@@ -52,6 +52,25 @@ def loaded(snapshot, tmp_path):
     return fixture, capture
 
 
+def test_managed_material_without_forbidden_claims_runs_without_adding_a_semantic_pass(tmp_path):
+    content = {
+        "title": "선택 항목 평가", "description": "",
+        "documents": [{"id": "doc-1", "title": "공고", "source_url": "",
+                       "chunks": ["중소기업을 지원합니다."]}],
+        "cases": [{"id": "Q01", "document_id": "doc-1", "question": "누가 신청하나요?",
+                   "expected_status": "ANSWERED", "expected_citation_orders": [0],
+                   "reference_facts": ["중소기업"], "forbidden_claims": [],
+                   "answer": {"text": "중소기업입니다.", "status": "ANSWERED", "citation_orders": [0]}}],
+    }
+    snapshot = build_snapshot(content, f"managed-{uuid4().hex}-v1")
+    fixture, capture = loaded(snapshot, tmp_path)
+    result = evaluate.report(*evaluate.load_fixture(fixture), json.loads(capture.read_bytes()))
+    assert result["cases"][0]["forbiddenClaims"] == []
+    assert result["semanticFaithfulness"] is None
+    assert result["semanticReviewRequired"] is True
+    assert result["modelMeasured"] is False
+
+
 def test_manual_answers_keep_honest_provenance_and_unknown_model_metrics(snapshot, tmp_path):
     fixture, capture = loaded(snapshot, tmp_path)
     result = llmops.load_results(fixture, capture)

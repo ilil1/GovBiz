@@ -58,6 +58,18 @@ class ManagedMaterialValidationTests(TestCase):
         with self.assertRaisesRegex(ValueError, "저장 답변"):
             validate_content(value, publish=True)
 
+    def test_empty_forbidden_claims_are_optional_but_blank_entries_are_invalid(self):
+        value = content()
+        value["cases"][0]["forbidden_claims"] = []
+        self.assertEqual(validate_content(value, publish=True)["cases"][0]["forbidden_claims"], [])
+        identifier = "managed-" + "a" * 32 + "-v1"
+        snapshot = build_snapshot(value, identifier)
+        self.assertEqual(snapshot["fixture"]["cases"][0]["forbiddenClaims"], [])
+        self.assertEqual(validate_snapshot(snapshot), snapshot)
+        value["cases"][0]["forbidden_claims"] = [" "]
+        with self.assertRaises(ValueError):
+            validate_content(value, publish=True)
+
     def test_invalid_types_and_out_of_range_citations_are_not_accepted(self):
         for field, value in (
             ("document_id", []),

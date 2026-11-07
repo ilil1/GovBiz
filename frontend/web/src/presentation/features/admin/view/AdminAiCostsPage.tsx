@@ -32,6 +32,11 @@ export function AdminAiCostsPage({ title = 'AI 비용', children, onExpired }: {
 
       <div className={workspacePageStyles.content}>
         {children}
+        {vm.byModel.some((row) => row.label?.startsWith('demo-local-')) ? (
+          <p className={adminAccountsPageStyles.notice} role="status">
+            로컬 테스트용 가상 데이터가 기존 앱 기록과 합산됩니다. 가상 데이터는 실제 사용량이나 청구 금액이 아닙니다.
+          </p>
+        ) : null}
         <p className={styles.intro}>{vm.basis}</p>
 
         {vm.notice ? (

@@ -38,7 +38,7 @@ describe('평가 자료 선택 안내', () => {
     expect(cards.map((card) => card.querySelector('p')?.textContent)).toEqual(['실제 품질 평가용 2개', '개발 검증용 4개', '과거 자료 4개'])
     expect(screen.getByText(/같은 질문이 여러 묶음에 포함될 수 있습니다/)).toBeTruthy()
     expect(screen.getByText(/모든 자료를 실행할 필요는 없습니다/)).toBeTruthy()
-    expect(screen.getByText(/고정 원문 안의 근거 검색까지 확인하려면 RAG 자료/)).toBeTruthy()
+    expect(screen.getByText(/정해진 공고 안에서 필요한 내용을 찾는 과정까지 확인합니다/)).toBeTruthy()
 
     const table = showComposition()
     expect(table.getAllByRole('row')).toHaveLength(datasets.length + 1)
@@ -100,6 +100,22 @@ describe('평가 자료 선택 안내', () => {
     expect(explanation.getByText(selected.selection_guide!.limitations)).toBeTruthy()
     expect(explanation.getByText(`질문 ${selected.case_ids.length}개`)).toBeTruthy()
     expect(explanation.getByText(/자료 분류는 검토 승인이나 품질 합격을 뜻하지 않습니다/)).toBeTruthy()
+  })
+
+  it('선택한 자료의 실제 평가 범위를 구분하고 저장 결과 재평가의 한계를 안내한다', () => {
+    const fixed = { ...datasets[0], evaluation_scope: 'fixed-answer-context-only' }
+    const rag = { ...datasets[1], evaluation_scope: 'source-chunks-retrieval-answer' }
+    const view = mount([fixed, rag], fixed.id)
+    const selected = () => within(screen.getByRole('region', { name: '선택한 평가 자료 설명' }))
+    expect(selected().getByText('답변 확인:')).toBeTruthy()
+    expect(selected().getByText(/여러 공고 중 알맞은 공고를 찾는 능력은 확인하지 않습니다/)).toBeTruthy()
+    view.rerender(<EvaluationDatasetPicker datasets={[fixed, rag]} value={rag.id} disabled={false} onChange={vi.fn()} />)
+    expect(selected().getByText('공고 안에서 내용 찾기와 답변 확인:')).toBeTruthy()
+    expect(selected().getByText(/미리 정한 공고 원문 안에서 필요한 부분을 찾고 답변하는 과정/)).toBeTruthy()
+    expect(selected().getByText(/여러 공고 중 알맞은 공고를 찾는 능력은 확인하지 않습니다/)).toBeTruthy()
+    expect(selected().getByText(/이전에 저장한 답변을 다시 확인하며 AI 호출이나 검색을 하지 않습니다/)).toBeTruthy()
+    expect(selected().getByText(/AI가 다시 답변하며 비용이 발생할 수 있습니다/)).toBeTruthy()
+    expect(selected().queryByText('답변 확인:')).toBeNull()
   })
 
   it('사용자가 다른 자료를 선택한 경우에만 기존 변경 콜백을 호출한다', () => {

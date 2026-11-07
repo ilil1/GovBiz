@@ -13,19 +13,19 @@
     "code_sha256": "b2715707819f120f677aba684790f3f68d6c27c17c1613db455d162d89823b84"
   },
   "evaluation": {
-    "sha256": "4062d6db38d6819ab082d7e50b135ef533dca322710570103a14b6d829d1b132",
+    "sha256": "af128b94b7d7d179058e42169d9f190fa541708460f96bfac2b150ca5512c1d4",
     "files": {
-      "evaluation/support-program-evidence/evaluate.py": "7cf30a24ade715bd0d167ea5719a9d506ef4eed22b6afd8b3dc52083e01cb3ba",
+      "evaluation/support-program-evidence/evaluate.py": "dc0fee988db3f2a3b6a91b15fa2bfac141801d29015b21eca73d54af3de20419",
       "evaluation/support-program-evidence/official_snapshot.py": "1b97e2d2aa15ca02b50e2a999203c7f685de08afc735bb8456b880041c37abf4",
       "evaluation/support-program-evidence/verify_flow.py": "828ff0faa4c2871dd6a880742184e5700a754a5d5307f7fc95a3c45212ade0ed",
       "evaluation/support-program-evidence/llmops.py": "2b04b29960c9c404ae04d8b2badd43261cc6511a7346933249391ba9c2abe1f8",
-      "backend/ops-service/apps/evaluations/managed_materials.py": "5c732b7c319f9706d1c0244db695ae1e48f53874ac5374926c4ffc730e2604e1",
+      "backend/ops-service/apps/evaluations/managed_materials.py": "4a95a1c97e5757ce689de9823da0c78ffec9f20ee4a7aeeee9849c16ff3bf143",
       "backend/ai-service/app/support_program_evidence/models.py": "01e8da480d9ede6a976220a1a3bb6607ec8329783455d6c25c84a245a64b29b6",
       "backend/ai-service/app/support_program_identity.py": "aa706697f294fd4846263e73cd281c4a9d660a7939feb7e2e4e3d60fd5393fb1",
       "backend/ai-service/pyproject.toml": "50ef0fc8c53c9af3e1bb31fafed5200732725ea43691be538d90840d2168037c",
       "backend/ai-service/uv.lock": "349ecdd9152eb2f5479a3db41d39e9d1bf7a8f5a16103426c2cd78207add1fe3"
     },
-    "version": "4062d6db38d6819ab082d7e50b135ef533dca322710570103a14b6d829d1b132",
+    "version": "af128b94b7d7d179058e42169d9f190fa541708460f96bfac2b150ca5512c1d4",
     "scope": "fixed-answer-context-only"
   },
   "rag_evaluation": {
@@ -44,9 +44,9 @@
     "scope": "source-chunks-retrieval-answer"
   },
   "generation": {
-    "sha256": "46b256d4fd6c8878aef27d273d5cca27aa5a857ff9fe435ac055b1570e3c5d62",
+    "sha256": "5e68e5651a9796d5e4cf49654157ffee4fa231609173630d0105a323e1bd2197",
     "files": {
-      "evaluation/support-program-evidence/evaluate.py": "7cf30a24ade715bd0d167ea5719a9d506ef4eed22b6afd8b3dc52083e01cb3ba",
+      "evaluation/support-program-evidence/evaluate.py": "dc0fee988db3f2a3b6a91b15fa2bfac141801d29015b21eca73d54af3de20419",
       "evaluation/support-program-evidence/official_snapshot.py": "1b97e2d2aa15ca02b50e2a999203c7f685de08afc735bb8456b880041c37abf4",
       "evaluation/support-program-evidence/verify_flow.py": "828ff0faa4c2871dd6a880742184e5700a754a5d5307f7fc95a3c45212ade0ed",
       "backend/ai-service/app/config.py": "7fc38debcdfb14249e64a195373072d14fc124406f0753d421118f197b16918d",
@@ -76,9 +76,9 @@
     }
   },
   "rag_generation": {
-    "sha256": "07f480e757c21dcde307c3b0ce23316bde8e30de7520b52bd1536f1c1d5ebeca",
+    "sha256": "cdbb4e9544068df79876a7b258991ce403b2bbfe45ce149951e22b58b215eebc",
     "files": {
-      "evaluation/support-program-evidence/evaluate.py": "7cf30a24ade715bd0d167ea5719a9d506ef4eed22b6afd8b3dc52083e01cb3ba",
+      "evaluation/support-program-evidence/evaluate.py": "dc0fee988db3f2a3b6a91b15fa2bfac141801d29015b21eca73d54af3de20419",
       "evaluation/support-program-evidence/official_snapshot.py": "1b97e2d2aa15ca02b50e2a999203c7f685de08afc735bb8456b880041c37abf4",
       "evaluation/support-program-evidence/verify_flow.py": "828ff0faa4c2871dd6a880742184e5700a754a5d5307f7fc95a3c45212ade0ed",
       "backend/ai-service/app/config.py": "7fc38debcdfb14249e64a195373072d14fc124406f0753d421118f197b16918d",
@@ -123,7 +123,7 @@
     "document_vectors": "content-addressed-evaluation-cache-v1"
   },
   "pipeline": {
-    "sha256": "4b34e02d1580c0c73c9ad7d24d1dc05fb47712f19f8878b5121c51380b806b40",
+    "sha256": "5a1291ea637ebc92ce16b05228aafc54fccbdc05167b7e535c5093630e4944dd",
     "files": {
       "evaluation/support-program-evidence/ops_flow.py": "72003a1648e36256f4c6c4585c011187a413ace04c9ea3ef533d9c00ebce6fc0",
       "evaluation/support-program-evidence/budget_client.py": "5fb2ba03088467201693f94ec2c2b074ab15998f4e2ea6724c0c67cdef6613f9",
@@ -133,7 +133,7 @@
       "backend/ops-service/apps/evaluations/quality_policy.py": "b2715707819f120f677aba684790f3f68d6c27c17c1613db455d162d89823b84",
       "backend/ops-service/apps/evaluations/vector_cache.py": "177707a4d9f60b28daeab7460e69d02b3dbf61323e58a3e47a7e69ffa10f830e",
       "backend/ops-service/apps/evaluations/artifact_files.py": "68ccee925969e3eba852658013d6f67789b524f971212b8a4c00aaa0e289799a",
-      "backend/ops-service/apps/evaluations/managed_materials.py": "5c732b7c319f9706d1c0244db695ae1e48f53874ac5374926c4ffc730e2604e1"
+      "backend/ops-service/apps/evaluations/managed_materials.py": "4a95a1c97e5757ce689de9823da0c78ffec9f20ee4a7aeeee9849c16ff3bf143"
     }
   },
   "datasets": {

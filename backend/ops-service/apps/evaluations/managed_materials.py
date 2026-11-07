@@ -146,7 +146,12 @@ def validate_content(content, *, publish=False):
         ):
             case[field] = [
                 _text(text, 1200, f"{identifier} {label}", required=publish)
-                for text in _list(item[field], 30, f"{identifier} {label}", required=publish)
+                for text in _list(
+                    item[field],
+                    30,
+                    f"{identifier} {label}",
+                    required=publish and field == "reference_facts",
+                )
             ]
         answer = item["answer"]
         if answer is not None:

@@ -103,6 +103,23 @@ class DatasetManagementTests(TestCase):
         self.assertFalse(EvaluationDatasetRevision.objects.exists())
         self.assertEqual(EvaluationDataset.objects.get().version, 1)
 
+    def test_publish_without_forbidden_claims_preserves_previous_revision(self):
+        dataset, _ = self.create()
+        self.publish(dataset)
+        original = deepcopy(EvaluationDatasetRevision.objects.get().snapshot)
+        updated = content()
+        updated["cases"][0]["forbidden_claims"] = []
+        edited = self.client.put(
+            f"{URL}/{dataset['id']}", self.payload(2, content=updated), format="json"
+        )
+        self.assertEqual(edited.status_code, 200, edited.data)
+        published, _ = self.publish(edited.data)
+        self.assertEqual([row["number"] for row in published["revisions"]], [2, 1])
+        snapshots = {row.number: row.snapshot for row in EvaluationDatasetRevision.objects.all()}
+        self.assertEqual(snapshots[1], original)
+        self.assertEqual(snapshots[2]["fixture"]["cases"][0]["forbiddenClaims"], [])
+        self.assertFalse(EvaluationRun.objects.exists())
+
     def test_publish_freezes_version_and_edit_does_not_change_it(self):
         dataset, _ = self.create()
         published, _ = self.publish(dataset)

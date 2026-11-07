@@ -91,6 +91,14 @@ function renderApp() {
 }
 
 describe('관리자 AI 비용', () => {
+  it('가상 사용량이 포함된 기간에는 실제 청구가 아님을 알린다', async () => {
+    vi.spyOn(appContainer.resolve('getAdminAiCostSummaryUseCase'), 'execute').mockResolvedValue(summaryOf({
+      byModel: [{ key: 'demo-local-gpt-6-luna', serviceTier: 'default', totals }],
+    }))
+    renderApp()
+    expect(await screen.findByText('로컬 테스트용 가상 데이터가 기존 앱 기록과 합산됩니다. 가상 데이터는 실제 사용량이나 청구 금액이 아닙니다.')).toBeTruthy()
+  })
+
   it('이번 달 추정 비용을 기능·모델·날짜·회원별로 보이고, 관리자 키가 없으면 실제 비용 대신 까닭을 보인다', async () => {
     const getSummary = vi.spyOn(appContainer.resolve('getAdminAiCostSummaryUseCase'), 'execute').mockResolvedValue(summaryOf())
     renderApp()
