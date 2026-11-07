@@ -1,0 +1,2 @@
+localMode: false
+image: {tag: "", digest: "", pullPolicy: IfNotPresent}
