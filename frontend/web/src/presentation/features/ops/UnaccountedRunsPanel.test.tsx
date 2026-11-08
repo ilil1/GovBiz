@@ -152,8 +152,7 @@ describe('미반영 실행 사용량 확인', () => {
     expect(screen.getByText(/확인할 자료가 없으면 관리자에게 문의/)).toBeTruthy()
   })
 
-  it('지원 대상이 아닌 기록은 이해하기 쉽게 안내하고 다른 차단 사유는 유지한다', async () => {
-    const reason = '예약·실행 명세 도입 전 완료된 원본 live 실행만 대상입니다.'
+  it.each(['예약·실행 명세 도입 전 완료된 원본 live 실행만 대상입니다.', '예약이 없는 완료된 원본 live 실행만 대상입니다.'])('지원 대상이 아닌 기록은 이해하기 쉽게 안내하고 다른 차단 사유는 유지한다: %s', async (reason) => {
     const other = '별도로 확인해야 하는 사유입니다.'
     vi.stubGlobal('fetch', vi.fn(async (url: string) => json(url.includes('unaccounted-runs') ? listing : {
       as_of: at, run_id: first, applied: false, state: 'unavailable', blockers: [reason, other],

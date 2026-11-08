@@ -71,25 +71,81 @@ describe('관리자 누적 한도 변경', () => {
     view.rerender(<BudgetLimitsForm summary={{ ...summary, state: 'consistent', limits: { calls: 10, input_tokens: null, output_tokens: 100 } }} owner={owner} onSaved={vi.fn()} onExpired={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'AI 평가 사용량 변경하기' })).toBeTruthy()
   })
-  it('필요한 양 확인과 직접 입력을 단계별로 오가며 입력을 보존한다', async () => {
+  it('필요량을 확인하면 입력 단계로 이동하고 이전 단계로 돌아가도 입력을 보존한다', async () => {
     setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
     await inspectNeeds()
-    expect(screen.queryByRole('textbox', { name: 'AI 요청 허용 횟수' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '확인한 양을 보고 직접 입력' }))
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: '2. 얼마나 사용할지 정하기' }))
-    expect(screen.getByText('이번 평가 1회 최대 100토큰')).toBeTruthy()
-    expect(screen.getByText('이번 평가 1회 최대 6회')).toBeTruthy()
-    expect(screen.getByText('이번 평가 1회 최대 50토큰')).toBeTruthy()
-    expect(screen.getByText(/전체 허용량에는 이전 사용량도 포함해야/)).toBeTruthy()
-    expect(screen.getByText(/검색·RAG 평가를 실행할 수 없습니다/)).toBeTruthy()
+    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '50')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('disabled', true)
+    expect(screen.getByText(/확인되지 않은 이전 평가 사용량은 포함하지 않았습니다/)).toBeTruthy()
     fireEvent.change(screen.getByLabelText('AI 요청 허용 횟수'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     expect(screen.getByRole('combobox', { name: '평가 자료 선택' })).toHaveProperty('value', 'fixed')
     expect(screen.getByText('이번 평가에 필요한 최대 양')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '확인한 양을 보고 직접 입력' }))
+    fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
     expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '9')
     expect(screen.queryByRole('button', { name: '확인한 한도 저장' })).toBeNull()
+  })
+
+  it('평가 횟수를 선택하면 최대 필요량을 배수로 입력하고 저장하지 않는다', async () => {
+    const fetch = setupPlanning()
+    mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
+    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
+    fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
+    expect(await screen.findByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '18')
+    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '150')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+  it.each(['0', '-1', '1.5', '1001'])('잘못된 평가 횟수 %s는 확인할 수 없다', async (value) => {
+    const fetch = setupPlanning()
+    mount()
+    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
+    fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value } })
+    expect(screen.getByRole('button', { name: '필요량 확인' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('alert').textContent).toContain('1~1,000')
+    expect(fetch.mock.calls).toHaveLength(1)
+  })
+
+  it('필요량 조회 중 평가 횟수를 바꾸면 오래된 결과를 적용하지 않는다', async () => {
+    let resolve!: (response: Response) => void
+    const pending = new Promise<Response>((done) => { resolve = done })
+    const fetch = vi.fn(async (url: string) => url.includes('/evaluation-catalog') ? json(catalog) : pending)
+    vi.stubGlobal('fetch', fetch)
+    mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
+    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
+    fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
+    fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value: '2' } })
+    await act(async () => { resolve(json(readiness)); await pending })
+    expect(screen.queryByRole('heading', { name: '2. 얼마나 사용할지 정하기' })).toBeNull()
+    expect(screen.queryByText('이번 평가에 필요한 최대 양')).toBeNull()
+    expect(fetch.mock.calls).toHaveLength(2)
+  })
+
+  it('사유를 입력하지 않아도 검토 후 자동 생성 사유를 명시해 저장한다', async () => {
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => json(url.endsWith('/evaluation-catalog') ? catalog : url.endsWith('/session') ? session : success(JSON.parse(options!.body as string))))
+    vi.stubGlobal('fetch', fetch)
+    const { onSaved } = mount()
+    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
+    fireEvent.change(screen.getByLabelText('AI 요청 허용 횟수'), { target: { value: '7' } })
+    fireEvent.change(screen.getByLabelText('AI 답변 허용량 (출력 토큰)'), { target: { value: '776' } })
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    expect(screen.getByText('사유: 자동 생성: AI 평가 사용량 한도 설정')).toBeTruthy()
+    expect(screen.getByText(/한도를 저장해도 평가는 실행되지 않습니다/)).toBeTruthy()
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    const [, options] = fetch.mock.calls.find(([url]) => url.endsWith('/budget/limits'))!
+    expect(JSON.parse(options!.body as string).reason).toBe('자동 생성: AI 평가 사용량 한도 설정')
   })
 
   it('평가 자료가 없으면 등록 화면으로 이동할 수 있고 설정을 저장하지 않는다', async () => {
@@ -101,14 +157,17 @@ describe('관리자 누적 한도 변경', () => {
     expect(fetch.mock.calls).toHaveLength(1)
   })
 
-  it('과거 입력 사용량을 모르면 기록 위치와 입력 칸을 비워두는 방법을 안내한다', async () => {
+  it('과거 입력 사용량을 모르면 기록을 확인하도록 안내하고 입력을 막는다', () => {
     setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
     fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
-    expect(screen.getByRole('link', { name: '이전 평가 기록으로 이동' }).getAttribute('href')).toBe('#budget-unaccounted')
-    expect(screen.getByText(/지금은 이 칸을 비워 두세요/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: '이전 평가 기록 확인하기' }).getAttribute('href')).toBe('#budget-unaccounted')
+    expect(screen.getByText(/이전 평가의 사용량을 확인하기 전에는 입력 한도를 설정할 수 없습니다/)).toBeTruthy()
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByLabelText('입력 한도 도움말'))
+    expect(screen.getByText(/설정 후에는 해제할 수 없으며, 0을 입력하면 사용할 수 없습니다/)).toBeTruthy()
   })
 
   it('확인할 기록이 없으면 이동할 수 없는 링크 대신 관리자 확인을 안내한다', () => {
@@ -116,22 +175,21 @@ describe('관리자 누적 한도 변경', () => {
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown', legacy_live_run_count: 0 })
     fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
-    expect(screen.queryByRole('link', { name: '이전 평가 기록으로 이동' })).toBeNull()
-    expect(screen.getByText(/관리자에게 과거 사용 기록 확인을 요청하세요/)).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '이전 평가 기록 확인하기' })).toBeNull()
+    expect(screen.getByText(/관리자에게 사용 기록 확인을 요청해 주세요/)).toBeTruthy()
   })
 
-  it('한도가 없는 경우 필요량만 무료로 확인하고 미확인 사용량을 0으로 적용하지 않는다', async () => {
+  it('첫 설정은 1회 제안값과 과거 사용량 미포함을 알리고 입력 한도는 비운다', async () => {
     const fetch = setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
     await inspectNeeds()
-    expect(screen.queryByRole('button', { name: '계산한 값으로 입력하고 계속' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '확인한 양을 보고 직접 입력' }))
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '50')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
-    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '')
+    expect(screen.getByText(/확인되지 않은 이전 평가 사용량은 포함하지 않았습니다/)).toBeTruthy()
     expect(fetch.mock.calls).toHaveLength(2)
-    expect(fetch.mock.calls.every(([url]) => url.includes('/evaluation-catalog') || url.includes('/evaluations/live-readiness?'))).toBe(true)
     expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+    expect(screen.queryByRole('button', { name: '확인한 한도 저장' })).toBeNull()
   })
 
   it('필요량을 확인해도 자동 저장하지 않고 사용자가 적용할 때 기존 한도를 낮추지 않는다', async () => {
@@ -142,14 +200,12 @@ describe('관리자 누적 한도 변경', () => {
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
     })
     await inspectNeeds()
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '21')
-    fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
     expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '26')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '1000')
     expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '150')
-    expect(screen.getByRole('status').textContent).toContain('아직 저장되지는 않았습니다')
+    expect(screen.getByRole('status').textContent).toContain('확인 후 저장해 주세요')
     fireEvent.change(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)'), { target: { value: '1400' } })
-    expect(screen.queryByText(/아직 저장되지는 않았습니다/)).toBeNull()
+    expect(screen.queryByText(/확인한 필요량을 바탕으로 한도를 입력했습니다/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '1400')
@@ -165,7 +221,6 @@ describe('관리자 누적 한도 변경', () => {
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
     })
     await inspectNeeds()
-    fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
     fireEvent.change(screen.getByLabelText('한도 변경 사유'), { target: { value: '평가 준비' } })
     fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
     expect(screen.getByRole('button', { name: '확인한 한도 저장' })).toBeTruthy()
@@ -193,7 +248,7 @@ describe('관리자 누적 한도 변경', () => {
     expect(fetch.mock.calls.every(([url, options]) => url.endsWith('/evaluation-catalog') && (!options?.method || options.method === 'GET'))).toBe(true)
   })
 
-  it('과거 입력 사용량을 모르면 호출·출력만 계산하고 입력 한도는 건드리지 않는다', async () => {
+  it('과거 입력 사용량을 모르면 호출·출력만 계산하고 입력은 비운다', async () => {
     const fetch = setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'legacy_unknown',
       limits: { calls: 21, input_tokens: null, output_tokens: 120 },
@@ -201,30 +256,35 @@ describe('관리자 누적 한도 변경', () => {
       remaining: { calls: 1, input_tokens: null, output_tokens: 20 },
     })
     await inspectNeeds()
-    fireEvent.change(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)'), { target: { value: '777' } })
-    fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
     expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '26')
     expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '150')
-    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '777')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('disabled', true)
     expect(fetch.mock.calls).toHaveLength(2)
   })
 
-  it('확인하는 동안 다른 관리자가 한도를 변경하면 이전 결과로 입력하지 못한다', async () => {
-    const fetch = setupPlanning(), onSaved = vi.fn(), onExpired = vi.fn()
+  it('필요량 응답을 기다리는 동안 한도가 바뀌면 자동 입력하지 않는다', async () => {
+    let resolve!: (response: Response) => void
+    const pending = new Promise<Response>((done) => { resolve = done })
+    const fetch = vi.fn(async (url: string) => url.includes('/evaluation-catalog') ? json(catalog) : pending)
+    vi.stubGlobal('fetch', fetch)
+    const onSaved = vi.fn(), onExpired = vi.fn()
     const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced',
       limits: { calls: 21, input_tokens: 1000, output_tokens: 120 },
       allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
     }
     const view = render(<BudgetLimitsForm summary={data} owner={owner} onSaved={onSaved} onExpired={onExpired} />)
-    await inspectNeeds()
+    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 변경하기' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
+    fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
     view.rerender(<BudgetLimitsForm summary={{ ...data, limits_revision: 'd'.repeat(64) }} owner={owner} onSaved={onSaved} onExpired={onExpired} />)
+    await act(async () => { resolve(json(readiness)); await pending })
     expect(screen.queryByRole('button', { name: '계산한 값으로 입력하고 계속' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '확인한 양을 보고 직접 입력' })).toBeNull()
     expect(screen.getByRole('alert').textContent).toContain('한도 설정이 변경되었습니다')
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '21')
-    expect(fetch.mock.calls).toHaveLength(2)
+    expect(screen.queryByRole('heading', { name: '2. 얼마나 사용할지 정하기' })).toBeNull()
     expect(onSaved).not.toHaveBeenCalled()
+    expect(fetch.mock.calls).toHaveLength(2)
   })
 
   it('필요량 확인 중 자료를 바꾸면 이전 응답을 입력에 사용하지 않는다', async () => {
@@ -261,6 +321,7 @@ describe('관리자 누적 한도 변경', () => {
     fireEvent.change(screen.getByLabelText(label), { target: { value: invalid } })
     const labels = ['AI 요청 허용 횟수', 'AI에 보내는 내용 허용량 (입력 토큰)', 'AI 답변 허용량 (출력 토큰)']
     const before = labels.map((name) => (screen.getByLabelText(name) as HTMLInputElement).value)
+    fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
     expect(labels.map((name) => (screen.getByLabelText(name) as HTMLInputElement).value)).toEqual(before)
     expect(screen.getByRole('alert').textContent).toContain('0 이상의 안전한 정수')
@@ -275,8 +336,8 @@ describe('관리자 누적 한도 변경', () => {
     expect(screen.getByText(/현재 20회 할당 \+ 추가 6회 예약 = 호출 한도 26회/)).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'AI 요청 허용 횟수', description: /API 호출의 총횟수/ })).toHaveProperty('value', '')
     expect(screen.getByRole('textbox', { name: 'AI 답변 허용량 (출력 토큰)', description: /최대 출력량을 합산/ })).toHaveProperty('value', '')
-    expect(screen.getByRole('textbox', { name: 'AI에 보내는 내용 허용량 (입력 토큰)', description: /최초 미설정은 빈칸.*한 번 설정하면 해제할 수 없습니다.*숫자 0/ })).toHaveProperty('value', '')
-    expect(screen.getByRole('textbox', { name: '한도 변경 사유', description: /평가 목적·범위/ })).toHaveProperty('value', '')
+    expect(screen.getByRole('textbox', { name: 'AI에 보내는 내용 허용량 (입력 토큰)', description: /설정 후에는 해제할 수 없습니다.*숫자 0/ })).toHaveProperty('value', '')
+    expect(screen.getByText('변경 이유 직접 적기 (선택)')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('AI 요청 허용 횟수'), { target: { value: '26' } })
     fireEvent.click(screen.getByRole('button', { name: '닫기' }))
     expect(fetch.mock.calls.every(([url, options]) => url.endsWith('/evaluation-catalog') && (!options?.method || options.method === 'GET'))).toBe(true)

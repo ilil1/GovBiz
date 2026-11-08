@@ -432,7 +432,7 @@ describe('React LLMOps 운영 화면', () => {
       fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
       await screen.findByText('누적 한도 변경 이력을 저장했습니다.')
     } else if (kind === 'daily') {
-      fireEvent.click(await screen.findByText('하루 한도 · 사용 기록 보기'))
+      fireEvent.click(await screen.findByText('하루 평가 한도'))
       fireEvent.click(await screen.findByRole('button', { name: '일별 한도 설정' }))
       fireEvent.change(screen.getByLabelText('일별 호출 한도'), { target: { value: '12' } })
       fireEvent.change(screen.getByLabelText('일별 입력 토큰 한도'), { target: { value: '400000' } })

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from hashlib import sha256
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -15,7 +16,14 @@ from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_
 
 from .budget import BudgetUnavailable, reserve, worker_action
 from .budget_reporting import budget_summary, change_limits
-from .legacy_usage import LegacyUsageUnavailable, capture_usage, reconcile_legacy_usage
+from .execution_spec import digest
+from .legacy_usage import (
+    LegacyUsageUnavailable,
+    _eligible,
+    _validate_pinned_input,
+    capture_usage,
+    reconcile_legacy_usage,
+)
 from .models import EvaluationBudget, EvaluationLegacyUsage, EvaluationRun
 from .test_budget import TOKEN, USAGE
 from .test_reviews import ReviewFixture
@@ -101,6 +109,119 @@ class CaptureUsageTests(SimpleTestCase):
         for capture in (None, {}, {**sample_capture(), "completed": False}):
             with self.assertRaises(LegacyUsageUnavailable):
                 capture_usage(capture, 1, 2000)
+
+
+def resign_profile(spec):
+    # 변조 뒤 프로필·전체 해시를 다시 계산해도 의미 검증이 차단하는지 확인한다.
+    excluded = {
+        "profile_sha256",
+        "candidate_capture_id",
+        "reference_capture_id",
+        "candidate_sha256",
+        "reference_sha256",
+        "reference_config",
+        "baseline_version",
+        "baseline_review_id",
+        "recovery_config",
+    }
+    spec["profile_sha256"] = digest(
+        {key: value for key, value in spec.items() if key not in excluded}
+    )
+
+
+class PinnedEligibilityTests(SimpleTestCase):
+    def setUp(self):
+        self.config = {
+            "fixture_sha256": "b" * 64,
+            "model": "model",
+            "max_model_calls": 1,
+            "max_input_tokens": 32768,
+            "max_output_tokens": 2000,
+        }
+        profile = {
+            "schema_version": 2,
+            "evaluation_scope": "fixed-answer-context-only",
+            "dataset_id": "dataset",
+            "dataset": {"case_ids": ["E01"], "fixture_sha256": "b" * 64},
+            "execution_mode": "live",
+            "live_config": self.config,
+            "model_operations": [
+                {
+                    "id": "answer:E01",
+                    "kind": "answer",
+                    "case_id": "E01",
+                    "model": "model",
+                    "max_input_tokens": 32768,
+                    "max_output_tokens": 2000,
+                }
+            ],
+        }
+        self.spec = {
+            **profile,
+            "profile_sha256": digest(profile),
+            "candidate_capture_id": "live",
+            "reference_capture_id": "ref",
+            "candidate_sha256": None,
+            "reference_sha256": "a" * 64,
+            "reference_config": {},
+            "baseline_version": None,
+            "baseline_review_id": None,
+            "recovery_config": {},
+        }
+        self.run = SimpleNamespace(
+            status="COMPLETED",
+            error_code="",
+            execution_mode="live",
+            source_run_id=None,
+            prefect_flow_run_id=uuid4(),
+            execution_spec=self.spec,
+            execution_spec_sha256=digest(self.spec),
+            live_config=self.config,
+            dataset_id="dataset",
+            candidate_capture_id="live",
+            reference_capture_id="ref",
+            reference_config={},
+            recovery_config={},
+        )
+
+    def test_valid_pinned_fixed_answer_is_eligible(self):
+        _eligible(self.run)
+
+    def test_pinned_input_limit_and_observed_usage_must_match(self):
+        capture = {**sample_capture(), "maxInputTokens": 32768}
+        _validate_pinned_input(capture, self.config)
+        for value in (None, 32769, True):
+            modified = deepcopy(capture)
+            modified["maxInputTokens"] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                _validate_pinned_input(modified, self.config)
+        modified = deepcopy(capture)
+        modified["apiResponses"][0]["usage"]["input_tokens"] = 32769
+        with self.assertRaises(ValueError):
+            _validate_pinned_input(modified, self.config)
+
+    def test_pinned_identity_and_operations_must_be_complete(self):
+        for mutate in (
+            lambda spec: spec.update(evaluation_scope="source-chunks-retrieval-answer"),
+            lambda spec: spec.update(profile_sha256="f" * 64),
+            lambda spec: spec.update(dataset_id="other"),
+            lambda spec: spec.update(candidate_capture_id="other"),
+            lambda spec: spec["model_operations"][0].update(kind="embedding"),
+            lambda spec: spec["model_operations"][0].update(id="other"),
+            lambda spec: spec["model_operations"][0].update(model="other"),
+            lambda spec: spec["model_operations"][0].update(max_input_tokens=32769),
+            lambda spec: spec["model_operations"].clear(),
+        ):
+            changed = deepcopy(self.spec)
+            mutate(changed)
+            if changed["profile_sha256"] == self.spec["profile_sha256"]:
+                resign_profile(changed)
+            self.run.execution_spec, self.run.execution_spec_sha256 = changed, digest(changed)
+            with self.subTest(spec=changed), self.assertRaises(LegacyUsageUnavailable):
+                _eligible(self.run)
+        self.run.execution_spec, self.run.execution_spec_sha256 = self.spec, "f" * 64
+        with self.assertRaises(LegacyUsageUnavailable):
+            _eligible(self.run)
 
 
 class LegacyFixture(ReviewFixture):
@@ -239,6 +360,100 @@ class LegacyUsageTests(LegacyFixture, TestCase):
         for kwargs in ({"actor": "다른 담당자"}, {"reason": "변경"}, {"request_id": uuid4()}):
             with self.assertRaises(LegacyUsageUnavailable):
                 self.preview(evidence_sha256=result["evidence_sha256"], apply=True, **kwargs)
+
+    def pinned_spec(self):
+        self.run.live_config = {**self.run.live_config, "max_input_tokens": 32768}
+        self.run.save(update_fields=["live_config"])
+        capture = json.loads((self.root / str(self.run.pk) / "capture/capture.json").read_bytes())
+        capture["maxInputTokens"] = 32768
+        self.write_capture(self.run, capture)
+        case_ids = capture["caseIds"]
+        config = self.run.live_config
+        profile = {
+            "schema_version": 2,
+            "evaluation_scope": "fixed-answer-context-only",
+            "dataset_id": self.run.dataset_id,
+            "dataset": {"case_ids": case_ids, "fixture_sha256": config["fixture_sha256"]},
+            "execution_mode": "live",
+            "live_config": config,
+            "model_operations": [
+                {
+                    "id": f"answer:{case_id}",
+                    "kind": "answer",
+                    "case_id": case_id,
+                    "model": config["model"],
+                    "max_input_tokens": config["max_input_tokens"],
+                    "max_output_tokens": config["max_output_tokens"],
+                }
+                for case_id in case_ids
+            ],
+        }
+        return {
+            **profile,
+            "profile_sha256": digest(profile),
+            "candidate_capture_id": self.run.candidate_capture_id,
+            "reference_capture_id": self.run.reference_capture_id,
+            "candidate_sha256": None,
+            "reference_sha256": "a" * 64,
+            "reference_config": self.run.reference_config,
+            "baseline_version": None,
+            "baseline_review_id": None,
+            "recovery_config": self.run.recovery_config,
+        }
+
+    def test_verified_pinned_fixed_answer_run_can_be_recorded_once(self):
+        spec = self.pinned_spec()
+        EvaluationRun.objects.filter(pk=self.run.pk).update(
+            execution_spec=spec, execution_spec_sha256=digest(spec)
+        )
+        raw = (self.root / str(self.run.pk) / "capture/capture.json").read_bytes()
+        # 저장 보고서 연결 검증은 read_candidate가 담당하며, 여기서는 명세를
+        # 통과한 뒤 기존 원장 반영·중복 방지 경로가 유지되는지 검증한다.
+        with patch(
+            "apps.evaluations.legacy_usage.read_candidate",
+            return_value=(None, sha256(raw).hexdigest(), None),
+        ):
+            preview = self.preview()
+            self.assertTrue(preview["can_apply"])
+            self.assertEqual(
+                preview["usage"], {"calls": 1, "input_tokens": 100, "output_tokens": 50}
+            )
+            result = self.preview(evidence_sha256=preview["evidence_sha256"], apply=True)
+            self.assertTrue(result["applied"])
+            self.assertTrue(
+                self.preview(evidence_sha256=preview["evidence_sha256"], apply=True)["replayed"]
+            )
+        self.assertEqual(self.amounts(), (1, 100, 50))
+        self.assertEqual(EvaluationLegacyUsage.objects.count(), 1)
+
+    def test_pinned_run_rejects_changed_scope_profile_selection_and_operations(self):
+        original = self.pinned_spec()
+        for change in (
+            lambda spec: spec.update(evaluation_scope="source-chunks-retrieval-answer"),
+            lambda spec: spec.update(dataset_id="different"),
+            lambda spec: spec.update(profile_sha256="f" * 64),
+            lambda spec: spec.update(candidate_capture_id="different"),
+            lambda spec: spec["model_operations"][0].update(kind="embedding"),
+            lambda spec: spec["model_operations"][0].update(model="other"),
+            lambda spec: spec["model_operations"][0].update(case_id="other"),
+            lambda spec: spec["model_operations"].clear(),
+        ):
+            spec = deepcopy(original)
+            change(spec)
+            if spec["profile_sha256"] == original["profile_sha256"]:
+                resign_profile(spec)
+            EvaluationRun.objects.filter(pk=self.run.pk).update(
+                execution_spec=spec, execution_spec_sha256=digest(spec)
+            )
+            with self.subTest(spec=spec), self.assertRaises(LegacyUsageUnavailable):
+                self.preview()
+        EvaluationRun.objects.filter(pk=self.run.pk).update(
+            execution_spec=original, execution_spec_sha256="f" * 64
+        )
+        with self.assertRaises(LegacyUsageUnavailable):
+            self.preview()
+        self.assertEqual(self.amounts(), (0, 0, 0))
+        self.assertFalse(EvaluationLegacyUsage.objects.exists())
 
     def test_partial_current_replay_or_reserved_runs_cannot_use_legacy_path(self):
         for fields in (

@@ -70,6 +70,21 @@ class ManagedMaterialValidationTests(TestCase):
         with self.assertRaises(ValueError):
             validate_content(value, publish=True)
 
+    def test_reference_facts_can_be_omitted_without_fabricating_review_criteria(self):
+        value = content()
+        value["cases"][0]["reference_facts"] = []
+        self.assertEqual(validate_content(value, publish=True)["cases"][0]["reference_facts"], [])
+        snapshot = build_snapshot(value, "managed-" + "a" * 32 + "-v1")
+        self.assertEqual(snapshot["fixture"]["cases"][0]["referenceFacts"], [])
+        self.assertEqual(
+            snapshot["capture"]["cases"][0]["response"]["answer"],
+            value["cases"][0]["answer"]["text"],
+        )
+        self.assertEqual(validate_snapshot(snapshot), snapshot)
+        value["cases"][0]["reference_facts"] = [" "]
+        with self.assertRaises(ValueError):
+            validate_content(value, publish=True)
+
     def test_invalid_types_and_out_of_range_citations_are_not_accepted(self):
         for field, value in (
             ("document_id", []),
@@ -77,7 +92,7 @@ class ManagedMaterialValidationTests(TestCase):
             ("expected_citation_orders", [True]),
             ("expected_citation_orders", [1]),
             ("expected_citation_orders", [0, 0]),
-            ("reference_facts", []),
+            ("reference_facts", "중소기업"),
         ):
             data = content()
             data["cases"][0][field] = value

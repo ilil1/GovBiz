@@ -4,8 +4,8 @@ import { Link } from 'react-router'
 import { applyLegacyUsage, getLegacyUsagePreview, getUnaccountedRuns, OpsApiError, type LegacyUsageInput, type LegacyUsagePreview, type UnaccountedRuns } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 
-const legacyEligibilityMessage = '예약·실행 명세 도입 전 완료된 원본 live 실행만 대상입니다.'
-const explainBlocker = (reason: string) => reason === legacyEligibilityMessage
+const legacyEligibilityMessages = ['예약·실행 명세 도입 전 완료된 원본 live 실행만 대상입니다.', '예약이 없는 완료된 원본 live 실행만 대상입니다.']
+const explainBlocker = (reason: string) => legacyEligibilityMessages.includes(reason)
   ? '이 평가는 이 화면에서 사용량을 반영할 수 없습니다. 이 기능은 정해진 조건을 만족하는 이전 평가에만 사용할 수 있습니다.'
   : reason
 

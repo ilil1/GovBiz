@@ -71,6 +71,43 @@ def test_managed_material_without_forbidden_claims_runs_without_adding_a_semanti
     assert result["modelMeasured"] is False
 
 
+
+def test_managed_optional_review_facts_are_preserved_without_a_semantic_pass(snapshot, tmp_path):
+    fixture = deepcopy(snapshot["fixture"])
+    fixture["cases"][0]["referenceFacts"] = []
+    path = tmp_path / "fixture.json"
+    raw = encoded(fixture)
+    path.write_bytes(raw)
+    capture = deepcopy(snapshot["capture"])
+    capture["fixtureSha256"] = sha256(raw).hexdigest()
+
+    result = evaluate.report(*evaluate.load_fixture(path), capture)
+    assert result["cases"][0]["referenceFacts"] == []
+    assert result["semanticFaithfulness"] is None
+    assert result["semanticReviewRequired"] is True
+    assert result["modelMeasured"] is False
+
+
+@pytest.mark.parametrize("invalid", [[""], ["  "], [None], None])
+def test_managed_review_facts_reject_invalid_values(snapshot, tmp_path, invalid):
+    fixture = deepcopy(snapshot["fixture"])
+    fixture["cases"][0]["referenceFacts"] = invalid
+    path = tmp_path / "fixture.json"
+    path.write_bytes(encoded(fixture))
+    with pytest.raises(ValueError, match="referenceFacts required"):
+        evaluate.load_fixture(path)
+
+
+def test_non_managed_fixture_still_requires_review_facts(snapshot, tmp_path):
+    fixture = deepcopy(snapshot["fixture"])
+    fixture.update(schemaVersion="support-program-evidence-eval-v1", dataType="synthetic", referenceSource="ai-authored")
+    fixture["cases"][0]["referenceFacts"] = []
+    path = tmp_path / "fixture.json"
+    path.write_bytes(encoded(fixture))
+    with pytest.raises(ValueError, match="referenceFacts required"):
+        evaluate.load_fixture(path)
+
+
 def test_manual_answers_keep_honest_provenance_and_unknown_model_metrics(snapshot, tmp_path):
     fixture, capture = loaded(snapshot, tmp_path)
     result = llmops.load_results(fixture, capture)

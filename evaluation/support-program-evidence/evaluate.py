@@ -102,9 +102,9 @@ def load_fixture(path: Path) -> tuple[dict, list[tuple[dict, SupportProgramEvide
         require(bool(orders) == (status == "ANSWERED"), "reference status and citations disagree")
         for field in ("referenceFacts", "forbiddenClaims"):
             values = case.get(field)
-            # Admin-authored materials may omit prohibited-claim examples. An empty
-            # list records no such examples; it does not establish semantic safety.
-            optional = managed and field == "forbiddenClaims"
+            # Admin-authored materials may omit human review notes. Empty lists
+            # record unspecified criteria and do not establish semantic quality.
+            optional = managed and field in ("referenceFacts", "forbiddenClaims")
             require(isinstance(values, list) and (bool(values) or optional) and
                     all(isinstance(value, str) and bool(value.strip()) for value in values), f"{field} required")
         prepared_cases.append((case, request))

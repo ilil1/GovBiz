@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { getEvaluationCatalog, getLiveReadiness, OpsApiError, type BudgetSummary, type EvaluationCatalog, type LiveReadiness } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 
@@ -10,15 +10,19 @@ const optionsFor = (dataset: Dataset | undefined) => dataset?.live_options
 export function BudgetPlanningPanel({ summary, revision, onApply, onContinueManually, onResultChange, onExpired }: {
   summary: BudgetSummary; revision: string; onApply: (required: LiveReadiness['required']) => void; onContinueManually: () => void; onResultChange: (required: LiveReadiness['required'] | null) => void; onExpired: () => void
 }) {
+  const runHelpId = useId()
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
   const [reload, setReload] = useState(0)
   const [datasetId, setDatasetId] = useState('')
   const [model, setModel] = useState('')
+  const [runCount, setRunCount] = useState('1')
   const [result, setResult] = useState<LiveReadiness | null>(null)
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
   const active = useRef<AbortController | null>(null)
+  const latest = useRef({ summary, revision, onApply, onResultChange })
+  latest.current = { summary, revision, onApply, onResultChange }
   const expiry = useRef(onExpired); expiry.current = onExpired
   useEffect(() => {
     const controller = new AbortController()
@@ -37,15 +41,37 @@ export function BudgetPlanningPanel({ summary, revision, onApply, onContinueManu
   const dataset = datasets.find((item) => item.id === datasetId)
   const options = optionsFor(dataset)
   const option = options.find((item) => item.live_config.model === model)
+  const runs = Number(runCount)
+  const validRuns = /^[1-9]\d*$/.test(runCount) && Number.isSafeInteger(runs) && runs <= 1000
   const resetResult = () => { active.current?.abort(); active.current = null; setChecking(false); setResult(null); onResultChange(null); setError('') }
   const check = async () => {
-    if (!dataset || !option || checking) return
+    if (!dataset || !option || checking || !validRuns) return
     active.current?.abort()
     const controller = new AbortController(); active.current = controller
     setChecking(true); setResult(null); onResultChange(null); setError('')
     try {
       const response = await getLiveReadiness(dataset.id, option.execution_profile, controller.signal, model)
-      if (!controller.signal.aborted) { setResult(response); onResultChange(response.required) }
+      if (!controller.signal.aborted) {
+        const required = { calls: response.required.calls * runs, input_tokens: response.required.input_tokens * runs, output_tokens: response.required.output_tokens * runs }
+        if (![required.calls, required.input_tokens, required.output_tokens].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+          setError('필요한 양이 너무 큽니다. 평가 횟수를 줄여 주세요.')
+          return
+        }
+        const current = latest.current
+        if (current.revision !== revision || current.summary.limits_revision !== revision) {
+          setError('한도 설정이 변경되었습니다. 예산을 새로고침하고 다시 확인해 주세요.')
+          return
+        }
+        setResult({ ...response, required }); current.onResultChange(required)
+        const allocated = current.summary.allocated
+        const firstSetup = current.summary.state === 'unconfigured' && !allocated
+        const inputAvailable = (current.summary.input_state === 'enforced' || current.summary.input_state === 'unconfigured') && (allocated?.input_tokens != null || firstSetup && current.summary.input_state === 'unconfigured' && current.summary.legacy_live_run_count === 0)
+        const canApply = (firstSetup || current.summary.state === 'consistent' && allocated)
+          && Number.isSafeInteger((allocated?.calls ?? 0) + required.calls)
+          && Number.isSafeInteger((allocated?.output_tokens ?? 0) + required.output_tokens)
+          && (!inputAvailable || Number.isSafeInteger((allocated?.input_tokens ?? 0) + required.input_tokens))
+        if (canApply) current.onApply(required)
+      }
     } catch (reason) {
       if (controller.signal.aborted) return
       if (reason instanceof OpsApiError && [401, 403].includes(reason.status)) expiry.current()
@@ -54,15 +80,16 @@ export function BudgetPlanningPanel({ summary, revision, onApply, onContinueManu
   }
   const allocated = summary.allocated
   const stale = revision !== summary.limits_revision
-  const usable = summary.state === 'consistent' && allocated && !stale
+  const firstSetup = summary.state === 'unconfigured' && !allocated
+  const usable = Boolean((firstSetup || summary.state === 'consistent' && allocated) && !stale)
   const inputAvailable = (summary.input_state === 'enforced' || summary.input_state === 'unconfigured')
-    && allocated?.input_tokens != null
-  const inputSafe = !inputAvailable || !result || Number.isSafeInteger(allocated!.input_tokens! + result.required.input_tokens)
-  const safe = Boolean(usable && result && Number.isSafeInteger(allocated.calls + result.required.calls)
-    && Number.isSafeInteger(allocated.output_tokens + result.required.output_tokens) && inputSafe)
+    && (allocated?.input_tokens != null || firstSetup && summary.input_state === 'unconfigured' && summary.legacy_live_run_count === 0)
+  const inputSafe = !inputAvailable || !result || Number.isSafeInteger((allocated?.input_tokens ?? 0) + result.required.input_tokens)
+  const safe = Boolean(usable && result && Number.isSafeInteger((allocated?.calls ?? 0) + result.required.calls)
+    && Number.isSafeInteger((allocated?.output_tokens ?? 0) + result.required.output_tokens) && inputSafe)
   const inputKnown = inputAvailable && inputSafe
   return <section aria-label="평가 필요량 확인" className="grid gap-5 rounded-xl border border-line bg-white p-4 text-sm sm:p-5">
-    <div className="space-y-1"><h3 className="text-lg font-bold text-ink">1. 어떤 평가를 할지 고르세요</h3><p className="leading-6 text-ink-muted">자료를 선택하면 평가 한 번에 필요한 최대 사용량을 확인할 수 있습니다.</p><p className="text-xs text-ink-muted">확인만 할 때는 AI가 실행되지 않고 비용도 발생하지 않습니다.</p></div>
+    <div className="space-y-1"><h3 className="text-lg font-bold text-ink">1. 어떤 평가를 할지 고르세요</h3><p className="leading-6 text-ink-muted">자료와 횟수를 선택하면 평가에 필요한 최대 사용량을 계산합니다.</p><p className="text-xs text-ink-muted">확인만 할 때는 AI가 실행되지 않고 비용도 발생하지 않습니다.</p></div>
     <>
       {loading ? <p role="status">평가 자료를 불러오고 있습니다.</p> : <>
         {error && <p role="alert" className="text-red-700">{error}</p>}
@@ -73,11 +100,12 @@ export function BudgetPlanningPanel({ summary, revision, onApply, onContinueManu
             <option value="">자료를 선택하세요</option>{datasets.map((item) => <option key={item.id} value={item.id}>{item.selection_guide?.title ?? item.label} · 질문 {item.case_ids.length}개</option>)}
           </select></label>
           {dataset && <label className="grid gap-2 font-semibold text-ink">평가 모델 선택<select className="min-h-11 rounded-lg border border-line bg-white px-3" value={model} onChange={(event) => { resetResult(); setModel(event.target.value) }}>{options.map((item) => <option key={item.live_config.model} value={item.live_config.model}>{item.live_config.model}</option>)}</select></label>}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">{!option && <p className="text-ink-muted">먼저 평가 자료를 선택해 주세요.</p>}<button type="button" className={`${result ? styles.secondaryButton : styles.primaryButton} ml-auto max-sm:w-full`} disabled={!option || checking} onClick={() => void check()}>{checking ? '확인 중…' : '필요량 확인'}</button></div>
+          {dataset && <div className="grid gap-2"><label className="grid gap-2 font-semibold text-ink">평가할 횟수<input type="number" min="1" max="1000" step="1" className="min-h-11 rounded-lg border border-line bg-white px-3 sm:max-w-40" value={runCount} onChange={(event) => { resetResult(); setRunCount(event.target.value) }} aria-describedby={runHelpId} /></label><p id={runHelpId} className="text-xs text-ink-muted">필요량 계산에만 사용하며 평가가 실행되지는 않습니다. 1~1,000회까지 입력할 수 있습니다.</p>{!validRuns && <p role="alert" className="text-red-700">평가 횟수는 1~1,000 사이의 정수로 입력해 주세요.</p>}</div>}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">{!option && <p className="text-ink-muted">먼저 평가 자료를 선택해 주세요.</p>}<button type="button" className={`${result ? styles.secondaryButton : styles.primaryButton} ml-auto max-sm:w-full`} disabled={!option || checking || !validRuns} onClick={() => void check()}>{checking ? '확인 중…' : '필요량 확인'}</button></div>
         </>}
       </>}
       {result && <div className="grid gap-4 rounded-xl bg-surface-muted p-4" aria-live="polite">
-        <div><p className="font-semibold text-ink">이번 평가에 필요한 최대 양</p><p className="mt-1 text-xs text-ink-muted">선택한 자료로 평가를 한 번 실행할 때의 기준입니다.</p></div>
+        <div><p className="font-semibold text-ink">이번 평가에 필요한 최대 양</p><p className="mt-1 text-xs text-ink-muted">선택한 자료로 평가를 {runs.toLocaleString('ko-KR')}회 실행할 때 필요한 최대량입니다.</p></div>
         <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">{([
           ['AI 요청 횟수', `${result.required.calls.toLocaleString('ko-KR')}회`],
           ['AI에 보내는 내용', `${result.required.input_tokens.toLocaleString('ko-KR')}토큰`],
@@ -90,7 +118,7 @@ export function BudgetPlanningPanel({ summary, revision, onApply, onContinueManu
           : !usable ? <p className="text-amber-800">지금까지 사용했거나 예약된 양을 계산할 수 없어 전체 허용량을 자동으로 정할 수 없습니다. 위 숫자는 이번 평가에만 필요한 양입니다. 다음 단계에서 전체 허용량을 직접 정해 주세요. {summary.legacy_live_run_count > 0 ? <> <a className="font-semibold underline" href="#budget-unaccounted">이전 평가 기록으로 이동</a> 후 기록 확인 버튼을 눌러 확인하세요.</> : '관련 사용 기록을 확인해 주세요.'}</p>
             : !safe ? <p className="text-amber-800">안전한 숫자 범위를 벗어나 자동 계산할 수 없습니다. 한도를 직접 입력해 주세요.</p>
               : !inputKnown ? <p className="text-amber-800">입력 사용량을 확인할 수 없어 입력 토큰 한도는 자동으로 채우지 않습니다. 호출·출력만 계산합니다. {summary.legacy_live_run_count > 0 ? <> <a className="font-semibold underline" href="#budget-unaccounted">이전 평가 기록으로 이동</a> 후 기록 확인 버튼을 눌러 확인하세요.</> : '관련 사용 기록을 확인해 주세요.'}</p> : null}
-        {!stale && <div className="flex justify-end">{safe ? <button type="button" className={`${styles.primaryButton} max-sm:w-full`} onClick={() => onApply(result.required)}>계산한 값으로 입력하고 계속</button> : <button type="button" className={`${styles.primaryButton} max-sm:w-full`} onClick={onContinueManually}>확인한 양을 보고 직접 입력</button>}</div>}
+        {!stale && <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" className={safe ? styles.secondaryButton : styles.primaryButton} onClick={onContinueManually}>확인한 양을 보고 직접 입력</button>{safe && <button type="button" className={styles.primaryButton} onClick={() => onApply(result.required)}>계산한 값으로 입력하고 계속</button>}</div>}
       </div>}
     </>
   </section>

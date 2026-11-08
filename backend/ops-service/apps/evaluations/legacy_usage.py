@@ -86,6 +86,20 @@ def capture_usage(capture, calls, max_output):
         ) from None
 
 
+def _validate_pinned_input(capture, config):
+    max_input = config["max_input_tokens"]
+    if (
+        type(max_input) is not int
+        or max_input < 1
+        or type(capture.get("maxInputTokens")) is not int
+        or capture.get("maxInputTokens") != max_input
+        or any(
+            response["usage"]["input_tokens"] > max_input for response in capture["apiResponses"]
+        )
+    ):
+        raise ValueError
+
+
 def _identity(run):
     return {
         "run_id": str(run.pk),
@@ -109,12 +123,71 @@ def _eligible(run):
         or run.status != "COMPLETED"
         or run.error_code
         or run.execution_mode != "live"
-        or run.execution_spec
-        or run.execution_spec_sha256
         or run.source_run_id
         or not run.prefect_flow_run_id
     ):
-        raise LegacyUsageUnavailable("예약·실행 명세 도입 전 완료된 원본 live 실행만 대상입니다.")
+        raise LegacyUsageUnavailable("예약이 없는 완료된 원본 live 실행만 대상입니다.")
+    if not run.execution_spec and not run.execution_spec_sha256:
+        return
+    # 명세가 있는 고정 근거 답변 실행만 지원한다. RAG는 임베딩 호출이 별도로
+    # 존재하므로 답변 캡처만으로 전체 사용량을 확정할 수 없다.
+    try:
+        spec, config = run.execution_spec, run.live_config
+        case_ids = spec["dataset"]["case_ids"]
+        operations = spec["model_operations"]
+        unpinned = {
+            "profile_sha256",
+            "candidate_capture_id",
+            "reference_capture_id",
+            "candidate_sha256",
+            "reference_sha256",
+            "reference_config",
+            "baseline_version",
+            "baseline_review_id",
+            "recovery_config",
+        }
+        profile = {key: value for key, value in spec.items() if key not in unpinned}
+        if (
+            not isinstance(spec, dict)
+            or not isinstance(config, dict)
+            or not isinstance(run.execution_spec_sha256, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", run.execution_spec_sha256)
+            or digest(spec) != run.execution_spec_sha256
+            or spec.get("schema_version") != 2
+            or spec.get("evaluation_scope") != "fixed-answer-context-only"
+            or spec.get("execution_mode") != "live"
+            or spec.get("dataset_id") != run.dataset_id
+            or spec.get("live_config") != config
+            or spec.get("candidate_capture_id") != run.candidate_capture_id
+            or spec.get("reference_capture_id") != run.reference_capture_id
+            or spec.get("reference_config") != run.reference_config
+            or spec.get("recovery_config") != run.recovery_config
+            or spec.get("profile_sha256") != digest(profile)
+            or spec["dataset"].get("fixture_sha256") != config.get("fixture_sha256")
+            or not isinstance(case_ids, list)
+            or not case_ids
+            or any(not isinstance(case_id, str) or not case_id for case_id in case_ids)
+            or len(set(case_ids)) != len(case_ids)
+            or not isinstance(operations, list)
+            or len(operations) != len(case_ids)
+            or type(config.get("max_model_calls")) is not int
+            or config["max_model_calls"] != len(case_ids)
+            or type(config.get("max_input_tokens")) is not int
+            or config["max_input_tokens"] < 1
+            or any(
+                not isinstance(operation, dict)
+                or operation.get("id") != f"answer:{case_id}"
+                or operation.get("kind") != "answer"
+                or operation.get("case_id") != case_id
+                or operation.get("model") != config.get("model")
+                or operation.get("max_output_tokens") != config.get("max_output_tokens")
+                or operation.get("max_input_tokens") != config["max_input_tokens"]
+                for operation, case_id in zip(operations, case_ids, strict=True)
+            )
+        ):
+            raise ValueError
+    except (KeyError, TypeError, ValueError, AttributeError):
+        raise LegacyUsageUnavailable("실행 명세와 전체 답변 호출을 확인할 수 없습니다.") from None
 
 
 def _previous(request_id, run_id, actor, reason, evidence_sha256, authenticated_actor_id):
@@ -183,6 +256,8 @@ def reconcile_legacy_usage(
         usage = capture_usage(capture, run.model_api_calls, run.live_config["max_output_tokens"])
         if usage["calls"] != run.live_config["max_model_calls"]:
             raise ValueError
+        if run.execution_spec:
+            _validate_pinned_input(capture, run.live_config)
     except (ResultsUnavailable, KeyError, ValueError, TypeError):
         raise LegacyUsageUnavailable(
             "저장 결과의 무결성과 전체 호출 사용량을 확인할 수 없습니다."
