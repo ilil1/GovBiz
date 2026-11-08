@@ -376,7 +376,6 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   return <>
     <WorkspacePageHeader title="새 평가" actions={<Link className={styles.secondaryButton} to="/ops/datasets">평가 자료 등록·관리</Link>} />
     <div className={styles.content}>
-      <p className="text-sm leading-6 text-ink-muted">평가 자료와 답변 확인 방법을 고른 뒤 비교할 답변을 확인하고 실행하세요. 다른 메뉴에 다녀와도 선택한 내용은 유지됩니다.</p>
       <section id="new-evaluation" className={`${styles.card} scroll-mt-28`} aria-label="평가 실행">
         <h2 className={styles.cardTitle}>평가 준비하기</h2>
         <p className="text-sm leading-6 text-ink-muted">처음이라면 아래 순서대로 선택해 보세요. 기존 답변을 다시 확인하면 추가 AI 호출이 없습니다.</p>
