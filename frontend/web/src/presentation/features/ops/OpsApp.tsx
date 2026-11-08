@@ -276,6 +276,13 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   const [rejected, setRejected] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [step, setStep] = useState<1 | 2 | 3>(restored.pending ? 3 : 1)
+  const stepHeading = useRef<HTMLHeadingElement>(null)
+  const firstStepRender = useRef(true)
+  useEffect(() => {
+    if (firstStepRender.current) { firstStepRender.current = false; return }
+    stepHeading.current?.focus()
+  }, [step])
   const [mode, setMode] = useState<'replay' | 'live'>(restored.pending ? restored.pending.live_config ? 'live' : 'replay' : draft?.mode ?? 'replay')
   const [approved, setApproved] = useState(!!restored.pending?.live_config)
   const [dataset, setDataset] = useState(restored.pending?.dataset_id ?? draft?.dataset ?? datasets[0]?.id ?? '')
@@ -326,7 +333,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
     return () => controller.abort()
   }, [restored, finish])
   const submit = async () => {
-    if (submitting.current || busy || storageError || (!pending && mode === 'live' && (!approved || !liveEnabled || !canGenerate || !selectedOption))) return
+    if (step !== 3 || submitting.current || busy || storageError || (!pending && mode === 'live' && (!approved || !liveEnabled || !canGenerate || !selectedOption))) return
     if (!pending && (!supported || !(mode === 'live' ? liveProfile : selected?.execution_profiles.replay))) return
     submitting.current = true; setBusy(true); setSubmitError(''); setRejected(false)
     try {
@@ -367,13 +374,42 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   return <>
     <WorkspacePageHeader title="새 평가" actions={<Link className={styles.secondaryButton} to="/ops/datasets">평가 자료 등록·관리</Link>} />
     <div className={styles.content}>
-      <p className="text-sm text-ink-muted">평가 자료를 고르고 확인 방법을 선택하세요. 다른 메뉴에 다녀와도 선택한 내용은 유지됩니다. 새 AI 답변은 실행 전 비용과 예산을 다시 확인합니다.</p>
+      <p className="text-sm leading-6 text-ink-muted">평가 자료와 답변 확인 방법을 고른 뒤 비교할 답변을 확인하고 실행하세요. 다른 메뉴에 다녀와도 선택한 내용은 유지됩니다.</p>
       <section id="new-evaluation" className={`${styles.card} scroll-mt-28`} aria-label="평가 실행">
-        <h2 className={styles.cardTitle}>어떤 답변을 확인할까요?</h2>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void submit() }}>
+        <h2 className={styles.cardTitle}>평가 준비하기</h2>
+        <p className="text-sm leading-6 text-ink-muted">처음이라면 아래 순서대로 선택해 보세요. 기존 답변을 다시 확인하면 추가 AI 호출이 없습니다.</p>
+        {pending && <div className="rounded-xl bg-amber-50 p-3 text-sm" role="status"><p>보관한 요청: {pending.request_id}</p><p>{pending.dataset_id} · 기준 {pending.reference_capture_id}{pending.baseline_version ? ` · 기준 버전 ${pending.baseline_version}` : ''} · {pending.live_config ? `${pending.live_config.model} · 최대 ${pending.live_config.max_model_calls}회 · 출력 ${pending.live_config.max_output_tokens}토큰/회 · 입력 ${pending.live_config.max_input_tokens ?? '기록 없음'}토큰/회` : '저장 응답 재평가'}</p><p>새로고침·재로그인 뒤에도 이 탭에서 같은 요청을 확인합니다. 탭을 닫기 전 실행 이력에서 접수 여부를 확인하세요.</p></div>}
+        {storageError && <p role="alert" className="text-sm text-red-700">{storageError}</p>}
+        {submitError && <p role="alert" className="text-sm text-red-700">{submitError}</p>}
+        {rejected && <button className={styles.secondaryButton} onClick={reselect}>접수되지 않은 조건 다시 선택</button>}
+        <ol aria-label="평가 준비 단계" className="grid list-none gap-2 p-0 text-sm sm:grid-cols-3">
+          {(['평가 자료', '답변 확인 방법', '비교 및 실행'] as const).map((label, index) => <li key={label} aria-current={step === index + 1 ? 'step' : undefined} className={`rounded-lg px-3 py-2 ${step === index + 1 ? 'bg-brand-primary font-bold text-white' : 'bg-surface-muted text-ink-muted'}`}><span className="mr-2">{index + 1}</span>{label}{step === index + 1 && <span className="sr-only"> · 현재 단계</span>}</li>)}
+        </ol>
+        <form className="grid gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (step === 3) void submit() }}>
+          {step === 1 && <>
+          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-base font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">1. 평가 자료 선택</h3>
           <EvaluationDatasetPicker datasets={datasets} value={dataset} disabled={busy || requestId.current !== null} onChange={changeDataset} />
-          <label className="grid min-w-0 gap-2 text-sm font-semibold md:col-span-2">답변을 확인하는 방법<select className={field} value={mode} disabled={busy || requestId.current !== null} onChange={(event) => { setMode(event.target.value as 'replay' | 'live'); setApproved(false) }}><option value="replay">기존 답변 다시 확인 · 추가 AI 호출 없음</option><option value="live" disabled={!canGenerate}>새 응답 생성 · 비용 발생 가능</option></select></label>
-          <p className="text-sm leading-6 text-ink-muted md:col-span-2">{ragLive ? '등록된 공고 안에서 필요한 내용을 찾고 새 답변을 만듭니다. AI 사용 비용이 발생합니다.' : mode === 'live' ? '질문과 공고 내용을 OpenAI에 보내 새 답변을 만듭니다. 공고 검색은 다시 하지 않으며 AI 사용 비용이 발생합니다.' : '이미 저장된 답변을 다시 확인합니다. AI에게 새 답변을 요청하지 않으며, 현재 AI의 성능을 새로 측정하는 것은 아닙니다.'}</p>
+          {!supported && <p className="text-sm text-amber-800 md:col-span-2">이 자료는 평가 범위를 확인할 수 없어 실행할 수 없습니다. 다른 자료를 선택해 주세요.</p>}
+          <button type="button" className={`${styles.primaryButton} justify-self-start md:col-span-2`} disabled={!dataset || !supported || busy} onClick={() => setStep(2)}>다음: 답변 확인 방법</button>
+          </>}
+          {step === 2 && <>
+          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-base font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">2. 답변 확인 방법 선택</h3>
+          <p className="text-sm text-ink-muted md:col-span-2">선택한 자료: <strong className="text-ink">{selected?.selection_guide?.title ?? selected?.label}</strong> · 질문 {selected?.case_ids.length ?? 0}개</p>
+          <fieldset className="min-w-0 md:col-span-2">
+            <legend className="text-sm font-semibold">답변을 확인하는 방법</legend>
+            <p className="mt-1 text-sm text-ink-muted">무엇을 확인하고 싶은지에 따라 하나를 선택하세요.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm leading-6 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary ${mode === 'replay' ? 'border-brand-primary bg-brand-soft' : 'border-line bg-white'}`}>
+                <input type="radio" name="evaluation-mode" aria-label="기존 답변 다시 확인" value="replay" className="mt-1" checked={mode === 'replay'} disabled={busy || requestId.current !== null} onChange={() => { setMode('replay'); setApproved(false) }} />
+                <span><strong className="block text-ink">기존 답변 다시 확인</strong><span className="block text-ink-muted">저장된 답변을 비교합니다. 추가 AI 호출은 없습니다.</span><span className="mt-1 block text-ink-muted">현재 AI의 성능을 새로 측정하는 것은 아닙니다.</span></span>
+              </label>
+              <label className={`flex items-start gap-3 rounded-xl border p-4 text-sm leading-6 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary ${!canGenerate ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${mode === 'live' ? 'border-brand-primary bg-brand-soft' : 'border-line bg-white'}`}>
+                <input type="radio" name="evaluation-mode" aria-label="새 응답 생성" value="live" className="mt-1" checked={mode === 'live'} disabled={!canGenerate || busy || requestId.current !== null} onChange={() => { setMode('live'); setApproved(false) }} />
+                <span><strong className="block text-ink">새 응답 생성</strong><span className="block text-ink-muted">선택한 모델로 새 답변을 만듭니다.</span><span className="mt-1 block text-amber-800">자료를 OpenAI에 전송하며 비용이 발생할 수 있습니다.</span>{!canGenerate && <span className="mt-1 block text-ink-muted">이 자료에서는 새 응답을 만들 수 없습니다.</span>}</span>
+              </label>
+            </div>
+          </fieldset>
+          {mode === 'live' && <p className="text-sm leading-6 text-ink-muted md:col-span-2">{ragLive ? '등록된 공고 안에서 필요한 내용을 찾고 새 답변을 만듭니다. AI 사용 비용이 발생합니다.' : '질문과 공고 내용을 OpenAI에 보내 새 답변을 만듭니다. 공고 검색은 다시 하지 않으며 AI 사용 비용이 발생합니다.'}</p>}
           {ragLive && <details className="text-sm leading-6 text-ink-muted md:col-span-2"><summary className="cursor-pointer font-semibold">검색과 AI 호출 상세 보기</summary><p className="mt-2">{ragLiveNotice(liveConfig)}</p></details>}
           {selected && <p className="text-sm md:col-span-2" role="status">확인 범위: {selected.evaluation_scope === 'fixed-answer-context-only' ? '미리 고른 공고 내용을 바탕으로 답변을 확인합니다. 여러 공고 중 알맞은 공고를 찾는 능력은 측정하지 않습니다.' : selected.evaluation_scope === 'source-chunks-retrieval-answer' ? (ragLive ? '정해진 공고 안에서 필요한 내용을 찾고 새 답변을 확인합니다. 실제 서비스의 공고 검색 성능은 측정하지 않습니다.' : '정해진 공고의 저장된 검색과 답변을 다시 확인합니다. 새로운 검색이나 답변 생성은 하지 않습니다.') : '평가할 범위를 확인할 수 없습니다.'}</p>}
           {mode === 'live' && <label className="grid min-w-0 gap-2 text-sm font-semibold md:col-span-2">평가 모델<select className={field} value={model} disabled={busy || requestId.current !== null} onChange={(event) => { setModel(event.target.value); setApproved(false) }}>
@@ -383,8 +419,27 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
           {mode === 'live' && !pending && !selectedOption && <p role="alert" className="text-sm text-red-700 md:col-span-2">선택했던 모델을 현재 자료에서 사용할 수 없습니다. 허용된 평가 모델을 다시 선택하세요.</p>}
           {mode === 'live' && <p className="text-sm text-ink-muted md:col-span-2">한 번에 선택한 모델 하나를 평가합니다. 같은 평가 자료로 다른 모델도 실행하면 <Link className="text-brand-primary underline" to="/ops/dashboard">성능 대시보드</Link>에서 모델별 결과를 비교할 수 있습니다.</p>}
           {ragLive && <div className="md:col-span-2"><VectorPlan config={liveConfig} /></div>}
+          {mode === 'live' && !liveEnabled && <p role="status" className="text-sm text-amber-800 md:col-span-2">새 응답 생성이 비활성화되어 있습니다. 실행기와 서버 설정을 확인하거나 기존 답변 확인을 선택해 주세요.</p>}
+          <div className="flex flex-wrap gap-3 md:col-span-2">
+            <button type="button" className={styles.secondaryButton} onClick={() => setStep(1)}>이전: 평가 자료</button>
+            <button type="button" className={styles.primaryButton} disabled={busy || (mode === 'live' && (!liveEnabled || !selectedOption))} onClick={() => setStep(3)}>다음: 비교하고 실행</button>
+          </div>
+          </>}
+          {step === 3 && <>
+          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-base font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">3. 비교하고 실행</h3>
           <div className="grid min-w-0 gap-2 text-sm"><label className="grid gap-2 font-semibold">비교 기준 답변<select className={field} value={reference} disabled={busy || requestId.current !== null} onChange={(event) => setReference(event.target.value)}>{selected?.baseline && <option value={selected.baseline.id}>{selected.baseline.label}</option>}{selected?.captures.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><p className="text-ink-muted">선택한 답변과 비교할 기존 기록입니다. 비교 기준이라고 해서 정답으로 승인된 것은 아닙니다.</p></div>
           {mode === 'replay' && <div className="grid min-w-0 gap-2 text-sm"><label className="grid gap-2 font-semibold">다시 확인할 답변<select className={field} value={candidate} disabled={busy || requestId.current !== null} onChange={(event) => setCandidate(event.target.value)}>{selected?.captures.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><p className="text-ink-muted">비교 기준 답변과 견줄 저장된 답변입니다. 같은 답변을 고르면 결과가 다시 계산되는지만 확인합니다.</p></div>}
+          <section aria-label="평가 설정 요약" className="rounded-xl border border-brand-primary bg-brand-soft p-4 text-sm leading-6 md:col-span-2">
+            <h4 className="font-bold">실행 전 선택한 내용을 확인하세요</h4>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div><dt className="text-ink-muted">평가 자료</dt><dd className="font-semibold break-words">{selected?.selection_guide?.title ?? selected?.label ?? '선택되지 않음'} · 질문 {selected?.case_ids.length ?? 0}개</dd></div>
+              <div><dt className="text-ink-muted">확인 방법</dt><dd className="font-semibold">{mode === 'live' ? `새 응답 생성 · ${liveConfig?.model ?? '모델 선택 필요'}` : '기존 답변 다시 확인 · 추가 AI 호출 없음'}</dd></div>
+              <div><dt className="text-ink-muted">비교 기준 답변</dt><dd className="font-semibold">{(selected?.baseline?.id === reference ? selected.baseline.label : selected?.captures.find((item) => item.id === reference)?.label) ?? '선택되지 않음'}</dd></div>
+              {mode === 'replay' && <div><dt className="text-ink-muted">다시 확인할 답변</dt><dd className="font-semibold">{selected?.captures.find((item) => item.id === candidate)?.label ?? '선택되지 않음'}</dd></div>}
+            </dl>
+            {mode === 'replay' && reference && reference === candidate && <p className="mt-3 rounded-lg bg-white p-3 text-amber-800">같은 저장 답변을 비교합니다. 현재 AI 성능 측정이 아닌 재현 확인입니다.</p>}
+            <p className="mt-3 text-ink-muted" aria-live="polite">{pending ? '같은 요청으로 재시도하여 접수 여부를 확인합니다.' : mode === 'live' ? !liveEnabled ? '현재 새 응답 생성이 비활성화되어 있습니다. 실행기와 서버 설정을 확인해 주세요.' : !selectedOption ? '사용할 평가 모델을 선택해 주세요.' : approved ? '전송 내용에 동의했습니다. 설정·예산을 점검하거나 새 응답 생성 및 평가를 실행하세요.' : '전송 내용과 최대 호출 예산을 확인하고 동의해 주세요. 설정·예산은 실행 전에 점검할 수 있습니다.' : '비교할 두 답변을 확인한 뒤 평가를 실행하세요. 추가 AI 호출은 없습니다.'}</p>
+          </section>
           {mode === 'live' && selected && liveConfig && <div className="min-w-0 rounded-xl border border-amber-200 md:col-span-2 bg-amber-50 p-4 text-sm leading-6">
             <p>모델: <strong>{liveConfig.model}</strong> · 최대 {liveConfig.max_model_calls}회 · 호출당 출력 최대 {liveConfig.max_output_tokens.toLocaleString()}토큰 · 호출당 입력 최대 {liveConfig.max_input_tokens?.toLocaleString() ?? '기록 없음'}토큰 · 자동 재호출 없음</p>
             {ragLive && <p>임베딩: {liveConfig.embedding_model} · {liveConfig.embedding_dimensions}차원. 최대 호출 수에는 새로 만드는 청크·질문 임베딩과 답변만 포함됩니다. 재사용하는 청크 벡터에는 임베딩 호출을 예약하지 않습니다. 전체 입력 예약 {liveConfig.max_total_input_tokens?.toLocaleString()}토큰 · 전체 출력 예약 {liveConfig.max_total_output_tokens?.toLocaleString()}토큰.</p>}
@@ -394,13 +449,14 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
             <label className="mt-3 flex items-start gap-2"><input type="checkbox" className="mt-1" checked={approved} disabled={!liveEnabled || busy || requestId.current !== null} onChange={(event) => setApproved(event.target.checked)} />위 자료의 OpenAI 전송과 최대 호출 예산을 확인했습니다.</label>
           </div>}
           {mode === 'live' && !pending && liveProfile && <div className="min-w-0 md:col-span-2"><LiveReadinessPanel key={`${dataset}:${model}:${liveProfile}`} datasetId={dataset} executionProfile={liveProfile} model={model} onExpired={onExpired} /></div>}
-          <button className={`${styles.primaryButton} justify-self-start md:col-span-2`} disabled={busy || !!storageError || rejected || (!pending && (!supported || !dataset || !reference || !candidate || (mode === 'live' && (!approved || !liveEnabled || !canGenerate || !selectedOption))))}>{busy ? '접수 중…' : pending ? '같은 요청으로 재시도' : mode === 'live' ? '새 응답 생성 및 평가' : '평가 실행'}</button>
+          {!pending && (!reference || !candidate) && <p role="status" className="text-sm text-amber-800 md:col-span-2">비교할 저장 답변이 없습니다. 이전 단계에서 다른 평가 자료를 선택해 주세요.</p>}
+          <div className="flex flex-wrap gap-3 md:col-span-2">
+            {!pending && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => setStep(2)}>이전: 답변 확인 방법</button>}
+            <button type="submit" className={styles.primaryButton} disabled={busy || !!storageError || rejected || (!pending && (!supported || !dataset || !reference || !candidate || (mode === 'live' && (!approved || !liveEnabled || !canGenerate || !selectedOption))))}>{busy ? '접수 중…' : pending ? '같은 요청으로 재시도' : mode === 'live' ? '새 응답 생성 및 평가' : '평가 실행'}</button>
+          </div>
+          </>}
         </form>
-        {selected && <p className="text-xs leading-5 text-ink-muted">비교 범위: {selected.case_ids.join(', ')} · {selected.case_ids.length}건. {mode === 'live' ? '선택한 모델의 새 응답과 선택한 기준 응답을 비교합니다.' : reference === candidate ? '같은 저장 결과의 재현 검증입니다.' : '두 실행의 위 사례만 비교합니다. 원본의 다른 사례는 평가 범위에 포함하지 않습니다.'}</p>}
-        {pending && <div className="rounded-xl bg-amber-50 p-3 text-sm" role="status"><p>보관한 요청: {pending.request_id}</p><p>{pending.dataset_id} · 기준 {pending.reference_capture_id}{pending.baseline_version ? ` · 기준 버전 ${pending.baseline_version}` : ''} · {pending.live_config ? `${pending.live_config.model} · 최대 ${pending.live_config.max_model_calls}회 · 출력 ${pending.live_config.max_output_tokens}토큰/회 · 입력 ${pending.live_config.max_input_tokens ?? '기록 없음'}토큰/회` : '저장 응답 재평가'}</p><p>새로고침·재로그인 뒤에도 이 탭에서 같은 요청을 확인합니다. 탭을 닫기 전 실행 이력에서 접수 여부를 확인하세요.</p></div>}
-        {storageError && <p role="alert" className="text-sm text-red-700">{storageError}</p>}
-        {submitError && <p role="alert" className="text-sm text-red-700">{submitError}</p>}
-        {rejected && <button className={styles.secondaryButton} onClick={reselect}>접수되지 않은 조건 다시 선택</button>}
+        {step === 3 && selected && <p className="text-xs leading-5 text-ink-muted">비교 범위: {selected.case_ids.join(', ')} · {selected.case_ids.length}건. {mode === 'live' ? '선택한 모델의 새 응답과 선택한 기준 응답을 비교합니다.' : reference === candidate ? '같은 저장 결과의 재현 검증입니다.' : '두 실행의 위 사례만 비교합니다. 원본의 다른 사례는 평가 범위에 포함하지 않습니다.'}</p>}
       </section>
     </div>
   </>

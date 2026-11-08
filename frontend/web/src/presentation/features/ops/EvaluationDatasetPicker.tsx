@@ -26,19 +26,45 @@ export function EvaluationDatasetPicker({ datasets, value, disabled, onChange }:
     {dataset.selection_guide ? `${dataset.selection_guide.title} · ${dataset.case_ids.length}문제` : dataset.label}
   </option>
 
-  return <div className="grid min-w-0 gap-4 md:col-span-2">
+  return <div className="grid min-w-0 gap-3 md:col-span-2">
     <div>
       <label htmlFor={id} className="text-sm font-semibold">평가 자료</label>
-      <p id={`${id}-help`} className="mt-1 text-sm leading-6"><strong>등록된 평가 자료 {datasets.length}개</strong> 중 목적에 맞는 자료 하나를 선택하세요.</p>
-      <p className="mt-1 text-sm leading-6 text-ink-muted">평가 자료는 공고 내용, 질문, 답변을 확인할 기준을 묶어 둔 것입니다. 확인하려는 목적에 맞는 자료 하나를 선택하세요. 같은 질문이 여러 묶음에 포함될 수 있습니다. 모든 자료를 실행할 필요는 없습니다.</p>
+      <p id={`${id}-help`} className="mt-1 text-sm leading-6 text-ink-muted"><strong>등록된 평가 자료 {datasets.length}개</strong> 중 확인할 공고와 질문이 담긴 자료를 선택하세요.</p>
     </div>
-    <ul aria-label="평가 자료 용도 안내" className="grid list-none gap-2 p-0 sm:grid-cols-3">
+    <select id={id} aria-describedby={`${id}-help`} className="min-h-11 w-full min-w-0 rounded-xl border border-line bg-white px-3 text-sm focus:outline-2 focus:outline-brand-primary"
+      value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+      {groups.filter((group) => group.datasets.length > 0).map((group) => <optgroup key={group.id} label={group.label}>{group.datasets.map(option)}</optgroup>)}
+      {unclassified.length > 0 && <optgroup label="분류 확인 필요">{unclassified.map(option)}</optgroup>}
+    </select>
+    {selected && <section aria-label="선택한 평가 자료 설명" aria-live="polite" className="min-w-0 rounded-xl border border-line p-4 text-sm leading-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={workspaceTagClassName('info')}>{category?.label ?? '분류 확인 필요'}</span>
+        <span className="text-ink-muted">질문 {selected.case_ids.length}개</span>
+      </div>
+      <h4 className="mt-2 font-bold break-words">{guide?.title ?? selected.label}</h4>
+      {scope && <p className="mt-2 text-ink-muted"><strong className="text-ink">{scope.label}:</strong> {scope.description}</p>}
+      {guide ? <p className="mt-2 text-ink-muted"><strong className="text-ink">평가 목적:</strong> {guide.purpose}</p> : <p className="mt-2 text-ink-muted">이 자료의 용도 설명이 아직 제공되지 않았습니다. 자료 이름만으로 실제 품질 평가용인지 판단하지 마세요.</p>}
+      <details className="mt-3 rounded-lg bg-surface-muted p-3">
+        <summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">사용 자료와 평가 범위 자세히 보기</summary>
+        <p className="mt-3 text-ink-muted">아래의 <strong>기존 답변 다시 확인</strong>은 이전에 저장한 답변을 다시 확인하며 AI 호출이나 검색을 하지 않습니다. <strong>새 응답 생성</strong>은 AI가 다시 답변하며 비용이 발생할 수 있습니다.</p>
+        {guide && <dl className="mt-3 grid gap-3">
+          <div><dt className="font-semibold">사용 자료</dt><dd className="mt-1 text-ink-muted">{guide.material}</dd></div>
+          <div><dt className="font-semibold">평가 범위와 한계</dt><dd className="mt-1 text-ink-muted">{guide.limitations}</dd></div>
+        </dl>}
+        <p className="mt-3 text-xs leading-5 text-ink-muted">자료 분류는 검토 승인이나 품질 합격을 뜻하지 않습니다. v1·v2·v3는 자료의 수정 버전이며, H01 같은 표시는 질문 번호입니다.</p>
+      </details>
+    </section>}
+    <details className="min-w-0 rounded-xl bg-surface-muted p-4 text-sm leading-6">
+      <summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">어떤 자료를 골라야 하나요?</summary>
+      <p className="mt-3 text-ink-muted">평가 자료는 공고 내용, 질문, 답변을 확인할 기준을 묶어 둔 것입니다. 같은 질문이 여러 묶음에 포함될 수 있습니다. 모든 자료를 실행할 필요는 없습니다.</p>
+      <ul aria-label="평가 자료 용도 안내" className="mt-3 grid list-none gap-2 p-0 sm:grid-cols-3">
       {groups.map((group) => <li key={group.id} className={`min-w-0 rounded-xl border p-3 ${category?.id === group.id ? 'border-brand-primary bg-brand-soft' : 'border-line bg-surface-muted'}`}>
         <p className="text-sm font-semibold">{group.label} <span className="ml-1 font-normal text-ink-muted">{group.datasets.length}개</span></p>
         <p className="mt-1 text-sm leading-6 text-ink-muted">{group.description}</p>
       </li>)}
-    </ul>
-    {unclassified.length > 0 && <p className="text-sm leading-6 text-ink-muted">분류 확인 필요 {unclassified.length}개 · 용도 설명이 없는 자료도 전체 개수에 포함됩니다.</p>}
+      </ul>
+      {unclassified.length > 0 && <p className="mt-3 text-ink-muted">분류 확인 필요 {unclassified.length}개 · 용도 설명이 없는 자료도 전체 개수에 포함됩니다.</p>}
+    </details>
     <details className="min-w-0 rounded-xl border border-line">
       <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">등록 자료 구성 보기</summary>
       <div className="overflow-x-auto px-4 pb-4">
@@ -59,25 +85,5 @@ export function EvaluationDatasetPicker({ datasets, value, disabled, onChange }:
         </table>
       </div>
     </details>
-    <select id={id} aria-describedby={`${id}-help`} className="min-h-11 w-full min-w-0 rounded-xl border border-line bg-white px-3 text-sm focus:outline-2 focus:outline-brand-primary"
-      value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-      {groups.filter((group) => group.datasets.length > 0).map((group) => <optgroup key={group.id} label={group.label}>{group.datasets.map(option)}</optgroup>)}
-      {unclassified.length > 0 && <optgroup label="분류 확인 필요">{unclassified.map(option)}</optgroup>}
-    </select>
-    {selected && <section aria-label="선택한 평가 자료 설명" aria-live="polite" className="min-w-0 rounded-xl border border-line p-4 text-sm leading-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={workspaceTagClassName('info')}>{category?.label ?? '분류 확인 필요'}</span>
-        <span className="text-ink-muted">질문 {selected.case_ids.length}개</span>
-      </div>
-      <h3 className="mt-2 font-bold break-words">{guide?.title ?? selected.label}</h3>
-      {scope && <p className="mt-2 text-ink-muted"><strong className="text-ink">{scope.label}:</strong> {scope.description}</p>}
-      <p className="mt-2 text-ink-muted">아래의 <strong>기존 답변 다시 확인</strong>은 이전에 저장한 답변을 다시 확인하며 AI 호출이나 검색을 하지 않습니다. <strong>새 응답 생성</strong>은 AI가 다시 답변하며 비용이 발생할 수 있습니다.</p>
-      {guide ? <dl className="mt-3 grid gap-3">
-        <div><dt className="font-semibold">평가 목적</dt><dd className="mt-1 text-ink-muted">{guide.purpose}</dd></div>
-        <div><dt className="font-semibold">사용 자료</dt><dd className="mt-1 text-ink-muted">{guide.material}</dd></div>
-        <div className="rounded-lg bg-surface-muted p-3"><dt className="font-semibold">평가 범위와 한계</dt><dd className="mt-1 text-ink-muted">{guide.limitations}</dd></div>
-      </dl> : <p className="mt-2 text-ink-muted">이 자료의 용도 설명이 아직 제공되지 않았습니다. 자료 이름만으로 실제 품질 평가용인지 판단하지 마세요.</p>}
-      <p className="mt-3 text-xs leading-5 text-ink-muted">자료 분류는 검토 승인이나 품질 합격을 뜻하지 않습니다. v1·v2·v3는 자료의 수정 버전이며, H01 같은 표시는 질문 번호입니다.</p>
-    </section>}
   </div>
 }

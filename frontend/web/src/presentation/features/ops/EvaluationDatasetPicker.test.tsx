@@ -29,11 +29,17 @@ const showComposition = () => {
   fireEvent.click(screen.getByText('등록 자료 구성 보기'))
   return within(screen.getByRole('table', { name: '등록된 평가 자료 구성' }))
 }
+const showGuide = () => fireEvent.click(screen.getByText('어떤 자료를 골라야 하나요?'))
 
 describe('평가 자료 선택 안내', () => {
   it('현재 등록된 10개 자료를 용도별 2·4·4개로 설명하고 모든 자료의 목적과 사례 수를 보여준다', () => {
     mount()
     expect(screen.getByText('등록된 평가 자료 10개')).toBeTruthy()
+    const select = screen.getByRole('combobox', { name: '평가 자료' })
+    const guide = screen.getByText('어떤 자료를 골라야 하나요?').closest('details')!
+    expect(select.compareDocumentPosition(guide) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(guide.open).toBe(false)
+    showGuide()
     const cards = within(screen.getByRole('list', { name: '평가 자료 용도 안내' })).getAllByRole('listitem')
     expect(cards.map((card) => card.querySelector('p')?.textContent)).toEqual(['실제 품질 평가용 2개', '개발 검증용 4개', '과거 자료 4개'])
     expect(screen.getByText(/같은 질문이 여러 묶음에 포함될 수 있습니다/)).toBeTruthy()
@@ -56,6 +62,7 @@ describe('평가 자료 선택 안내', () => {
     view.rerender(<EvaluationDatasetPicker datasets={subset} value={datasets[0].id} disabled={false} onChange={onChange} />)
     expect(screen.getByText('등록된 평가 자료 2개')).toBeTruthy()
     expect(screen.queryByText('등록된 평가 자료 10개')).toBeNull()
+    showGuide()
     const cards = within(screen.getByRole('list', { name: '평가 자료 용도 안내' })).getAllByRole('listitem')
     expect(cards.map((card) => card.querySelector('p')?.textContent)).toEqual(['실제 품질 평가용 0개', '개발 검증용 1개', '과거 자료 1개'])
     expect(screen.getByRole('combobox', { name: '평가 자료' })).toHaveProperty('value', datasets[0].id)
@@ -66,6 +73,7 @@ describe('평가 자료 선택 안내', () => {
   it.each([undefined, null])('용도 설명이 %s인 자료도 전체 수·선택 목록·구성 표에서 누락하지 않는다', (guide) => {
     const unknown = { ...datasets[0], id: 'unclassified-material', label: '새로 등록된 설명 없는 자료', selection_guide: guide, case_ids: ['N01', 'N02'] }
     mount([...datasets, unknown], unknown.id)
+    showGuide()
     expect(screen.getByText('등록된 평가 자료 11개')).toBeTruthy()
     expect(screen.getByText(/분류 확인 필요 1개 · 용도 설명이 없는 자료도 전체 개수에 포함/)).toBeTruthy()
     const select = screen.getByRole('combobox', { name: '평가 자료' })
@@ -95,6 +103,10 @@ describe('평가 자료 선택 안내', () => {
     expect(select).toHaveProperty('value', selected.id)
     expect(onChange).not.toHaveBeenCalled()
     const explanation = within(screen.getByRole('region', { name: '선택한 평가 자료 설명' }))
+    const detail = explanation.getByText('사용 자료와 평가 범위 자세히 보기').closest('details')!
+    expect(detail.open).toBe(false)
+    fireEvent.click(explanation.getByText('사용 자료와 평가 범위 자세히 보기'))
+    expect(detail.open).toBe(true)
     expect(explanation.getByText(selected.selection_guide!.purpose)).toBeTruthy()
     expect(explanation.getByText(selected.selection_guide!.material)).toBeTruthy()
     expect(explanation.getByText(selected.selection_guide!.limitations)).toBeTruthy()
