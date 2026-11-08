@@ -769,7 +769,7 @@ describe('관리자 평가 자료 등록', () => {
     fireEvent.click(screen.getByRole('button', { name: '평가 자료 등록 내용 확인' }))
     expect(screen.getByText('아래에서 등록할 내용을 확인해 주세요.')).toBeTruthy()
     expect(writes(fetch)).toHaveLength(1)
-    expect(within(screen.getByRole('region', { name: '게시 최종 확인' })).getByText(/실제 모델 호출·검토 승인·품질 합격은 아닙니다/)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: '게시 최종 확인' })).getByText(/등록만으로 AI 답변이 생성되거나 평가 결과가 승인되지는 않습니다/ )).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '확인하고 평가 자료로 등록' }))
     await screen.findByText(/새 평가에서 선택할 자료 버전을 게시했습니다/)
     expect(writes(fetch)[1][0]).toBe(`/api/v1/ops/datasets/${id}/publish`)
@@ -951,7 +951,7 @@ describe('관리자 평가 자료 등록', () => {
   it('보관과 복원은 기존 자료에만 적용하고 평가를 접수하지 않는다', async () => {
     const fetch = setup([saved]); open(); await selectSaved()
     showPublish()
-    fireEvent.click(screen.getByText('자료 관리 및 이전 버전'))
+    fireEvent.click(screen.getByText('자료 보관하기'))
     fireEvent.click(screen.getByRole('button', { name: '자료 보관' }))
     await screen.findByText(/자료를 보관했습니다/)
     expect(screen.getByRole('button', { name: '평가 자료 등록 내용 확인' }).hasAttribute('disabled')).toBe(true)
@@ -959,6 +959,19 @@ describe('관리자 평가 자료 등록', () => {
     await screen.findByText(/자료를 복원했습니다/)
     expect(writes(fetch).map(([, options]) => JSON.parse(options!.body as string).archived)).toEqual([true, false])
     expect(writes(fetch).every(([url]) => String(url).endsWith('/archive'))).toBe(true)
+  })
+
+  it('수정한 내용이 있으면 저장 전에 보관할 수 없으며 이유를 안내한다', async () => {
+    const fetch = setup([saved]); open(); await selectSaved()
+    fireEvent.change(screen.getByRole('textbox', { name: '자료 이름 · 필수' }), { target: { value: '저장 전 수정 내용' } })
+    showPublish()
+    fireEvent.click(screen.getByText('자료 보관하기'))
+    expect(screen.getByText('변경한 내용을 먼저 임시 저장해 주세요.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '자료 보관' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '평가 자료 등록 내용 확인' })).toHaveProperty('disabled', true)
+    expect(writes(fetch)).toHaveLength(0)
+    showDocuments()
+    expect(screen.getByRole('textbox', { name: '자료 이름 · 필수' })).toHaveProperty('value', '저장 전 수정 내용')
   })
 
   it('쓰기 전 계정이 달라지면 자료 저장을 전송하지 않는다', async () => {
