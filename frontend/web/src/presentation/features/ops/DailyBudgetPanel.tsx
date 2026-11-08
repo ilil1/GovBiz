@@ -1,24 +1,25 @@
 import type { DailyBudget } from '../../../data/ops/opsApi'
 
-export function DailyBudgetPanel({ value }: { value: DailyBudget | undefined }) {
+export function DailyBudgetPanel({ value, hideSummary = false }: { value: DailyBudget | undefined; hideSummary?: boolean }) {
   return <section aria-label="일별 평가 예산" className="space-y-4 rounded-xl bg-surface-muted p-4 text-sm sm:p-5">
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    {!hideSummary && <><div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <h3 className="text-base font-semibold">일별 평가 예산</h3>
       {value && <p className="text-xs text-ink-muted">{value.period_start.slice(0, 10)} 00:00부터 다음 날 00:00까지 · Asia/Seoul</p>}
     </div>
     <p className="text-xs text-ink-muted">서울 시간 기준 · 호출과 토큰 한도이며 실제 청구 금액은 아닙니다.</p>
-    {!value ? <p>서버에서 일별 예산 정보를 제공하지 않습니다.</p> : <>
-      {value.state === 'disabled' ? <p>일별 제한 미적용 · 누적 한도는 별도로 확인합니다.</p> : <>
-        {value.state === 'unknown' && <p role="alert" className="text-red-700">일별 사용량 미확인 · 신규 예약을 차단합니다. 누락·불일치 장부를 먼저 확인하세요.</p>}
-        {value.state === 'exceeded' && <p role="alert" className="text-red-700">일별 한도 초과 · 신규 예약을 차단합니다.</p>}
-        {value.state === 'enforced' && <p>일별 한도 적용 중 · 누적 한도도 함께 검사합니다.</p>}
-        <dl className="grid gap-2 sm:grid-cols-3">
+    </>}
+    {!value ? !hideSummary && <p>서버에서 일별 예산 정보를 제공하지 않습니다.</p> : <>
+      {value.state === 'disabled' ? !hideSummary && <p>일별 제한 미적용 · 누적 한도는 별도로 확인합니다.</p> : <>
+        {!hideSummary && value.state === 'unknown' && <p role="alert" className="text-red-700">일별 사용량 미확인 · 신규 예약을 차단합니다. 누락·불일치 장부를 먼저 확인하세요.</p>}
+        {!hideSummary && value.state === 'exceeded' && <p role="alert" className="text-red-700">일별 한도 초과 · 신규 예약을 차단합니다.</p>}
+        {!hideSummary && value.state === 'enforced' && <p>일별 한도 적용 중 · 누적 한도도 함께 검사합니다.</p>}
+        {!hideSummary && <dl className="grid gap-2 sm:grid-cols-3">
           {([['calls', '호출', '회'], ['input_tokens', '입력 토큰', '토큰'], ['output_tokens', '출력 토큰', '토큰']] as const).map(([key, label, unit]) => <div key={key} className="min-w-0 rounded-lg bg-white p-3">
             <dt className="font-semibold">{label}</dt>
             <dd className="mt-1 text-base font-semibold">잔여 {value.state === 'unknown' || value.remaining?.[key] == null ? '확인 불가' : `${value.remaining[key].toLocaleString('ko-KR')}${unit}`}</dd>
             <dd className="mt-1 text-xs text-ink-muted">일별 한도 {value.limits?.[key] == null ? '확인 불가' : `${value.limits[key].toLocaleString('ko-KR')}${unit}`}</dd>
           </div>)}
-        </dl>
+        </dl>}
         <details className="rounded-lg bg-white px-3">
           <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">오늘 접수와 이월 상세</summary>
           <div className="overflow-x-auto pb-3"><table className="w-full min-w-[32rem] text-left">

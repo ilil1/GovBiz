@@ -88,12 +88,22 @@ describe('관리자 예산 장부', () => {
     expect(screen.getByText(/금액 한도는 아닙니다/)).toBeTruthy()
     expect(screen.getByRole('heading', { name: '전체 사용 한도' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '하루 평가 한도' })).toBeTruthy()
-    const records = screen.getByText('평가 사용·변경 기록')
-    expect(records.closest('details')).toHaveProperty('open', false)
+    const overall = within(screen.getByRole('region', { name: '전체 사용 한도' }))
+    expect(overall.queryByText('전체 한도와 사용량 보기')).toBeNull()
+    expect(screen.queryByText('평가 사용·변경 기록')).toBeNull()
     expect(within(screen.getByRole('region', { name: '하루 예산 요약' })).getByText(/일별 예산 정보를 확인할 수 없습니다/)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: '하루 예산 요약' })).queryByText('일별 예산 상세 보기')).toBeNull()
+    const records = overall.getByText('사용·예약 내역')
     expect(records.closest('details')).toHaveProperty('open', false)
     fireEvent.click(records)
-    expect(screen.getByText('전체 한도와 사용량 보기').closest('details')).toHaveProperty('open', false)
+    expect(overall.getByText('사용·예약 합계')).toBeTruthy()
+    const usageSummary = within(overall.getByText('사용·예약 합계').parentElement!)
+    expect(usageSummary.getByText('6회')).toBeTruthy()
+    expect(usageSummary.getByText('미확인·미설정')).toBeTruthy()
+    expect(usageSummary.getByText('12,000토큰')).toBeTruthy()
+    expect(usageSummary.getByText(/실제 청구 금액은 아닙니다/)).toBeTruthy()
+    expect(usageSummary.getByText(/사용량을 확인하지 못한 호출이 1회 있습니다/)).toBeTruthy()
+    expect(overall.getByText(/확인된 사용량과 아직 정리되지 않은 예약을 합친 값입니다/)).toBeTruthy()
     expect(screen.getByText(/확인되지 않은 이전 평가 사용량은 포함되지 않았습니다/)).toBeTruthy()
     const details = screen.getByText('누적 예산 상세 내역')
     expect(details.closest('details')).toHaveProperty('open', false)
@@ -103,6 +113,57 @@ describe('관리자 예산 장부', () => {
     expect(details.closest('details')).toHaveProperty('open', false)
     expect(within(screen.getByRole('region', { name: '남은 사용량' })).getByText('남은 한도')).toBeTruthy()
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('하루 한도 중복 수치는 제거하고 이월과 변경 이력은 하루 카드에서 확인한다', async () => {
+    const limits = { calls: 10, input_tokens: 1000, output_tokens: 100 }
+    const today = { calls: 1, input_tokens: 100, output_tokens: 10 }
+    const carried = { calls: 1, input_tokens: 100, output_tokens: 10 }
+    const allocated = { calls: 2, input_tokens: 200, output_tokens: 20 }
+    const remaining = { calls: 8, input_tokens: 800, output_tokens: 80 }
+    const daily = {
+      state: 'enforced', timezone: 'Asia/Seoul', period_start: '2026-09-29T00:00:00+09:00', period_end: '2026-09-30T00:00:00+09:00',
+      limits, current_day: today, carried, allocated, remaining,
+      recent_changes: [{ request_id: id, source: 'CLI', actor: '김 운영자', reason: '하루 한도 조정', expected_revision: null,
+        previous: null, policy: { enabled: true, limits }, created_at: time }],
+    }
+    const fetch = vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, daily } }))
+    vi.stubGlobal('fetch', fetch)
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    const dailyCard = within(await screen.findByRole('region', { name: '하루 예산 요약' }))
+    expect(within(dailyCard.getByRole('region', { name: '하루 남은 사용량' })).getByText('8회')).toBeTruthy()
+    fireEvent.click(dailyCard.getByText('일별 예산 상세 보기'))
+    expect(dailyCard.queryByText('잔여 8회')).toBeNull()
+    fireEvent.click(dailyCard.getByText('오늘 접수와 이월 상세'))
+    const table = dailyCard.getByRole('table', { name: '일별 한도와 오늘의 할당량 및 이월량' })
+    expect(within(table).getByRole('row', { name: '호출 10 1 1 8' })).toBeTruthy()
+    fireEvent.click(dailyCard.getByText('일별 정책 변경 이력 · 최근 1건'))
+    expect(dailyCard.getByText(/김 운영자 · CLI/)).toBeTruthy()
+    expect(dailyCard.getByText('사유: 하루 한도 조정')).toBeTruthy()
+    expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
+  })
+
+  it.each([false, true])('하루 한도가 꺼져도 변경 이력 여부 %s에 따라 상세를 제공한다', async (hasHistory) => {
+    const limits = { calls: 10, input_tokens: 1000, output_tokens: 100 }
+    const change = { request_id: id, source: 'CLI', actor: '김 운영자', reason: '하루 한도 해제', expected_revision: null,
+      previous: { enabled: true, limits }, policy: { enabled: false, limits }, created_at: time }
+    const daily = {
+      state: 'disabled', timezone: 'Asia/Seoul', period_start: '2026-09-29T00:00:00+09:00', period_end: '2026-09-30T00:00:00+09:00',
+      limits: null, current_day: null, carried: null, allocated: null, remaining: null,
+      recent_changes: hasHistory ? [change] : [],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, daily } })))
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    const dailyCard = within(await screen.findByRole('region', { name: '하루 예산 요약' }))
+    expect(dailyCard.getByText(/하루 한도 미설정/)).toBeTruthy()
+    if (hasHistory) {
+      fireEvent.click(dailyCard.getByText('일별 예산 상세 보기'))
+      fireEvent.click(dailyCard.getByText('일별 정책 변경 이력 · 최근 1건'))
+      expect(dailyCard.getByText(/김 운영자 · CLI/)).toBeTruthy()
+      expect(dailyCard.getByText('사유: 하루 한도 해제')).toBeTruthy()
+    } else {
+      expect(dailyCard.queryByText('일별 예산 상세 보기')).toBeNull()
+    }
   })
 
   it.each(['enforced', 'unknown', 'exceeded'] as const)('하루 한도 %s 상태를 전체 한도와 같은 기준으로 표시한다', async (state) => {
@@ -203,7 +264,7 @@ describe('관리자 예산 장부', () => {
     } }))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} operatorId="core:81" /></MemoryRouter>)
-    await screen.findByRole('alert')
+    await screen.findByText(/저장된 할당량과 상세 장부가 일치하지 않습니다/)
     const guide = within(screen.getByRole('region', { name: '예산 설정 순서' }))
     expect(guide.getByText('사용 기록이 맞지 않아 설정을 변경할 수 없습니다.')).toBeTruthy()
     expect(screen.getByRole('button', { name: '전체 한도 변경하기' })).toHaveProperty('disabled', true)
@@ -218,6 +279,7 @@ describe('관리자 예산 장부', () => {
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
     const calls = screen.getByRole('textbox', { name: 'AI 요청 허용 횟수' })
     fireEvent.change(calls, { target: { value: '20' } })
+    fireEvent.click(screen.getByText('사용·예약 내역'))
     const details = screen.getByText('누적 예산 상세 내역')
     fireEvent.click(details)
     fireEvent.click(details)
@@ -255,6 +317,7 @@ describe('관리자 예산 장부', () => {
     const fetch = vi.fn().mockResolvedValue(json(page))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('사용·예약 내역'))
     fireEvent.click(await screen.findByText('누적 예산 상세 내역'))
     const table = await screen.findByRole('table', { name: '예산 할당량 구성' })
     const values = table.textContent
@@ -319,11 +382,15 @@ describe('관리자 예산 장부', () => {
       breakdown: { ...breakdown, legacy_calls: 7, legacy_input_tokens: 7901, legacy_output_tokens: 776 },
     } })))
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('사용·예약 내역'))
     fireEvent.click(await screen.findByText('누적 예산 상세 내역'))
     const table = await screen.findByRole('table', { name: '예산 할당량 구성' })
     expect(within(table).getByRole('row', { name: '과거 저장 응답 반영 7 776 7,901토큰' })).toBeTruthy()
-    expect(screen.getByText(/과거 실행 2건의 사용량을 합산/)).toBeTruthy()
-    expect(screen.queryByText(/이전 평가/)).toBeNull()
+    const past = screen.getByText('이전 평가 2건 포함')
+    expect(past.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(past)
+    expect(screen.getByText(/저장된 응답을 검토해 합산한 사용량입니다/)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: '이전 평가 확인' })).toBeNull()
   })
 
   it('새 호출의 답변 작업을 표시하고 과거 호출의 사례를 추정하지 않는다', async () => {
@@ -349,6 +416,7 @@ describe('관리자 예산 장부', () => {
     const fetch = vi.fn().mockResolvedValue(json(page))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('사용·예약 내역'))
     fireEvent.click(await screen.findByText('누적 예산 상세 내역'))
     const table = await screen.findByRole('table', { name: '예산 할당량 구성' })
     expect(within(table).getByRole('row', { name: '확정 사용량 1 50 100토큰' })).toBeTruthy()
@@ -357,10 +425,98 @@ describe('관리자 예산 장부', () => {
     expect(within(table).getByRole('row', { name: '종료 전 반환 대기 — 1,950 미확인·미설정' })).toBeTruthy()
     expect(screen.getByText(/이전 평가 2건의 사용량을 확인할 수 없습니다/)).toBeTruthy()
     fireEvent.click(screen.getByText('한도 변경 이력 · 최근 1 / 전체 1건'))
-    expect(screen.getByText(/김 운영자 · CLI/)).toBeTruthy()
-    expect(screen.getByText(/Core 로그인으로 인증한 신원은 아닙니다/)).toBeTruthy()
+    const changeRow = screen.getByText(/김 운영자/).closest('li')!
+    const change = within(changeRow)
+    const changeSummary = within(changeRow.querySelector(':scope > dl')!)
+    expect(change.getByText('운영자 직접 입력')).toBeTruthy()
+    expect(changeSummary.getByText('미설정 → 12회')).toBeTruthy()
+    expect(changeSummary.getByText('미설정 → 24,000토큰')).toBeTruthy()
+    expect(changeSummary.queryByText('AI에 보내는 내용')).toBeNull()
+    const detail = change.getByText('변경 상세 보기')
+    expect(detail.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(detail)
+    expect(detail.closest('details')).toHaveProperty('open', true)
+    expect(within(detail.closest('details')!).getByText('미확인·미설정 → 미확인·미설정')).toBeTruthy()
+    expect(change.getByText(/관리자 로그인으로 인증된 신원이 아닙니다/)).toBeTruthy()
+    expect(change.getByText('원본 출처: CLI')).toBeTruthy()
+    expect(change.getByText('사유: 검토한 수동 평가 한도')).toBeTruthy()
+    expect(change.getByText(`요청 ID: ${id}`)).toBeTruthy()
     expect(fetch).toHaveBeenCalledWith('/api/v1/ops/budget/reservations?page=1', expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }))
     expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
+  })
+
+  it('관리자가 바꾼 한도의 전후 값과 사유를 확인할 수 있다', async () => {
+    const change = {
+      request_id: id, actor: 'core:99', source: 'CORE_ADMIN', reason: '평가 범위 조정', created_at: time,
+      previous_limits: { calls: 2, input_tokens: 100, output_tokens: 10 },
+      limits: { calls: 4, input_tokens: 200, output_tokens: 20 },
+    }
+    const fetch = vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, recent_changes: [change] } }))
+    vi.stubGlobal('fetch', fetch)
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('한도 변경 이력 · 최근 1 / 전체 1건'))
+    const recordRow = screen.getByText(/core:99/).closest('li')!
+    const record = within(recordRow)
+    const recordSummary = within(recordRow.querySelector(':scope > dl')!)
+    expect(record.getByText('관리자 로그인')).toBeTruthy()
+    expect(recordSummary.getByText('2회 → 4회')).toBeTruthy()
+    expect(recordSummary.getByText('100토큰 → 200토큰')).toBeTruthy()
+    expect(recordSummary.getByText('10토큰 → 20토큰')).toBeTruthy()
+    const details = record.getByText('변경 상세 보기')
+    expect(details.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(details)
+    expect(record.getByText('사유: 평가 범위 조정')).toBeTruthy()
+    expect(record.getByText(`요청 ID: ${id}`)).toBeTruthy()
+    expect(record.getByText(/관리자 세션을 확인한 기록입니다/)).toBeTruthy()
+    expect(record.getByText('원본 출처: CORE_ADMIN')).toBeTruthy()
+    expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
+  })
+
+  it.each([
+    {
+      name: '최초 설정의 0과 미설정',
+      previous: null,
+      limits: { calls: 0, input_tokens: 0, output_tokens: 0 },
+      summary: ['미설정 → 0회', '미확인·미설정 → 0토큰', '미설정 → 0토큰'],
+      detail: ['미설정 → 0회', '미확인·미설정 → 0토큰', '미설정 → 0토큰'],
+    },
+    {
+      name: '한 항목만 변경',
+      previous: { calls: 2, input_tokens: null, output_tokens: 10 },
+      limits: { calls: 2, input_tokens: 0, output_tokens: 10 },
+      summary: ['미확인·미설정 → 0토큰'],
+      detail: ['2회 → 2회', '미확인·미설정 → 0토큰', '10토큰 → 10토큰'],
+    },
+    {
+      name: '변경 없는 0',
+      previous: { calls: 0, input_tokens: 0, output_tokens: 0 },
+      limits: { calls: 0, input_tokens: 0, output_tokens: 0 },
+      summary: [],
+      detail: ['0회 → 0회', '0토큰 → 0토큰'],
+    },
+  ])('$name은 변경된 항목만 요약하고 모든 항목은 상세에서 확인한다', async ({ previous, limits, summary, detail }) => {
+    const change = { request_id: id, actor: 'core:99', source: 'CORE_ADMIN', reason: '확인용', created_at: time, previous_limits: previous, limits }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, recent_changes: [change] } })))
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('한도 변경 이력 · 최근 1 / 전체 1건'))
+    const row = screen.getByText(/core:99/).closest('li')!
+    const summaryList = row.querySelector(':scope > dl')
+    if (summary.length) {
+      expect(summaryList).toBeTruthy()
+      const visibleSummary = within(summaryList as HTMLElement)
+      for (const value of summary) expect(visibleSummary.getByText(value)).toBeTruthy()
+      expect(summaryList!.querySelectorAll('dt')).toHaveLength(summary.length)
+    } else {
+      expect(summaryList).toBeNull()
+      expect(within(row).getByText('한도 값 변경 없음')).toBeTruthy()
+    }
+    const detailToggle = within(row).getByText('변경 상세 보기')
+    expect(detailToggle.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(detailToggle)
+    const detailPanel = within(detailToggle.closest('details')!)
+    for (const value of detail) expect(detailPanel.getAllByText(value).length).toBeGreaterThan(0)
+    const detailList = detailToggle.closest('details')!.querySelector('dl')!
+    expect(detailList.querySelectorAll('dt')).toHaveLength(3)
   })
 
   it('페이지 내역과 전체 합계를 혼동하지 않고 다음 예약 페이지를 조회한다', async () => {
@@ -370,17 +526,43 @@ describe('관리자 예산 장부', () => {
     }))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
-    const reservations = await screen.findByText('실행별 예약 · 26건')
-    expect(reservations.closest('details')).toHaveProperty('open', false)
-    fireEvent.click(reservations)
-    const next = screen.getByRole('button', { name: '예약 다음' })
-    expect(next.closest('details')).toBe(reservations.closest('details'))
+    fireEvent.click(await screen.findByText('사용·예약 내역'))
+    const reservations = await screen.findByRole('region', { name: '평가별 내역' })
+    expect(within(reservations).getByRole('heading', { name: '평가별 내역 · 26건' })).toBeTruthy()
+    const link = within(reservations).getByRole('link', { name: /평가 상세 보기 .* 10000000/ })
+    expect(link.getAttribute('href')).toBe('/ops/evaluations/10000000-0000-4000-8000-000000000001')
+    expect(link.textContent).toBe('평가 상세 보기')
+    expect(link.getAttribute('title')).toBe('검토 자료')
+    const row = link.closest('tr')!
+    expect(row.textContent).toContain('예약 유지 중')
+    expect(row.textContent).toContain('6회 · 12,000토큰')
+    expect(row.textContent).toContain('1회')
+    const next = within(reservations).getByRole('button', { name: '예약 다음' })
+    expect(next.closest('details')).toBe(screen.getByText('사용·예약 내역').closest('details'))
     fireEvent.click(next)
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
     expect(fetch.mock.calls[1][0]).toBe('/api/v1/ops/budget/reservations?page=2')
-    expect(await screen.findByText(/총계는 전체 예약과 검토 후 반영한 과거 사용량 기준/)).toBeTruthy()
-    expect(screen.getByText('실행별 예약 · 26건').closest('details')).toHaveProperty('open', true)
+    expect(await screen.findByText(/확인된 사용량과 아직 정리되지 않은 예약을 합친 값입니다/)).toBeTruthy()
+    expect(screen.getByText('사용·예약 내역').closest('details')).toHaveProperty('open', true)
+    expect(screen.getByRole('heading', { name: '평가별 내역 · 26건' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '예약 다음' })).toHaveProperty('disabled', true)
+  })
+
+  it('종료된 예약의 미확인 호출과 알 수 없는 시각을 숨기지 않는다', async () => {
+    const fetch = vi.fn().mockResolvedValue(json({
+      ...page, results: [{ ...reservation, created_at: 'invalid-date', closed_at: time }],
+    }))
+    vi.stubGlobal('fetch', fetch)
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('사용·예약 내역'))
+    const list = within(screen.getByRole('region', { name: '평가별 내역' }))
+    const link = list.getByRole('link', { name: '평가 상세 보기 · 시각 확인 불가 · 10000000' })
+    expect(link.getAttribute('href')).toBe('/ops/evaluations/10000000-0000-4000-8000-000000000001')
+    const cells = within(link.closest('tr')!).getAllByRole('cell')
+    expect(cells[1].textContent).toBe('예약 종료')
+    expect(cells[3].textContent).toBe('1회')
+    expect(list.queryByText('Invalid Date')).toBeNull()
+    expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
   })
 
   it.each(['unconfigured', 'inconsistent'] as const)('%s 상태는 잔여 한도를 0으로 표시하지 않는다', async (state) => {
@@ -390,6 +572,8 @@ describe('관리자 예산 장부', () => {
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
     expect(await screen.findByText(state === 'unconfigured' ? /아직 사용 한도를 설정하지 않았습니다/ : /상세 장부가 일치하지 않습니다/)).toBeTruthy()
     expect(screen.queryByText('0회 · 0토큰')).toBeNull()
+    fireEvent.click(screen.getByText('사용·예약 내역'))
+    expect(screen.getByText('사용·예약 합계를 확인할 수 없습니다.').getAttribute('role')).toBe('alert')
   })
 
   it('누적 한도가 없어도 과거 입력 미확인 경고를 숨기지 않는다', async () => {
@@ -438,10 +622,11 @@ describe('관리자 예산 장부', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(page)).mockRejectedValue(new Error('offline')))
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    fireEvent.click(screen.getByText('사용·예약 내역'))
     fireEvent.click(screen.getByText('누적 예산 상세 내역'))
     expect(screen.getByRole('table', { name: '예산 할당량 구성' })).toBeTruthy()
     await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
-    expect(screen.getByRole('alert').textContent).toContain('마지막 조회 기록')
+    expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('마지막 조회 기록'))).toBe(true)
     expect(screen.getByRole('row', { name: '확정 사용량 1 50 100토큰' })).toBeTruthy()
   })
 
@@ -526,10 +711,11 @@ it.each(['enforced', 'legacy_unknown', 'unconfigured'] as const)('누적 입력 
   render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
   expect(await screen.findByText(input_state === 'enforced' ? '103,392토큰'
     : input_state === 'legacy_unknown' ? '이전 평가의 사용량을 확인해 주세요' : /입력 한도가 설정되지 않았습니다/)).toBeTruthy()
+  fireEvent.click(screen.getByText('사용·예약 내역'))
   fireEvent.click(screen.getByText('누적 예산 상세 내역'))
   const row = screen.getByRole('row', { name: /^현재 할당량 합계/ })
   expect(row.textContent).toContain(unknown ? '미확인·미설정' : '196,608토큰')
-  if (input_state === 'enforced') expect(screen.getByText(/입력 103,392토큰/)).toBeTruthy()
+  if (input_state === 'enforced') expect(within(screen.getByRole('region', { name: '남은 사용량' })).getByText('103,392토큰')).toBeTruthy()
 })
 
 it('입력 보정 차액 불일치와 예약 상한 초과 사용량을 거절한다', async () => {

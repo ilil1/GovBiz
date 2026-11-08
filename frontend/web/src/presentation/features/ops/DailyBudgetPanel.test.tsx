@@ -37,6 +37,30 @@ describe('일별 평가 예산', () => {
     expect(screen.getByText(/자정을 넘긴 예약은 새 호출을 승인하지 않습니다/)).toBeTruthy()
   })
 
+  it('상단 요약을 숨겨도 접수·이월과 변경 이력을 확인할 수 있다', () => {
+    const value: DailyBudget = { ...day, recent_changes: [{
+      request_id: '10000000-0000-4000-8000-000000000001', source: 'CORE_ADMIN', actor: '관리자', reason: '설정',
+      expected_revision: 'a'.repeat(64), previous: null, policy: { enabled: true, limits: day.limits! }, created_at: day.period_start,
+    }] }
+    render(<DailyBudgetPanel value={value} hideSummary />)
+    expect(screen.queryByText('잔여 170,624토큰')).toBeNull()
+    expect(screen.queryByText('일별 한도 400,000토큰')).toBeNull()
+    fireEvent.click(screen.getByText('오늘 접수와 이월 상세'))
+    expect(screen.getByRole('row', { name: '입력 토큰 400,000 196,608 32,768 170,624' })).toBeTruthy()
+    fireEvent.click(screen.getByText('일별 정책 변경 이력 · 최근 1건'))
+    expect(screen.getByText(/관리자 · CORE_ADMIN/)).toBeTruthy()
+    expect(screen.getByText('사유: 설정')).toBeTruthy()
+    expect(screen.getByText('일별 항목과 이월량 설명')).toBeTruthy()
+  })
+
+  it.each(['unknown', 'exceeded'] as const)('중복 요약을 숨겨도 %s 기록은 0으로 표시하지 않는다', (state) => {
+    render(<DailyBudgetPanel hideSummary value={{ ...day, state, remaining: null, ...(state === 'unknown' ? { allocated: null, current_day: null, carried: null } : {}) }} />)
+    expect(screen.queryByText('잔여 0토큰')).toBeNull()
+    fireEvent.click(screen.getByText('오늘 접수와 이월 상세'))
+    const row = screen.getByRole('row', { name: /^입력 토큰/ })
+    expect(within(row).getAllByRole('cell').at(-1)?.textContent).toBe('확인 불가')
+  })
+
   it.each(['unknown', 'exceeded'] as const)('미확인·초과 상태 %s를 잔여 0으로 표시하지 않는다', (state) => {
     render(<DailyBudgetPanel value={{ ...day, state, remaining: null, ...(state === 'unknown' ? { allocated: null, current_day: null, carried: null } : {}) }} />)
     expect(screen.getByRole('alert').textContent).toContain('신규 예약을 차단')
