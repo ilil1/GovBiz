@@ -41,6 +41,33 @@ function Breakdown({ value }: { value: BudgetBreakdown }) {
   </div>
 }
 
+function OverviewBreakdown({ value }: { value: BudgetBreakdown }) {
+  const boundedCalls = value.unbounded_input_calls === 0
+  const boundedReservations = value.unbounded_input_reservations === 0
+  const tokens = (amount: number | null | undefined) => amount == null ? '확인할 수 없음' : `${count(amount)}토큰`
+  const rows = [
+    { label: '확정 사용량', help: '응답 기록에서 확인한 사용량입니다. 실제 청구 금액과는 다를 수 있습니다.', calls: `${count(value.settled_calls)}회`, input: tokens(value.confirmed_input_tokens), output: tokens(value.confirmed_output_tokens) },
+    ...(value.legacy_calls ? [{ label: '과거 저장 응답 반영', help: '과거 평가의 저장된 응답에서 확인해 한도에 반영한 사용량입니다.', calls: `${count(value.legacy_calls)}회`, input: tokens(value.legacy_input_tokens), output: tokens(value.legacy_output_tokens) }] : []),
+    { label: '승인 후 사용량 미확인', help: 'AI 요청은 승인됐지만 전송 여부나 사용량을 확인하지 못해 예약을 유지한 양입니다.', calls: `${count(value.unknown_calls)}회`, input: tokens(boundedCalls ? value.unknown_input_tokens : null), output: tokens(value.unknown_output_tokens) },
+    { label: '아직 승인하지 않은 예약', help: '평가를 위해 확보했지만 개별 AI 요청은 아직 승인되지 않은 양입니다.', calls: `${count(value.unapproved_calls)}회`, input: tokens(boundedReservations ? value.unapproved_input_tokens : null), output: tokens(value.unapproved_output_tokens) },
+    { label: '종료 전 반환 대기', help: '응답 정산 후 남은 양으로, 평가 예약을 닫을 때까지 한도에 포함됩니다.', calls: null, input: tokens(boundedReservations ? value.pending_release_input_tokens : null), output: tokens(value.pending_release_output_tokens) },
+  ]
+  return <div className="grid gap-2">{rows.map((row) => <section key={row.label} className="rounded-lg bg-white p-4">
+    <div className="flex flex-wrap items-center gap-x-2">
+      <h5 className="font-semibold text-ink">{row.label}</h5>
+      <details className="relative text-xs text-ink-muted">
+        <summary aria-label={`${row.label} 설명`} className="min-h-8 cursor-pointer py-2 font-medium focus-visible:outline-2 focus-visible:outline-brand-primary">도움말</summary>
+        <p className="pb-2 leading-5">{row.help}</p>
+      </details>
+    </div>
+    <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">{[
+      ...(row.calls === null ? [] : [['AI 요청', row.calls]]),
+      ['AI에 보내는 내용', row.input],
+      ['AI 답변', row.output],
+    ].map(([label, amount]) => <div key={label} className="min-w-0"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 break-words font-semibold text-ink">{amount}</dd></div>)}</dl>
+  </section>)}</div>
+}
+
 export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChanged }: {
   onExpired: () => void; refreshKey: number; operatorId?: string; onBudgetChanged?: () => void
 }) {
@@ -101,56 +128,6 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
             {summary.legacy_live_run_count > 0 && <p className="text-xs text-amber-800">확인되지 않은 이전 평가 사용량은 포함되지 않았습니다.</p>}
           </section>}
           {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
-          <details open={showUsageDetails} className="rounded-xl bg-surface-muted px-4 text-sm">
-            <summary onClick={(event) => { event.preventDefault(); setShowUsageDetails((value) => !value) }} className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">사용·예약 내역</summary>
-            <div className="grid gap-4 pb-4">
-              <div>
-                <p className="font-semibold">사용·예약 합계</p>
-                <p className="mt-1 text-xs text-ink-muted">확인된 사용량과 아직 정리되지 않은 예약을 합친 값입니다. 실제 청구 금액은 아닙니다.</p>
-                {summary.allocated && summary.state !== 'inconsistent' ? <dl className="mt-3 grid gap-2 sm:grid-cols-3">{[
-                  ['AI 요청', `${count(summary.allocated.calls)}회`],
-                  ['AI에 보내는 내용', inputCount(summary.allocated.input_tokens)],
-                  ['AI 답변', `${count(summary.allocated.output_tokens)}토큰`],
-                ].map(([label, amount]) => <div key={label} className="rounded-lg bg-white p-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 break-words font-semibold">{amount}</dd></div>)}</dl> : <p role="alert" className="mt-2 text-amber-800">사용·예약 합계를 확인할 수 없습니다.</p>}
-                {Boolean(summary.breakdown?.unknown_calls) && <p role="alert" className="mt-2 text-amber-800">사용량을 확인하지 못한 호출이 {count(summary.breakdown!.unknown_calls)}회 있습니다. 확인될 때까지 해당 예약량이 한도에 포함됩니다.</p>}
-              </div>
-              {Boolean(summary.legacy_accounted_run_count) && <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">이전 평가 {count(summary.legacy_accounted_run_count!)}건 포함</summary><p className="pb-2 text-xs text-ink-muted">저장된 응답을 검토해 합산한 사용량입니다. 당시 예약이나 제공자의 청구를 확인한 것은 아닙니다.</p></details>}
-              {summary.breakdown && <details className="rounded-xl bg-surface-muted px-4 text-sm"><summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">누적 예산 상세 내역</summary><div className="pb-4"><Breakdown value={summary.breakdown} /><p className="mt-3 text-xs leading-5 text-ink-muted">응답을 정산해도 실행의 예약을 닫기 전까지 입력·출력 차액은 반환 대기로 남습니다. 승인 기록만으로 모델 전송 완료나 실제 비용을 확정할 수 없습니다.</p></div></details>}
-              <section aria-label="평가별 내역">
-                <h4 className="text-sm font-semibold">평가별 내역 · {count(data.count)}건</h4>
-                {!data.results.length ? <p className="py-3 text-sm">예약 기록이 없습니다.</p> : <div className="overflow-x-auto"><table className="mt-3 w-full text-left text-sm">
-                  <thead><tr><th>기록 시각</th><th>예약 상태</th><th>사용·예약</th><th>미확인 호출</th></tr></thead>
-                  <tbody>{data.results.map((row) => {
-                    const createdAt = Number.isNaN(Date.parse(row.created_at)) ? '시각 확인 불가' : date(row.created_at)
-                    return <tr key={row.run_id} className="border-t border-line"><td className="py-3 pr-3"><p>{createdAt}</p><Link className="text-brand-primary underline" to={`/ops/evaluations/${row.run_id}`} aria-label={`평가 상세 보기 · ${createdAt} · ${row.run_id.slice(0, 8)}`} title={row.dataset_id}>평가 상세 보기</Link></td><td>{row.closed_at ? '예약 종료' : '예약 유지 중'}</td><td>{count(row.breakdown.allocated_calls)}회 · {count(row.breakdown.allocated_output_tokens)}토큰</td><td>{count(row.breakdown.unknown_calls)}회</td></tr>
-                  })}</tbody>
-                </table></div>}
-                {(data.count > 25 || page > 1) && <nav aria-label="예산 예약 페이지" className="mt-3 flex flex-wrap items-center justify-end gap-3 text-sm"><button type="button" className={styles.secondaryButton} disabled={page === 1} onClick={() => setPage((value) => value - 1)}>예약 이전</button><span>{page}페이지</span><button type="button" className={styles.secondaryButton} disabled={!data.next} onClick={() => setPage((value) => value + 1)}>예약 다음</button></nav>}
-              </section>
-            </div>
-          </details>
-          <details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">한도 변경 이력 · 최근 {summary.recent_changes.length} / 전체 {summary.change_count}건</summary>
-            {!summary.recent_changes.length ? <p className="text-sm">기록된 한도 변경 이력이 없습니다.</p> : <ol className="space-y-3 text-sm">{summary.recent_changes.map((change) => {
-              const amounts = [
-                ['AI 요청', change.previous_limits?.calls ?? null, change.limits.calls, '회'],
-                ['AI에 보내는 내용', change.previous_limits?.input_tokens ?? null, change.limits.input_tokens ?? null, '토큰'],
-                ['AI 답변', change.previous_limits?.output_tokens ?? null, change.limits.output_tokens, '토큰'],
-              ] as const
-              const changed = amounts.filter(([, before, after]) => before !== after)
-              const amount = (value: number | null, unit: '회' | '토큰', label: string) => value === null ? (label === 'AI에 보내는 내용' ? '미확인·미설정' : '미설정') : `${count(value)}${unit}`
-              return <li key={change.request_id} className="space-y-2 rounded-lg bg-surface-muted p-4">
-                <div><p className="font-semibold">{date(change.created_at)} · {change.actor}</p><p className="mt-1 text-xs text-ink-muted">{change.source === 'CLI' ? '운영자 직접 입력' : '관리자 로그인'}</p></div>
-                {changed.length ? <dl className="grid gap-2 sm:grid-cols-3">{changed.map(([label, before, after, unit]) => <div key={label}><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 break-words">{amount(before, unit, label)} → {amount(after, unit, label)}</dd></div>)}</dl> : <p>한도 값 변경 없음</p>}
-                <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">변경 상세 보기</summary>
-                  <div className="space-y-2 pb-2 text-xs text-ink-muted">
-                    <dl className="grid gap-2 sm:grid-cols-3">{amounts.map(([label, before, after, unit]) => <div key={label}><dt>{label}</dt><dd className="mt-1 break-words">{amount(before, unit, label)} → {amount(after, unit, label)}</dd></div>)}</dl>
-                    <p className="break-words">사유: {change.reason}</p><p className="break-all">요청 ID: {change.request_id}</p><p>원본 출처: {change.source}</p><p>{change.source === 'CLI' ? 'CLI 변경자는 운영자가 직접 입력했으며 관리자 로그인으로 인증된 신원이 아닙니다.' : '기존 프로젝트의 관리자 세션을 확인한 기록입니다.'}</p>
-                  </div>
-                </details>
-              </li>
-            })}</ol>}
-            <p className="mt-3 text-xs text-ink-muted">기존 한도의 과거 변경 기록은 소급 생성하지 않습니다.</p>
-          </details>
         </section>
         <section aria-label="하루 예산 요약" className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5">
           <div><h3 className="text-base font-bold text-ink">하루 평가 한도</h3><p className="mt-1 text-sm text-ink-muted">매일 서울 시간 자정 기준</p></div>
@@ -170,6 +147,59 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
           {operatorId && !summary.limits && <p className="text-sm text-ink-muted">하루 한도를 설정하려면 먼저 전체 한도를 설정해 주세요.</p>}
           {operatorId && summary.limits && <DailyBudgetLimitsForm daily={summary.daily} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('일별 정책 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
           {summary.daily && (summary.daily.state !== 'disabled' || summary.daily.recent_changes.length > 0) && <details><summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">일별 예산 상세 보기</summary><DailyBudgetPanel value={summary.daily} hideSummary /></details>}
+        </section>
+        <section aria-label="사용·변경 내역" className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5">
+          <h3 className="text-base font-bold text-ink">사용·변경 내역</h3>
+          <details open={showUsageDetails} className="rounded-xl bg-surface-muted px-4 text-sm">
+            <summary onClick={(event) => { event.preventDefault(); setShowUsageDetails((value) => !value) }} className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">사용·예약 내역</summary>
+            <div className="grid gap-4 pb-4">
+              <div>
+                <p className="font-semibold">사용·예약 합계</p>
+                <p className="mt-1 text-xs text-ink-muted">확인된 사용량과 아직 정리되지 않은 예약을 합친 값입니다. 실제 청구 금액은 아닙니다.</p>
+                {summary.allocated && summary.state !== 'inconsistent' ? <dl className="mt-3 grid gap-2 sm:grid-cols-3">{[
+                  ['AI 요청', `${count(summary.allocated.calls)}회`],
+                  ['AI에 보내는 내용', inputCount(summary.allocated.input_tokens)],
+                  ['AI 답변', `${count(summary.allocated.output_tokens)}토큰`],
+                ].map(([label, amount]) => <div key={label} className="rounded-lg bg-white p-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 break-words font-semibold">{amount}</dd></div>)}</dl> : <p role="alert" className="mt-2 text-amber-800">사용·예약 합계를 확인할 수 없습니다.</p>}
+                {Boolean(summary.breakdown?.unknown_calls) && <p role="alert" className="mt-2 text-amber-800">사용량을 확인하지 못한 호출이 {count(summary.breakdown!.unknown_calls)}회 있습니다. 확인될 때까지 해당 예약량이 한도에 포함됩니다.</p>}
+              </div>
+              {Boolean(summary.legacy_accounted_run_count) && <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">이전 평가 {count(summary.legacy_accounted_run_count!)}건의 사용량 반영</summary><p className="pb-2 text-xs leading-5 text-ink-muted">과거에 실행했지만 예산에 기록되지 않았던 평가입니다. 저장된 답변에서 확인한 사용량을 현재 한도에 합산했습니다. AI를 다시 호출하거나 실제 청구 금액을 확인한 것은 아닙니다.</p></details>}
+              {summary.breakdown && <details><summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">누적 예산 상세 내역</summary><div className="pb-2"><OverviewBreakdown value={summary.breakdown} /></div></details>}
+              <section aria-label="평가별 내역">
+                <h4 className="text-sm font-semibold">평가별 내역 · {count(data.count)}건</h4>
+                {!data.results.length ? <p className="py-3 text-sm">예약 기록이 없습니다.</p> : <div className="overflow-x-auto"><table className="mt-3 w-full text-left text-sm">
+                  <thead><tr><th>기록 시각</th><th>예약 상태</th><th>사용·예약</th><th>미확인 호출</th></tr></thead>
+                  <tbody>{data.results.map((row) => {
+                    const createdAt = Number.isNaN(Date.parse(row.created_at)) ? '시각 확인 불가' : date(row.created_at)
+                    return <tr key={row.run_id} className="border-t border-line"><td className="py-3 pr-3"><p>{createdAt}</p><Link className="text-brand-primary underline" to={`/ops/evaluations/${row.run_id}`} aria-label={`평가 상세 보기 · ${createdAt} · ${row.run_id.slice(0, 8)}`} title={row.dataset_id}>평가 상세 보기</Link></td><td>{row.closed_at ? '예약 종료' : '예약 유지 중'}</td><td>{count(row.breakdown.allocated_calls)}회 · {count(row.breakdown.allocated_output_tokens)}토큰</td><td>{count(row.breakdown.unknown_calls)}회</td></tr>
+                  })}</tbody>
+                </table></div>}
+                {(data.count > 25 || page > 1) && <nav aria-label="예산 예약 페이지" className="mt-3 flex flex-wrap items-center justify-end gap-3 text-sm"><button type="button" className={styles.secondaryButton} disabled={page === 1} onClick={() => setPage((value) => value - 1)}>예약 이전</button><span>{page}페이지</span><button type="button" className={styles.secondaryButton} disabled={!data.next} onClick={() => setPage((value) => value + 1)}>예약 다음</button></nav>}
+              </section>
+            </div>
+          </details>
+          <details className="rounded-xl bg-surface-muted px-4 text-sm"><summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">한도 변경 이력 · 최근 {summary.recent_changes.length} / 전체 {summary.change_count}건</summary>
+            {!summary.recent_changes.length ? <p className="text-sm">기록된 한도 변경 이력이 없습니다.</p> : <ol className="space-y-3 text-sm">{summary.recent_changes.map((change) => {
+              const amounts = [
+                ['AI 요청', change.previous_limits?.calls ?? null, change.limits.calls, '회'],
+                ['AI에 보내는 내용', change.previous_limits?.input_tokens ?? null, change.limits.input_tokens ?? null, '토큰'],
+                ['AI 답변', change.previous_limits?.output_tokens ?? null, change.limits.output_tokens, '토큰'],
+              ] as const
+              const changed = amounts.filter(([, before, after]) => before !== after)
+              const amount = (value: number | null, unit: '회' | '토큰', label: string) => value === null ? (label === 'AI에 보내는 내용' ? '미확인·미설정' : '미설정') : `${count(value)}${unit}`
+              return <li key={change.request_id} className="space-y-2 rounded-lg bg-surface-muted p-4">
+                <div><p className="font-semibold">{date(change.created_at)} · {change.actor}</p><p className="mt-1 text-xs text-ink-muted">{change.source === 'CLI' ? '운영자 직접 입력' : '관리자 로그인'}</p></div>
+                {changed.length ? <dl className="grid gap-2 sm:grid-cols-3">{changed.map(([label, before, after, unit]) => <div key={label}><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 break-words">{amount(before, unit, label)} → {amount(after, unit, label)}</dd></div>)}</dl> : <p>한도 값 변경 없음</p>}
+                <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">변경 상세 보기</summary>
+                  <div className="space-y-2 pb-2 text-xs text-ink-muted">
+                    <dl className="grid gap-2 sm:grid-cols-3">{amounts.map(([label, before, after, unit]) => <div key={label}><dt>{label}</dt><dd className="mt-1 break-words">{amount(before, unit, label)} → {amount(after, unit, label)}</dd></div>)}</dl>
+                    <p className="break-words">사유: {change.reason}</p><p className="break-all">요청 ID: {change.request_id}</p><p>원본 출처: {change.source}</p><p>{change.source === 'CLI' ? 'CLI 변경자는 운영자가 직접 입력했으며 관리자 로그인으로 인증된 신원이 아닙니다.' : '기존 프로젝트의 관리자 세션을 확인한 기록입니다.'}</p>
+                  </div>
+                </details>
+              </li>
+            })}</ol>}
+            <p className="mt-3 pb-4 text-xs text-ink-muted">기존 한도의 과거 변경 기록은 소급 생성하지 않습니다.</p>
+          </details>
         </section>
       </div>}
     </section>
