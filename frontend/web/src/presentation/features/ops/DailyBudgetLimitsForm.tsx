@@ -58,6 +58,14 @@ export function DailyBudgetLimitsForm({ daily, owner, onSaved, onExpired }: {
     <button type="button" className={styles.secondaryButton} disabled={opened || busy} onClick={open}>일별 한도 설정</button>
     {opened && <>
       <p className="text-sm">서울 시간의 예약 접수일 기준으로 매일 적용하는 한도입니다. 누적 한도와 함께 검사하며, 오늘 할당량·전날 미종료 또는 미확정 이월량을 포함해 정합니다. 한도 저장만으로 유료 평가·정기 실행이 켜지지 않습니다.</p>
+      <details className="rounded-lg bg-surface-muted p-3 text-sm">
+        <summary className="cursor-pointer font-semibold">일별 한도 입력 도움말</summary>
+        <div className="mt-2 space-y-2 leading-6 text-ink-muted">
+          <p>호출은 모델 API 사용 횟수이고, 입력·출력 토큰은 모델에 보내거나 모델이 생성하는 분량입니다. 세 항목의 하루 한도를 모두 입력해 주세요.</p>
+          <p>0은 제한 해제가 아니라 한도 0입니다. 일별 제한을 해제해도 누적 한도는 유지되며 정기 실행의 일별 예산 조건은 충족하지 못합니다.</p>
+          <p>변경 사유에는 하루 평가 범위와 한도 산정 이유를 적어 주세요.</p>
+        </div>
+      </details>
       {error && <p role="alert">{error}</p>}
       {(stale || conflict) && <p role="alert">일별 정책을 다시 확인해야 합니다. 예산 새로고침 후 변경 내용을 다시 작성하세요.</p>}
       {!proposal ? <form className="grid gap-3 text-sm sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); review() }}>
@@ -65,25 +73,25 @@ export function DailyBudgetLimitsForm({ daily, owner, onSaved, onExpired }: {
           <label className="grid gap-1">일별 정책 변경<select className="rounded border p-2" value={disable ? 'disable' : 'enable'} disabled={stale || conflict} onChange={(event) => setDisable(event.target.value === 'disable')} aria-describedby={`${helpId}-policy`}>
             <option value="enable">한도 설정·적용</option><option value="disable" disabled={!previous?.limits || previous.state === 'disabled'}>일별 제한 해제</option>
           </select></label>
-          <p id={`${helpId}-policy`} className="text-xs text-ink-muted">적용하려면 세 한도를 모두 입력하세요. 숫자 0은 제한 해제가 아닌 한도 0입니다. 일별 제한을 해제해도 누적 한도와 기존 사용 기록은 유지되지만, 정기 실행에 필요한 일별 예산 조건을 충족하지 못합니다. 선택 후 최종 저장해야 반영됩니다.</p>
+          <p id={`${helpId}-policy`} className="sr-only">적용하려면 세 한도를 모두 입력하세요. 숫자 0은 제한 해제가 아닌 한도 0입니다. 일별 제한을 해제해도 누적 한도와 기존 사용 기록은 유지되지만, 정기 실행에 필요한 일별 예산 조건을 충족하지 못합니다. 선택 후 최종 저장해야 반영됩니다.</p>
         </div>
         {!disable && <>
           <div className="space-y-1">
             <label className="grid gap-1">일별 호출 한도<input className="rounded border p-2" inputMode="numeric" value={calls} disabled={stale || conflict} onChange={(event) => setCalls(event.target.value)} aria-describedby={`${helpId}-calls`} required /></label>
-            <p id={`${helpId}-calls`} className="text-xs text-ink-muted">하루에 허용할 답변 생성·임베딩 등의 API 호출 총횟수입니다. 하루 평가 횟수와 각 평가의 최대 호출량을 함께 확인하세요.</p>
+            <p id={`${helpId}-calls`} className="sr-only">하루에 허용할 답변 생성·임베딩 등의 API 호출 총횟수입니다. 하루 평가 횟수와 각 평가의 최대 호출량을 함께 확인하세요.</p>
           </div>
           <div className="space-y-1">
             <label className="grid gap-1">일별 입력 토큰 한도<input className="rounded border p-2" inputMode="numeric" value={input} disabled={stale || conflict} onChange={(event) => setInput(event.target.value)} aria-describedby={`${helpId}-input`} required /></label>
-            <p id={`${helpId}-input`} className="text-xs text-ink-muted">질문·지침·근거 등 모델에 보내는 하루 입력 분량입니다. 예정된 평가의 최대 입력량을 합산하세요. 토큰은 문자 수와 다릅니다.</p>
+            <p id={`${helpId}-input`} className="sr-only">질문·지침·근거 등 모델에 보내는 하루 입력 분량입니다. 예정된 평가의 최대 입력량을 합산하세요. 토큰은 문자 수와 다릅니다.</p>
           </div>
           <div className="space-y-1">
             <label className="grid gap-1">일별 출력 토큰 한도<input className="rounded border p-2" inputMode="numeric" value={output} disabled={stale || conflict} onChange={(event) => setOutput(event.target.value)} aria-describedby={`${helpId}-output`} required /></label>
-            <p id={`${helpId}-output`} className="text-xs text-ink-muted">모델이 생성하는 하루 출력 분량입니다. 예정된 평가의 최대 출력량을 합산하세요. 당일 할당량과 전날 이월량보다 낮게 저장할 수 없습니다.</p>
+            <p id={`${helpId}-output`} className="sr-only">모델이 생성하는 하루 출력 분량입니다. 예정된 평가의 최대 출력량을 합산하세요. 당일 할당량과 전날 이월량보다 낮게 저장할 수 없습니다.</p>
           </div>
         </>}
         <div className="space-y-1 sm:col-span-2">
           <label className="grid gap-1">일별 한도 변경 사유<textarea className="rounded border p-2" value={reason} disabled={stale || conflict} onChange={(event) => setReason(event.target.value)} aria-describedby={`${helpId}-reason`} maxLength={1000} required /></label>
-          <p id={`${helpId}-reason`} className="text-xs text-ink-muted">하루 평가 범위와 한도 산정 근거 또는 해제 이유를 남기세요. 예: “하루 답변 평가 1회분과 이월 예약량을 반영”.</p>
+          <p id={`${helpId}-reason`} className="sr-only">하루 평가 범위와 한도 산정 근거 또는 해제 이유를 남기세요. 예: “하루 답변 평가 1회분과 이월 예약량을 반영”.</p>
         </div>
         <button className={styles.primaryButton} type="submit" disabled={stale || conflict}>일별 변경 내용 확인</button>
         <button className={styles.secondaryButton} type="button" onClick={() => setOpened(false)}>일별 설정 닫기</button>

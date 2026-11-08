@@ -65,17 +65,50 @@ const legacyDetail = {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('관리자 예산 장부', () => {
+  it('필수 요약과 경고를 먼저 보여주고 상세 내용은 요청할 때 연다', async () => {
+    const fetch = vi.fn().mockResolvedValue(json(page))
+    vi.stubGlobal('fetch', fetch)
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    expect(await screen.findByText(/예약 기록이 없는 과거 모델 실행 2건/)).toBeTruthy()
+    expect(screen.getByText('남은 한도')).toBeTruthy()
+    expect(screen.getByText(/^평가의 모델 호출과 토큰 사용 한도를 관리합니다/).textContent).toContain('금액 한도는 지원하지 않습니다')
+    const details = screen.getByText('누적 예산 상세 내역')
+    expect(details.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(details)
+    expect(screen.getByRole('row', { name: '확정 사용량 1 50 100토큰' })).toBeTruthy()
+    fireEvent.click(details)
+    expect(details.closest('details')).toHaveProperty('open', false)
+    expect(screen.getByText('남은 한도')).toBeTruthy()
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('상세 내용을 접었다 펼쳐도 작성 중인 한도는 유지하고 저장하지 않는다', async () => {
+    const fetch = vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, limits_revision: 'a'.repeat(64) } }))
+    vi.stubGlobal('fetch', fetch)
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} operatorId="core:81" /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '누적 한도 설정' }))
+    const calls = screen.getByRole('textbox', { name: '호출 누적 한도' })
+    fireEvent.change(calls, { target: { value: '20' } })
+    const details = screen.getByText('누적 예산 상세 내역')
+    fireEvent.click(details)
+    fireEvent.click(details)
+    expect(calls).toHaveProperty('value', '20')
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
+  })
+
   it('장부 조회가 실패해도 설정 순서와 무료 점검 이동 안내를 제공한다', async () => {
     const fetch = vi.fn().mockRejectedValue(new Error('장부 연결 실패'))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
     expect((await screen.findByRole('alert')).textContent).toContain('운영 서버에 연결할 수 없습니다.')
+    fireEvent.click(screen.getByText('처음 설정하는 방법'))
     const guide = within(screen.getByRole('region', { name: '예산 설정 안내' }))
     expect(guide.getAllByRole('listitem')).toHaveLength(3)
     expect(guide.getByRole('link', { name: '새 평가에서 필요량 확인' }).getAttribute('href')).toBe('/ops/evaluations/new')
     expect(guide.getByText(/최대 예약량을 무료로 조회/)).toBeTruthy()
     expect(guide.getByText(/설정을 저장해도 유료 평가·정기 실행은 켜지지 않습니다/)).toBeTruthy()
-    expect(screen.getByRole('link', { name: '실사용 모니터링에서 확인' }).getAttribute('href')).toBe('/ops/usage')
+    expect(screen.getByRole('link', { name: '실사용 모니터링' }).getAttribute('href')).toBe('/ops/usage')
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(fetch.mock.calls[0][0]).toBe('/api/v1/ops/budget/reservations?page=1')
   })
@@ -84,6 +117,7 @@ describe('관리자 예산 장부', () => {
     const fetch = vi.fn().mockResolvedValue(json(page))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('누적 예산 상세 내역'))
     const table = await screen.findByRole('table', { name: '예산 할당량 구성' })
     const values = table.textContent
     const toggle = screen.getByText('장부 항목은 무슨 뜻인가요?')
@@ -147,6 +181,7 @@ describe('관리자 예산 장부', () => {
       breakdown: { ...breakdown, legacy_calls: 7, legacy_input_tokens: 7901, legacy_output_tokens: 776 },
     } })))
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('누적 예산 상세 내역'))
     const table = await screen.findByRole('table', { name: '예산 할당량 구성' })
     expect(within(table).getByRole('row', { name: '과거 저장 응답 반영 7 776 7,901토큰' })).toBeTruthy()
     expect(screen.getByText(/과거 실행 2건의 사용량을 합산/)).toBeTruthy()
@@ -176,6 +211,7 @@ describe('관리자 예산 장부', () => {
     const fetch = vi.fn().mockResolvedValue(json(page))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('누적 예산 상세 내역'))
     const table = await screen.findByRole('table', { name: '예산 할당량 구성' })
     expect(within(table).getByRole('row', { name: '확정 사용량 1 50 100토큰' })).toBeTruthy()
     expect(within(table).getByRole('row', { name: '승인 후 사용량 미확인 1 2,000 미확인·미설정' })).toBeTruthy()
@@ -208,8 +244,18 @@ describe('관리자 예산 장부', () => {
       ...(state === 'unconfigured' ? { limits: null, allocated: null, breakdown: null } : {}),
     } })))
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
-    expect(await screen.findByText(state === 'unconfigured' ? /누적 한도가 설정되지 않았습니다/ : /상세 장부가 일치하지 않습니다/)).toBeTruthy()
+    expect(await screen.findByText(state === 'unconfigured' ? /누적 한도 미설정/ : /상세 장부가 일치하지 않습니다/)).toBeTruthy()
     expect(screen.queryByText('0회 · 0토큰')).toBeNull()
+  })
+
+  it('누적 한도가 없어도 과거 입력 미확인 경고를 숨기지 않는다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary,
+      state: 'unconfigured', input_state: 'legacy_unknown', limits: null, allocated: null, remaining: null, breakdown: null,
+    } })))
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    expect(await screen.findByText('누적 한도 미설정')).toBeTruthy()
+    expect(screen.getByText(/과거 입력 미확인:/)).toBeTruthy()
+    expect(screen.queryByText(/호출·출력 한도만 적용됩니다/)).toBeNull()
   })
 
   it('예약 기록이 없는 과거 실행을 무료 실행으로 해석하지 않는다', async () => {
@@ -236,6 +282,7 @@ describe('관리자 예산 장부', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(page)).mockRejectedValue(new Error('offline')))
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    fireEvent.click(screen.getByText('누적 예산 상세 내역'))
     expect(screen.getByRole('table', { name: '예산 할당량 구성' })).toBeTruthy()
     await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
     expect(screen.getByRole('alert').textContent).toContain('마지막 조회 기록')
@@ -323,6 +370,7 @@ it.each(['enforced', 'legacy_unknown', 'unconfigured'] as const)('누적 입력 
   render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
   expect(await screen.findByText(input_state === 'enforced' ? '누적 입력 토큰 한도 적용 중'
     : input_state === 'legacy_unknown' ? /과거 입력 미확인:/ : /누적 입력 한도 미설정:/)).toBeTruthy()
+  fireEvent.click(screen.getByText('누적 예산 상세 내역'))
   const row = screen.getByRole('row', { name: /^현재 할당량 합계/ })
   expect(row.textContent).toContain(unknown ? '미확인·미설정' : '196,608토큰')
   if (input_state === 'enforced') expect(screen.getByText(/입력 103,392토큰/)).toBeTruthy()

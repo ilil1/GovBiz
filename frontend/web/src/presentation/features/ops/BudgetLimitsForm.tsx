@@ -52,23 +52,31 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
     {opened && <>
       <p className="text-sm">추가 충전량이 아닌 전체 누적 상한을 입력하세요. 현재 할당량에 추가 평가의 최대 예약량을 더해 정합니다. 예: 현재 20회 할당 + 추가 6회 예약 = 호출 한도 26회.</p>
       <p className="text-xs text-ink-muted">이미 할당된 양보다 낮게 저장할 수 없습니다. 한도 저장은 사용량을 초기화하거나 유료 평가·정기 실행을 켜지 않습니다.</p>
+      <details className="rounded-lg bg-surface-muted p-3 text-sm">
+        <summary className="cursor-pointer font-semibold">한도 입력 도움말</summary>
+        <div className="mt-2 space-y-2 leading-6 text-ink-muted">
+          <p>호출은 모델 API를 사용하는 횟수입니다. 입력 토큰은 모델에 보내는 분량, 출력 토큰은 모델이 생성하는 분량입니다.</p>
+          <p>입력 한도를 처음 설정하지 않으려면 빈칸으로 두세요. 한번 설정하면 해제할 수 없으며, 0은 미설정이 아니라 한도 0입니다.</p>
+          <p>변경 사유에는 평가 목적과 한도를 정한 이유를 적어 주세요.</p>
+        </div>
+      </details>
       {error && <p role="alert">{error}</p>}
       {!proposal ? <form className="grid gap-3 text-sm sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); review() }}>
         <div className="space-y-1">
           <label className="grid gap-1">호출 누적 한도<input className="rounded border p-2" inputMode="numeric" value={calls} onChange={(event) => setCalls(event.target.value)} aria-describedby={`${helpId}-calls`} required /></label>
-          <p id={`${helpId}-calls`} className="text-xs text-ink-muted">답변 생성·임베딩 등에 사용하는 API 호출의 총횟수입니다. 평가 횟수나 질문 수를 뜻하지 않습니다. RAG 평가는 문서·질문 임베딩과 답변 호출을 합합니다.</p>
+          <p id={`${helpId}-calls`} className="sr-only">답변 생성·임베딩 등에 사용하는 API 호출의 총횟수입니다. 평가 횟수나 질문 수를 뜻하지 않습니다. RAG 평가는 문서·질문 임베딩과 답변 호출을 합합니다.</p>
         </div>
         <div className="space-y-1">
           <label className="grid gap-1">출력 토큰 누적 한도<input className="rounded border p-2" inputMode="numeric" value={output} onChange={(event) => setOutput(event.target.value)} aria-describedby={`${helpId}-output`} required /></label>
-          <p id={`${helpId}-output`} className="text-xs text-ink-muted">모델이 생성하는 답변 등 출력 분량의 총상한입니다. 평가별 최대 출력량을 합산해 정합니다.</p>
+          <p id={`${helpId}-output`} className="sr-only">모델이 생성하는 답변 등 출력 분량의 총상한입니다. 평가별 최대 출력량을 합산해 정합니다.</p>
         </div>
         <div className="space-y-1 sm:col-span-2">
           <label className="grid gap-1">입력 토큰 누적 한도<input className="rounded border p-2" inputMode="numeric" value={input} onChange={(event) => setInput(event.target.value)} aria-describedby={`${helpId}-input`} required={previous?.input_tokens != null} /></label>
-          <p id={`${helpId}-input`} className="text-xs text-ink-muted">질문·지침·근거 등 모델에 보내는 분량의 총상한입니다. 토큰은 문자 수와 다릅니다. 과거 미확인 입력 기록을 해결한 뒤 설정할 수 있습니다. 최초 미설정은 빈칸으로 두며, 한 번 설정하면 해제할 수 없습니다. 숫자 0은 미설정이 아닌 한도 0입니다.</p>
+          <p id={`${helpId}-input`} className="sr-only">질문·지침·근거 등 모델에 보내는 분량의 총상한입니다. 토큰은 문자 수와 다릅니다. 과거 미확인 입력 기록을 해결한 뒤 설정할 수 있습니다. 최초 미설정은 빈칸으로 두며, 한 번 설정하면 해제할 수 없습니다. 숫자 0은 미설정이 아닌 한도 0입니다.</p>
         </div>
         <div className="space-y-1 sm:col-span-2">
           <label className="grid gap-1">한도 변경 사유<textarea className="rounded border p-2" value={reason} onChange={(event) => setReason(event.target.value)} aria-describedby={`${helpId}-reason`} maxLength={1000} required /></label>
-          <p id={`${helpId}-reason`} className="text-xs text-ink-muted">평가 목적·범위와 한도를 정한 근거를 남기세요. 예: “검토 자료 H01~H06 답변 평가 1회분을 현재 할당량에 추가”.</p>
+          <p id={`${helpId}-reason`} className="sr-only">평가 목적·범위와 한도를 정한 근거를 남기세요. 예: “검토 자료 H01~H06 답변 평가 1회분을 현재 할당량에 추가”.</p>
         </div>
         <button className={styles.primaryButton} type="submit">변경 내용 확인</button>
         <button className={styles.secondaryButton} type="button" onClick={() => setOpened(false)}>닫기</button>
