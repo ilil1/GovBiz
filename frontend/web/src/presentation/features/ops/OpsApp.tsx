@@ -134,6 +134,7 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
   const monitoringSection = location.pathname.startsWith('/ops/usage/') ? location.pathname.slice('/ops/usage/'.length) : ''
   const title = monitoringTitles[monitoringSection] ?? (location.pathname.startsWith(`${listPath}/`) && location.pathname.endsWith('/report') ? 'Evidently 평가 보고서' : current.label)
   const legacyPath = location.pathname === listPath ? ({ '#new-evaluation': `${listPath}/new`, '#evaluation-budget': '/ops/budget', '#evaluation-schedules': '/ops/schedules' } as Record<string, string>)[location.hash] : undefined
+  const compactEvaluationMenu = location.pathname === listPath
   useEffect(() => {
     document.title = `GovBiz · ${title}`
     if (previousPath.current !== location.pathname) {
@@ -144,6 +145,20 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
   }, [location.pathname, title])
   return <div className="mx-auto grid w-full max-w-[1480px] min-w-0 flex-1 content-start lg:grid-cols-[208px_minmax(0,1fr)] lg:content-stretch">
     <aside className="border-b border-line bg-white lg:border-r lg:border-b-0">
+      {compactEvaluationMenu && <details className="lg:hidden"><summary className="cursor-pointer px-5 py-3 text-sm font-semibold">운영 메뉴 보기</summary>
+      <nav aria-label="운영 메뉴 목록" className="space-y-5 p-3 lg:sticky lg:top-0 lg:px-4 lg:py-8">
+        {opsPageGroups.map((group) => <section key={group.id} aria-labelledby={`ops-mobile-menu-${group.id}`} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+          <h2 id={`ops-mobile-menu-${group.id}`} className="mb-2 px-3 text-xs font-bold tracking-wide text-ink-muted">{group.label}</h2>
+          <div className="grid grid-cols-2 gap-1 lg:grid-cols-1 lg:gap-2">
+            {group.pages.map((page) => <Link key={page.path} to={page.path === '/ops/usage' && monitoringExample ? '/ops/usage?example=1' : page.path} aria-label={page.label} aria-current={current.path === page.path ? 'page' : undefined}
+              className={`min-w-0 rounded-lg border-l-[3px] px-3 py-3 text-sm no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary ${current.path === page.path ? 'border-brand-primary bg-brand-soft font-bold text-brand-primary' : 'border-transparent text-ink-muted hover:bg-surface-muted hover:text-ink'}`}>
+              <span className="block">{page.label}</span><span className="mt-1 hidden text-xs font-normal lg:block">{page.description}</span>
+            </Link>)}
+          </div>
+        </section>)}
+      </nav>
+      </details>}
+      <div className={compactEvaluationMenu ? 'hidden lg:block' : undefined}>
       <nav aria-label="LLMOps 작업 메뉴" className="space-y-5 p-3 lg:sticky lg:top-0 lg:px-4 lg:py-8">
         {opsPageGroups.map((group) => <section key={group.id} aria-labelledby={`ops-menu-${group.id}`} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
           <h2 id={`ops-menu-${group.id}`} className="mb-2 px-3 text-xs font-bold tracking-wide text-ink-muted">{group.label}</h2>
@@ -155,6 +170,7 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
           </div>
         </section>)}
       </nav>
+      </div>
     </aside>
     <main id="ops-main" tabIndex={-1} className="min-w-0 focus-visible:outline-2 focus-visible:outline-brand-primary">
       {legacyPath ? <Navigate replace to={legacyPath} /> : <Routes>
@@ -273,12 +289,29 @@ function EvaluationList({ onExpired }: { onExpired: () => void }) {
     <div className={styles.content}>
       <section id="evaluation-history" className={`${styles.card} scroll-mt-28`} aria-label="평가 실행 이력">
         <h2 className={styles.cardTitle}>실행 이력{data ? ` · ${data.count}건` : ''}</h2>
-        <p className={styles.cardDescription}>검토할 평가 자료 이름을 선택하세요. 실행 완료는 품질 합격과 다릅니다. 목록은 5초마다 갱신합니다.</p>
+        <p className={styles.cardDescription}>자료를 선택하면 자세한 결과를 볼 수 있어요. 실행 완료가 품질 합격을 뜻하지는 않아요.</p>
         {error && <p role="alert" className="text-sm text-red-700">{error} 기존 결과가 있으면 마지막으로 받은 상태를 유지합니다.</p>}
-        {!data ? (!error && <p role="status">실행 이력을 불러오고 있습니다.</p>) : !data.results.length ? <p className="py-8 text-center text-sm text-ink-muted">아직 실행한 평가가 없습니다. 새 평가에서 자료와 실행 방식을 선택해 시작하세요.</p> : <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm"><thead className="border-b border-line text-xs text-ink-muted"><tr>{['평가 자료 / 요청', '상태', '요청자', '요청 시각'].map((label) => <th key={label} className="px-3 py-3 whitespace-nowrap">{label}</th>)}</tr></thead>
-            <tbody>{data.results.map((run) => <tr key={run.id} className="border-b border-line last:border-0"><td className="min-w-64 px-3 py-4"><Link className="font-semibold text-brand-primary hover:underline" to={`${listPath}/${run.id}`}>{run.dataset_label}<span className="mt-1 block font-mono text-xs font-normal text-ink-muted">{run.id}</span></Link><span className="text-xs text-ink-muted">{modeLabel(run)}</span></td><td className="px-3 py-4"><Status run={run} /><p className="mt-2 whitespace-nowrap text-xs text-ink-muted">마지막 확인: {run.synced_at ? date(run.synced_at) : '아직 확인되지 않음'}</p>{run.status_stale && <p className="mt-1 text-xs text-amber-800">상태 확인 지연 · 현재 상태를 확정할 수 없습니다.</p>}{run.error_message && <p className="mt-2 max-w-56 text-xs text-red-700">{run.error_message}</p>}</td><td className="px-3 py-4 whitespace-nowrap">{run.requested_by}</td><td className="px-3 py-4 whitespace-nowrap">{date(run.created_at)}</td></tr>)}</tbody>
-          </table></div>}
+        {!data ? (!error && <p role="status">실행 이력을 불러오고 있습니다.</p>) : !data.results.length ? <p className="py-8 text-center text-sm text-ink-muted">아직 실행한 평가가 없습니다. 새 평가에서 자료와 실행 방식을 선택해 시작하세요.</p> : <>
+          <div aria-hidden="true" className="hidden grid-cols-[minmax(0,2fr)_minmax(7rem,1fr)_minmax(0,1fr)_minmax(10rem,1fr)] gap-4 border-b border-line px-4 pb-2 text-xs font-semibold text-ink-muted lg:grid"><span>평가 자료와 방법</span><span>진행 상태</span><span>요청한 사람</span><span>요청한 시간</span></div>
+          <ul aria-label="평가 실행 목록" className="m-0 grid list-none gap-3 p-0 lg:gap-0">
+            {data.results.map((run, index) => <li key={run.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,8rem)] gap-x-3 gap-y-4 rounded-xl border border-line p-4 lg:grid-cols-[minmax(0,2fr)_minmax(7rem,1fr)_minmax(0,1fr)_minmax(10rem,1fr)] lg:items-center lg:gap-4 lg:rounded-none lg:border-0 lg:border-b lg:border-line last:lg:border-b-0">
+              <div className="min-w-0">
+                <Link className="inline-flex min-h-11 items-center font-semibold leading-6 break-words text-brand-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [overflow-wrap:anywhere]" to={`${listPath}/${run.id}`} aria-label={`${run.dataset_label} · ${date(run.created_at)} · ${run.status_stale ? '상태 확인 지연, 마지막 상태 ' : ''}${run.status_label} · ${index + 1}번째 기록 상세 보기`}>{run.dataset_label}</Link>
+                <p className="mt-1 text-sm text-ink-muted [overflow-wrap:anywhere]">{run.recovery_kind === 'reassessment' ? '저장 답변 다시 평가' : run.execution_mode === 'recovery' ? '기존 결과 다시 정리' : run.execution_mode === 'live' ? '새 답변 생성' : '저장 답변 다시 확인'}{run.execution_mode === 'live' && run.live_config?.model ? ` · ${run.live_config.model}` : ''}</p>
+              </div>
+              <div className="min-w-0 text-right lg:text-left">
+                {run.status_stale ? <p className="mb-1 text-xs text-ink-muted">마지막 상태</p> : <span className="sr-only">진행 상태: </span>}
+                <Status run={run} />
+                {run.status_stale && <><p className="mt-1 text-xs font-semibold text-amber-800">상태 확인 지연 · 현재 상태 미확정</p><p className="mt-1 text-xs text-ink-muted">마지막 확인: {run.synced_at ? date(run.synced_at) : '아직 확인되지 않음'}</p></>}
+                {!run.status_stale && run.error_message && <p className="mt-1 text-xs text-ink-muted">자세한 내용은 결과에서 확인하세요.</p>}
+              </div>
+              <div className="col-span-2 grid min-w-0 gap-2 lg:contents">
+                <div className="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-3 lg:block"><p className="text-xs text-ink-muted lg:sr-only">요청자</p><p className="text-sm break-words [overflow-wrap:anywhere]">{run.requested_by || '기록 없음'}</p></div>
+                <div className="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-3 lg:block"><p className="text-xs text-ink-muted lg:sr-only">요청 시각</p><p className="text-sm break-words">{date(run.created_at)}</p></div>
+              </div>
+            </li>)}
+          </ul>
+        </>}
         {data && <nav aria-label="평가 이력 페이지" className="mt-3 flex items-center justify-end gap-3 text-sm"><button className={styles.secondaryButton} disabled={!data.previous} onClick={() => setSearch({ page: String(page - 1) })}>이전</button><span>{page} / {Math.max(1, Math.ceil(data.count / 25))}</span><button className={styles.secondaryButton} disabled={!data.next} onClick={() => setSearch({ page: String(page + 1) })}>다음</button></nav>}
       </section>
     </div>

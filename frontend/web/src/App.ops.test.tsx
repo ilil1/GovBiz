@@ -158,7 +158,7 @@ describe('운영 세션과 평가 자료 조회 분리', () => {
     expect(await screen.findByText(/평가 자료를 불러오지 못했습니다/)).toBeTruthy()
     fireEvent.click(screen.getByRole('link', { name: '평가 이력' }))
     expect(await screen.findByRole('heading', { level: 1, name: '평가 이력' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('link', { name: '새 평가' }))
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'LLMOps 작업 메뉴' })).getByRole('link', { name: '새 평가' }))
     expect(await screen.findByLabelText('평가 자료')).toHaveProperty('value', dataset.id)
     expect(catalogs).toBe(3)
     expect(fetchMock.mock.calls.filter(([path]) => path === '/api/v1/ops/session')).toHaveLength(1)
@@ -376,7 +376,8 @@ describe('React LLMOps 운영 화면', () => {
     await evaluationStep(2)
     expect(screen.getByRole('radio', { name: '기존 답변 다시 확인' })).toHaveProperty('checked', true)
     fireEvent.click(screen.getByRole('link', { name: '평가 이력' }))
-    fireEvent.click(await screen.findByRole('link', { name: '새 평가' }))
+    await screen.findByRole('region', { name: '평가 실행 이력' })
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'LLMOps 작업 메뉴' })).getByRole('link', { name: '새 평가' }))
     await evaluationStep(1)
     expect(await screen.findByLabelText('평가 자료')).toHaveProperty('value', quality.id)
     fireEvent.click(screen.getByRole('button', { name: '선택한 평가 자료 도움말' }))
@@ -911,6 +912,59 @@ describe('React LLMOps 운영 화면', () => {
     fireEvent.click(button)
     expect(await screen.findByText(/로그인 계정이 변경되었습니다/)).toBeTruthy()
     expect(fetchMock.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(false)
+  })
+
+  it('같은 자료의 실행을 방식과 상태로 구분하고 각각의 상세로 이동한다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    const failedId = '20000000-0000-4000-8000-000000000002'
+    const staleId = '30000000-0000-4000-8000-000000000003'
+    const runs = [completed,
+      { ...completed, id: failedId, execution_mode: 'live', live_config: liveConfig, status: 'FAILED', status_label: '실패', error_message: '내부 오류 원문' },
+      { ...completed, id: staleId, status: 'RUNNING', status_label: '실행 중', status_stale: true, error_message: '상태 조회 오류' },
+    ]
+    fetchMock.mockImplementation((path, options) => path.startsWith('/api/v1/ops/evaluations?page=')
+      ? Promise.resolve(json({ count: runs.length, next: null, previous: null, results: runs })) : original(path, options))
+    open('/ops/evaluations')
+    const list = await screen.findByRole('list', { name: '평가 실행 목록' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows).toHaveLength(3)
+    expect(within(rows[0]).getByText('저장 답변 다시 확인')).toBeTruthy()
+    expect(within(rows[1]).getByText('새 답변 생성 · gpt-6-luna')).toBeTruthy()
+    expect(within(rows[1]).getByText('실패')).toBeTruthy()
+    expect(within(rows[1]).queryByText('내부 오류 원문')).toBeNull()
+    expect(within(rows[2]).getByText('마지막 상태')).toBeTruthy()
+    expect(within(rows[2]).getByText(/상태 확인 지연 · 현재 상태 미확정/)).toBeTruthy()
+    expect(within(rows[2]).getByText(/마지막 확인: 아직 확인되지 않음/)).toBeTruthy()
+    const links = rows.map((row) => within(row).getByRole('link'))
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(runs.map((run) => `/ops/evaluations/${run.id}`))
+    expect(new Set(links.map((link) => link.getAttribute('aria-label'))).size).toBe(3)
+    expect(list.textContent).not.toContain(id)
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+  it('이력 목록의 모바일 메뉴는 필요할 때 열어 사용할 수 있다', async () => {
+    open('/ops/evaluations')
+    await screen.findByRole('list', { name: '평가 실행 목록' })
+    const menu = screen.getByText('운영 메뉴 보기')
+    expect(menu.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(menu)
+    expect(menu.closest('details')).toHaveProperty('open', true)
+    expect(within(menu.closest('details')!).getByRole('link', { name: '평가 이력' }).getAttribute('aria-current')).toBe('page')
+  })
+
+  it('결과 확인 실패는 실행 실패와 구분하고 요청된 실행 방식을 표시한다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((path, options) => path.startsWith('/api/v1/ops/evaluations?page=')
+      ? Promise.resolve(json({ count: 2, next: null, previous: null, results: [
+        { ...completed, status: 'RESULT_ERROR', status_label: '결과 확인 실패', error_message: '결과 파일을 확인할 수 없습니다.' },
+        { ...completed, id: '20000000-0000-4000-8000-000000000002', execution_mode: 'recovery', recovery_kind: 'reassessment', status: 'CANCELLED', status_label: '취소' },
+      ] })) : original(path, options))
+    open('/ops/evaluations')
+    const rows = within(await screen.findByRole('list', { name: '평가 실행 목록' })).getAllByRole('listitem')
+    expect(within(rows[0]).getByText('결과 확인 실패')).toBeTruthy()
+    expect(within(rows[0]).queryByText('실패')).toBeNull()
+    expect(within(rows[1]).getByText('저장 답변 다시 평가')).toBeTruthy()
+    expect(within(rows[1]).getByText('취소')).toBeTruthy()
   })
 
   it('상세를 열지 않아도 목록을 갱신하고 상태 확인 지연과 복구를 표시한다', async () => {
@@ -2545,7 +2599,7 @@ it('접수 중 메뉴를 옮겨도 늦은 응답이 현재 화면을 바꾸지 �
 it('이력 화면을 떠나면 목록 자동 조회를 중단한다', async () => {
   open('/ops/evaluations')
   await screen.findByText(completed.dataset_label)
-  fireEvent.click(screen.getByRole('link', { name: '새 평가' }))
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'LLMOps 작업 메뉴' })).getByRole('link', { name: '새 평가' }))
   await screen.findByLabelText('평가 자료')
   const reads = () => fetchMock.mock.calls.filter(([path]) => path.includes('/evaluations?page='))
   const count = reads().length
