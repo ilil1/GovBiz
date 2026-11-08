@@ -1,6 +1,7 @@
 """Django와 실행기가 함께 검증하는 후처리 복구 입력. 모델·평가 SDK를 사용하지 않는다."""
 
 import json
+import re
 from hashlib import sha256
 from uuid import UUID
 
@@ -9,7 +10,13 @@ from .execution_spec import digest, read_release
 
 
 def read_recovery_inputs(
-    results_root, evidence_root, source_id, *, artifact_reader=None, evidence_reader=None
+    results_root,
+    evidence_root,
+    source_id,
+    *,
+    artifact_reader=None,
+    evidence_reader=None,
+    reassessment=False,
 ):
     """원본 요청·검증 manifest에 고정된 완료 응답만 반환한다. 경로는 서버가 구성한다."""
     try:
@@ -27,11 +34,47 @@ def read_recovery_inputs(
         evidence_bytes = evidence_reader or (lambda name: read(evidence_root.resolve(), name))
         request_raw = result_bytes("request.json")
         marker = json.loads(request_raw)
-        manifest = json.loads(result_bytes("evaluation/manifest.json"))
+        manifest_raw = result_bytes("evaluation/manifest.json")
+        manifest = json.loads(manifest_raw)
         rag = evaluation_scope(marker["dataset_id"]) == RAG_SCOPE
         evaluator = read_release()["rag_evaluation" if rag else "evaluation"]
         spec = marker.get("execution_spec")
-        if manifest.get("evaluator_version") != evaluator["version"] or (
+        if reassessment:
+            # A new evaluation of a stored response is not a same-version recovery.
+            # Limit this separate path to completed fixed-answer live captures whose
+            # original evaluation stopped while publishing; preserve both versions.
+            source_version = manifest.get("evaluator_version")
+            approved_version = (
+                spec.get("evaluation", {}).get("version") if isinstance(spec, dict) else None
+            )
+            if (
+                rag
+                or marker.get("execution_mode") != "live"
+                or not isinstance(spec, dict)
+                or spec.get("schema_version") != 2
+                or spec.get("evaluation_scope") != "fixed-answer-context-only"
+                or manifest.get("scope") != "fixed-answer-context-only"
+                or manifest.get("status") != "failed"
+                or manifest.get("stage") != "publish"
+                or not isinstance(source_version, str)
+                or not re.fullmatch(r"[a-f0-9]{64}", source_version)
+                or source_version == evaluator["version"]
+                or not isinstance(approved_version, str)
+                or not re.fullmatch(r"[a-f0-9]{64}", approved_version)
+                or spec["evaluation"].get("sha256") != approved_version
+                or digest(spec) != marker.get("execution_spec_sha256")
+                or manifest.get("execution_spec_sha256") != marker.get("execution_spec_sha256")
+                or spec.get("dataset_id") != marker["dataset_id"]
+                or spec.get("execution_mode") != "live"
+                or spec.get("live_config") != marker.get("live_config")
+                or spec.get("candidate_capture_id") != marker["candidate_capture_id"]
+                or spec.get("reference_capture_id") != marker["reference_capture_id"]
+                or spec.get("reference_config") != marker.get("reference_config", {})
+            ):
+                raise ValueError(
+                    "Stored response reassessment source is incompatible or unverified"
+                )
+        elif manifest.get("evaluator_version") != evaluator["version"] or (
             spec
             and (
                 spec["evaluation"] != evaluator
@@ -80,6 +123,13 @@ def read_recovery_inputs(
             "evaluator_sha256": evaluator["sha256"],
             "evaluator_version": evaluator["version"],
         }
+        if reassessment:
+            config.update(
+                reassessment_kind="stored-response-reassessment",
+                source_manifest_sha256=sha256(manifest_raw).hexdigest(),
+                source_evaluator_version=source_version,
+                source_approved_evaluator_version=approved_version,
+            )
         for name, raw in inputs.items():
             actual_hash = sha256(raw).hexdigest()
             if actual_hash != manifest[f"{name}_sha256"]:
@@ -141,6 +191,60 @@ def read_recovery_inputs(
         if mode == "live" and not rag:
             capture = json.loads(inputs["capture"])
             approved = marker["live_config"]
+            if reassessment:
+                operations = spec["model_operations"]
+                case_ids = dataset["case_ids"]
+                responses = capture["apiResponses"]
+                if (
+                    spec["dataset"]["fixture_sha256"] != dataset["fixture_sha256"]
+                    or spec["dataset"]["case_ids"] != case_ids
+                    or spec["reference_sha256"] != config["reference_capture_sha256"]
+                    or capture.get("scope") != "fixed-answer-context-only"
+                    or capture.get("promptSha256") != spec["generation"]["prompt_sha256"]
+                    or capture.get("runnerSha256")
+                    != spec["generation"]["files"][
+                        "evaluation/support-program-evidence/evaluate.py"
+                    ]
+                    or type(approved.get("max_input_tokens")) is not int
+                    or type(capture.get("maxInputTokens")) is not int
+                    or capture.get("maxInputTokens") != approved["max_input_tokens"]
+                    or any(case.get("outcome") != "success" for case in capture["cases"])
+                    or not isinstance(operations, list)
+                    or len(operations) != len(case_ids)
+                    or not isinstance(responses, list)
+                    or len(responses) != len(case_ids)
+                    or any(
+                        op.get("id") != f"answer:{case_id}"
+                        or op.get("kind") != "answer"
+                        or op.get("case_id") != case_id
+                        or op.get("model") != approved["model"]
+                        or op.get("max_input_tokens") != approved["max_input_tokens"]
+                        or op.get("max_output_tokens") != approved["max_output_tokens"]
+                        for op, case_id in zip(operations, case_ids, strict=True)
+                    )
+                ):
+                    raise ValueError("Stored response source does not match its approved inputs")
+                indexes = [
+                    index for case in capture["cases"] for index in case["apiResponseIndexes"]
+                ]
+                if sorted(indexes) != list(range(len(responses))) or any(
+                    type(i) is not int for i in indexes
+                ):
+                    raise ValueError("Stored response calls are incomplete")
+                for response in responses:
+                    usage = response["usage"]
+                    if (
+                        response["httpStatus"] != 200
+                        or response["responseStatus"] != "completed"
+                        or any(
+                            type(usage[key]) is not int or usage[key] < 0
+                            for key in ("input_tokens", "output_tokens", "total_tokens")
+                        )
+                        or usage["total_tokens"] != usage["input_tokens"] + usage["output_tokens"]
+                        or usage["input_tokens"] > approved["max_input_tokens"]
+                        or usage["output_tokens"] > approved["max_output_tokens"]
+                    ):
+                        raise ValueError("Stored response usage is incomplete")
             if (
                 capture["model"] != approved["model"]
                 or capture["caseIds"] != dataset["case_ids"]

@@ -1362,6 +1362,16 @@ React `/ops/schedules`의 **정기 평가 계획**에서 기존 Core 관리자 �
 - 입력 검증 완료 전 중단되어 manifest에 입력 해시가 없는 실행은 복구할 수 없습니다. 부분 응답을
   이어 생성하는 기능, 자동 복구 스케줄, 모델 재호출은 포함하지 않습니다.
 
+평가기 버전이 달라 같은 버전의 후처리 복구를 할 수 없는 경우,
+`POST /api/v1/ops/evaluations/{원본 UUID}/reassess`에 새 `request_id`를 전달해 **저장 답변 재평가**를 접수할 수 있습니다.
+완료된 원본 live 응답이 있는 고정 근거 답변 평가의 `publish` 단계 실패만 대상으로 하며, 원본 요청·명세와
+fixture·캡처·비교 기준의 해시 및 전체 호출 응답을 확인합니다. 입력이 불완전하거나 검증되지 않으면 거절합니다.
+새 모델 호출과 예산 예약은 없으며 원본을 보존한 별도 이력·결과를 만듭니다. 상세·결과에는 원본 실행,
+원본 실제·승인 평가기와 현재 평가기 버전을 기록하고 Langfuse 점수에도 재평가 출처를 표시합니다.
+같은 원본과 현재 평가기 조합은 결과나 실패 여부와 관계없이 한 번만 접수할 수 있습니다. 접수 응답이
+불확실하면 같은 `request_id`로 재확인하며, 새로운 UUID로 중복 제출하면 `409 REASSESSMENT_ALREADY_EXISTS`입니다.
+관리자 인증·CSRF와 기존 접수 상태 검증이 적용됩니다.
+
 Migration `0005_evaluationrun_recovery`는 원본 FK와 복구 명세를 추가합니다. 기존 행은 null/빈 명세로
 유지합니다. Ops와 평가 실행기를 함께 갱신해 Prefect deployment에 `recovery_config` 인자를 반영해야 합니다.
 Django는 공통 입력 검증 코드만 사용하고 pandas·Pandera·Evidently SDK는 실행기에만 유지합니다.

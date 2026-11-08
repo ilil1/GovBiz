@@ -485,6 +485,23 @@ def read_result(run):
                 raise ResultsUnavailable
         if run.execution_mode == "recovery":
             config = run.recovery_config
+            if config.get("reassessment_kind") == "stored-response-reassessment":
+                provenance = {
+                    key: config[key]
+                    for key in (
+                        "source_run_id",
+                        "source_evaluator_version",
+                        "source_approved_evaluator_version",
+                        "evaluator_version",
+                        "capture_sha256",
+                        "source_manifest_sha256",
+                    )
+                }
+                if (
+                    manifest.get("reassessment") != provenance
+                    or manifest.get("evaluator_version") != config["evaluator_version"]
+                ):
+                    raise ResultsUnavailable
             if (
                 str(run.source_run_id) != config["source_run_id"]
                 or manifest["capture_sha256"] != config["capture_sha256"]

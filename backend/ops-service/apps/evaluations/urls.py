@@ -83,6 +83,11 @@ urlpatterns = [
         name="evaluation-recover",
     ),
     path(
+        "api/v1/ops/evaluations/<uuid:run_id>/reassess",
+        views.api_reassess,
+        name="evaluation-reassess",
+    ),
+    path(
         "api/v1/ops/evaluations/<uuid:run_id>/review",
         views.api_review,
         name="evaluation-review",

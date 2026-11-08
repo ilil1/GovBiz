@@ -1,6 +1,7 @@
+import { createRequestId } from './requestId'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
-import { cancelEvaluation, getEvaluation, getEvaluationCatalog, getOpsSession, listEvaluations, OpsApiError, recoverEvaluation, submitEvaluation } from '../../../data/ops/opsApi'
+import { cancelEvaluation, getEvaluation, getEvaluationCatalog, getOpsSession, listEvaluations, OpsApiError, reassessEvaluation, recoverEvaluation, submitEvaluation } from '../../../data/ops/opsApi'
 import { appContainer } from '../../../app/appContainer'
 import { useAppDispatch } from '../../../app/hooks'
 import { signedOut } from '../../shared/auth/state/authSlice'
@@ -32,7 +33,8 @@ const listPath = '/ops/evaluations'
 const notice = '저장된 과거 평가 결과를 비교합니다. 새 모델 호출은 없으며 현재 모델의 품질 측정이 아닙니다.'
 const liveNotice = '선택한 평가 자료의 질문·고정 근거 청크와 답변 지침을 OpenAI에 전송해 새 응답을 생성합니다. 검색·임베딩은 실행하지 않으며 API 비용이 발생합니다.'
 const recoveryNotice = '이미 생성된 응답으로 보고서와 평가 점수 등록만 다시 처리합니다. 추가 모델 호출은 0회이며 원본 실행 기록은 보존됩니다.'
-const modeLabel = (run: EvaluationRun) => run.execution_mode === 'recovery' ? '후처리 복구' : run.execution_mode === 'live' ? '새 모델 응답 생성' : '저장 응답 재평가'
+const reassessmentNotice = '저장된 답변을 현재 평가기로 다시 평가합니다. 원본과 별도의 평가 이력이며 AI 모델을 추가 호출하지 않습니다.'
+const modeLabel = (run: EvaluationRun) => run.recovery_kind === 'reassessment' ? '저장 답변 재평가' : run.execution_mode === 'recovery' ? '후처리 복구' : run.execution_mode === 'live' ? '새 모델 응답 생성' : '저장 응답 재평가'
 const field = 'min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm focus:outline-2 focus:outline-brand-primary'
 const date = (value: string | null) => value ? new Date(value).toLocaleString('ko-KR') : '—'
 const message = (error: unknown) => error instanceof Error ? error.message : '요청을 처리하지 못했습니다.'
@@ -469,6 +471,8 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
   const readVersion = useRef(0)
   const [cancelError, setCancelError] = useState('')
   const recoveryRequest = useRef<{ source: string; id: string } | null>(null)
+  const reassessmentRequest = useRef<{ source: string; id: string } | null>(null)
+  const reassessmentInFlight = useRef(false)
   const [run, setRun] = useState<EvaluationRun | null>(null)
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
@@ -499,7 +503,7 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
     setBusy(true)
     try {
       setRun(run.execution_mode === 'recovery' && run.source_run_id
-        ? await recoverEvaluation(run.source_run_id, run.id)
+        ? await (run.recovery_kind === 'reassessment' ? reassessEvaluation : recoverEvaluation)(run.source_run_id, run.id)
         : await submitEvaluation(run.id, run.dataset_id, run.candidate_capture_id, run.reference_capture_id, run.live_config, run.baseline_version, undefined, run.execution_profile))
       setRefresh((value) => value + 1)
     }
@@ -533,6 +537,18 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
       else setError(message(reason))
     } finally { setBusy(false) }
   }
+  const reassess = async () => {
+    if (!run || busy || reassessmentInFlight.current) return
+    if (reassessmentRequest.current?.source !== run.id) reassessmentRequest.current = { source: run.id, id: createRequestId() }
+    reassessmentInFlight.current = true; setBusy(true)
+    try {
+      const result = await reassessEvaluation(run.id, reassessmentRequest.current.id)
+      setError(''); navigate(`${listPath}/${result.id}`)
+    } catch (reason) {
+      if (reason instanceof OpsApiError && (reason.status === 401 || reason.status === 403)) expiry.current()
+      else setError(message(reason))
+    } finally { reassessmentInFlight.current = false; setBusy(false) }
+  }
   return <>
     <WorkspacePageHeader title="평가 실행 상세" parent={{ to: listPath, label: '실행 이력' }} actions={run && <Status run={run} />} />
     <div className={styles.content}>
@@ -548,7 +564,7 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
         </section>}
         {run.cancel_requested_at && <p role="status" className="text-sm text-ink-muted">취소 요청: {run.cancel_requested_by} · {date(run.cancel_requested_at)}{run.status === 'CANCELLING' ? ' · 실행 종료를 확인하고 있습니다.' : ''}</p>}
         {run.can_retry && <button className={`${styles.primaryButton} self-start`} disabled={busy} onClick={() => void retry()}>{busy ? '접수 확인 중…' : '같은 요청으로 접수 재확인'}</button>}
-        <section className={styles.card}><h2 className={styles.cardTitle}>{run.dataset_label}</h2><p className="text-sm leading-6 text-ink-muted">{run.execution_mode === 'recovery' ? recoveryNotice : run.execution_mode === 'live' ? (run.evaluation_scope === 'source-chunks-retrieval-answer' ? ragLiveNotice(run.live_config) : liveNotice) : notice}</p>
+        <section className={styles.card}><h2 className={styles.cardTitle}>{run.dataset_label}</h2><p className="text-sm leading-6 text-ink-muted">{run.recovery_kind === 'reassessment' ? reassessmentNotice : run.execution_mode === 'recovery' ? recoveryNotice : run.execution_mode === 'live' ? (run.evaluation_scope === 'source-chunks-retrieval-answer' ? ragLiveNotice(run.live_config) : liveNotice) : notice}</p>
           <VectorPlan config={run.live_config} />
           <p className="text-sm">{modeLabel(run)} · {scopeLabel(run.evaluation_scope)}</p>
           {run.status === 'COMPLETED' && <p className="text-sm font-semibold text-brand-primary">평가 실행이 끝났습니다. 아래에서 답변과 근거를 검토하세요.</p>}
@@ -559,6 +575,10 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
             ...(run.execution_spec ? [
               ['고정 사례', run.execution_spec.dataset.case_ids.join(', ')],
               ['평가기 버전', run.execution_spec.evaluation.sha256],
+              ...(run.recovery_kind === 'reassessment' ? [
+                ['원본에 기록된 평가기 버전', run.source_evaluator_version ?? '확인할 수 없음'],
+                ['원본 접수 시 승인된 평가기 버전', run.source_approved_evaluator_version ?? '확인할 수 없음'],
+              ] : []),
               ...(run.execution_spec.generation ? [['프롬프트 버전', run.execution_spec.generation.prompt_sha256]] : []),
             ] : []),
             ['모델 호출 시도', run.model_api_calls === null ? '아직 확인되지 않음' : `${run.model_api_calls}회`],
@@ -578,7 +598,13 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
           <p className="text-xs leading-5 text-ink-muted">{recoveryNotice}</p>
           {run.postprocessing.can_recover ? <button className={`${styles.primaryButton} self-start`} disabled={busy} onClick={() => void recover()}>{busy ? '복구 접수 중…' : '후처리 다시 실행'}</button>
             : (run.status !== 'COMPLETED' || !run.postprocessing.inputs_ready) && <p className="text-sm text-ink-muted">{run.postprocessing.blocked_reason}</p>}
-          {run.postprocessing.attempts.length > 0 && <ul className="space-y-2 text-sm">{run.postprocessing.attempts.map((attempt) => <li key={attempt.id}><Link className="text-brand-primary underline" to={`${listPath}/${attempt.id}`}>복구 실행 {attempt.id.slice(0, 8)} · {attempt.status_label}</Link></li>)}</ul>}
+          {run.postprocessing.can_reassess && <div className="space-y-2 rounded-xl bg-surface-muted p-4">
+            <h3 className="font-semibold">저장된 답변을 현재 평가기로 다시 평가</h3>
+            <p className="text-sm leading-6">{reassessmentNotice}</p>
+            <button className={`${styles.secondaryButton} self-start`} disabled={busy} onClick={() => void reassess()}>{busy ? '재평가 접수 중…' : '저장 답변 다시 평가'}</button>
+          </div>}
+          {!run.postprocessing.can_reassess && run.postprocessing.reassessment_blocked_reason && <p className="text-sm text-ink-muted">저장 답변 재평가: {run.postprocessing.reassessment_blocked_reason}</p>}
+          {run.postprocessing.attempts.length > 0 && <ul className="space-y-2 text-sm">{run.postprocessing.attempts.map((attempt) => <li key={attempt.id}><Link className="text-brand-primary underline" to={`${listPath}/${attempt.id}`}>{attempt.recovery_kind === 'reassessment' ? '재평가 실행' : '복구 실행'} {attempt.id.slice(0, 8)} · {attempt.status_label}</Link></li>)}</ul>}
         </section>}
         {run.status === 'COMPLETED' && run.evaluation_scope !== 'source-chunks-retrieval-answer' && <section className={styles.card} aria-label="평가 결과"><h2 className={styles.cardTitle}>평가 결과</h2><p className="text-sm">{scopeNotice(run.evaluation_scope)}</p><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[
           ['처리 사례', `${run.summary.observedCaseCount ?? '—'} / ${run.summary.caseCount ?? '—'}`], ['상태 일치율', run.summary.statusAccuracy?.toFixed(2) ?? '미측정'],
@@ -636,7 +662,7 @@ function ComparisonResult({ comparison }: { comparison: NonNullable<EvaluationRu
       {comparison.metrics.map((metric) => <tr key={metric.key} className="border-b border-line"><th scope="row" className="px-3 py-3 font-medium">{metricLabels[metric.key]}</th><td className="px-3 py-3">{measurement(metric.reference)}</td><td className="px-3 py-3">{measurement(metric.candidate)}</td><td className="px-3 py-3 font-mono">{metric.delta === null ? '비교 불가' : `${metric.delta > 0 ? '+' : ''}${measurement(metric.delta)}`}</td></tr>)}
     </tbody></table></div>
     <div className="grid gap-4 md:grid-cols-2">{([['기준', comparison.reference_execution], ['후보', comparison.candidate_execution]] as const).map(([label, execution]) => <div className="rounded-xl bg-[#f3f7f5] p-4 text-xs leading-6 break-all" key={label}>
-      <h3 className="text-sm font-bold">{label} 실행 정보</h3><p>모델: {execution.model}</p><p>원 실행 시각: {date(execution.started_at)}</p><p>원본 사례: {execution.source_case_ids.join(', ')}</p><p>프롬프트: {execution.prompt_sha256}</p><p>실행기: {execution.runner_sha256}</p><p>캡처: {execution.capture_sha256}</p>
+      <h3 className="text-sm font-bold">{label} 실행 정보</h3><p>모델: {execution.model}</p><p>원 실행 시각: {date(execution.started_at)}</p><p>원본 사례: {execution.source_case_ids.join(', ')}</p><p>프롬프트: {execution.prompt_sha256 ?? '미확인'}</p><p>실행기: {execution.runner_sha256 ?? '미확인'}</p><p>캡처: {execution.capture_sha256}</p>
     </div>)}</div>
     <details className="text-sm"><summary className="cursor-pointer font-semibold">사례별 상태·인용 비교</summary><div className="overflow-x-auto"><table className="mt-3 w-full text-left text-xs"><thead><tr>{['사례', '기준 결과', '후보 결과', '상태 일치 (기준 → 후보)', '인용 재현 (기준 → 후보)'].map((label) => <th className="px-2 py-2" key={label}>{label}</th>)}</tr></thead><tbody>{comparison.cases.map((item) => <tr key={item.case_id}><th className="px-2 py-2">{item.case_id}</th><td>{item.reference.outcome}</td><td>{item.candidate.outcome}</td><td>{measurement(item.reference.status_match)} → {measurement(item.candidate.status_match)}</td><td>{measurement(item.reference.citation_recall)} → {measurement(item.candidate.citation_recall)}</td></tr>)}</tbody></table></div></details>
   </section>

@@ -809,6 +809,101 @@ describe('React LLMOps 운영 화면', () => {
     expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/ops/evaluations')).toBe(false)
   })
 
+  it('저장된 답변을 추가 모델 호출 없이 별도 재평가하고 원본·평가기 버전을 구분한다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    const child = '30000000-0000-4000-8000-000000000003'
+    const reassessed = { ...completed, id: child, execution_mode: 'recovery', recovery_kind: 'reassessment', source_run_id: id,
+      source_evaluator_version: 'a'.repeat(64), source_approved_evaluator_version: 'b'.repeat(64),
+      execution_spec: { dataset: { case_ids: ['TC01'], fixture_sha256: 'c'.repeat(64) }, evaluation: { sha256: 'd'.repeat(64) }, generation: null },
+      report_url: `/api/v1/ops/evaluations/${child}/report` }
+    fetchMock.mockImplementation(async (path, options) => {
+      if (path === `/api/v1/ops/evaluations/${id}`) return json({ ...completed, status: 'FAILED', report_url: null, postprocessing: {
+        inputs_ready: false, stage: 'publish', can_recover: false, blocked_reason: '이전 평가기와 다릅니다.',
+        can_reassess: true, reassessment_blocked_reason: '', attempts: [],
+      } })
+      if (path === `/api/v1/ops/evaluations/${id}/reassess`) return json(reassessed, 202)
+      if (path === `/api/v1/ops/evaluations/${child}`) return json(reassessed)
+      if (path === `/api/v1/ops/evaluations/${child}/review`) return json({ ...reviewDefaults, is_baseline: false, baseline_version: 0, baseline_history: [], reviews: [], material: null, material_error: '' })
+      return original(path, options)
+    })
+    open(`/ops/evaluations/${id}`)
+    expect(await screen.findByText(/원본과 별도의 평가 이력이며 AI 모델을 추가 호출하지 않습니다/)).toBeTruthy()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '저장 답변 다시 평가' })) })
+    const originalLink = await screen.findByRole('link', { name: '원본 실행과 실패 기록 보기' }, { timeout: 5000 })
+    expect(originalLink.getAttribute('href')).toBe(`/ops/evaluations/${id}`)
+    expect(screen.getByText('저장 답변 재평가 · 고정 근거 답변')).toBeTruthy()
+    fireEvent.click(screen.getByText('실행 정보·버전 자세히 보기'))
+    expect(screen.getByText('원본에 기록된 평가기 버전')).toBeTruthy()
+    expect(screen.getByText('원본 접수 시 승인된 평가기 버전')).toBeTruthy()
+    const options = fetchMock.mock.calls.find(([path]) => path.endsWith('/reassess'))![1]!
+    expect(Object.keys(JSON.parse(String(options.body)))).toEqual(['request_id'])
+    expect(options.credentials).toBe('same-origin')
+    expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/ops/evaluations')).toBe(false)
+  })
+
+  it('완료된 재평가에서 기준 응답의 버전이 없으면 미확인으로 표시한다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    const execution = { run_id: 'a'.repeat(32), model: 'test-model', prompt_sha256: 'p'.repeat(64), runner_sha256: 'r'.repeat(64), capture_sha256: 'c'.repeat(64), started_at: null, source_case_ids: ['E01'] }
+    const comparison = { schema_version: 2, comparison: 'candidate-reference', case_ids: ['E01'], candidate_execution: execution,
+      reference_execution: { ...execution, prompt_sha256: null, runner_sha256: null }, metrics: [], cases: [] }
+    fetchMock.mockImplementation((path, options) => path === `/api/v1/ops/evaluations/${id}`
+      ? Promise.resolve(json({ ...completed, execution_mode: 'recovery', recovery_kind: 'reassessment', comparison })) : original(path, options))
+    open(`/ops/evaluations/${id}`)
+    expect(await screen.findByText('평가 실행이 끝났습니다. 아래에서 답변과 근거를 검토하세요.')).toBeTruthy()
+    fireEvent.click(screen.getByText('기준 실행 정보'))
+    expect(screen.getByText('프롬프트: 미확인')).toBeTruthy()
+    expect(screen.getByText('실행기: 미확인')).toBeTruthy()
+  })
+
+  it('재평가 응답 유실과 접수 재확인에 같은 요청 ID와 재평가 API만 사용한다', async () => {
+    vi.mocked(crypto.randomUUID).mockReturnValue('30000000-0000-4000-8000-000000000003')
+    const original = fetchMock.getMockImplementation()!
+    const requests: string[] = []
+    let child = ''
+    const pending = () => ({ ...completed, id: child, execution_mode: 'recovery', recovery_kind: 'reassessment', source_run_id: id,
+      status: 'REQUESTED', can_retry: true, prefect_flow_run_id: null, report_url: null })
+    fetchMock.mockImplementation(async (path, options) => {
+      if (path === `/api/v1/ops/evaluations/${id}`) return json({ ...completed, status: 'FAILED', postprocessing: {
+        inputs_ready: false, stage: 'publish', can_recover: false, blocked_reason: '이전 평가기와 다릅니다.',
+        can_reassess: true, reassessment_blocked_reason: '', attempts: [],
+      } })
+      if (path === `/api/v1/ops/evaluations/${id}/reassess`) {
+        child = JSON.parse(String(options?.body)).request_id
+        requests.push(child)
+        if (requests.length === 1) throw new TypeError('response lost')
+        return json(pending(), 503)
+      }
+      if (child && path === `/api/v1/ops/evaluations/${child}`) return json(pending())
+      return original(path, options)
+    })
+    open(`/ops/evaluations/${id}`)
+    fireEvent.click(await screen.findByRole('button', { name: '저장 답변 다시 평가' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('연결할 수 없습니다'))
+    fireEvent.click(screen.getByRole('button', { name: '저장 답변 다시 평가' }))
+    await waitFor(() => expect(requests).toHaveLength(2))
+    const retry = await screen.findByRole('button', { name: '같은 요청으로 접수 재확인' })
+    await waitFor(() => expect(retry).toHaveProperty('disabled', false))
+    fireEvent.click(retry)
+    await waitFor(() => expect(requests).toHaveLength(3))
+    expect(new Set(requests).size).toBe(1)
+    expect(fetchMock.mock.calls.some(([path]) => path.endsWith('/recover') || path === '/api/v1/ops/evaluations')).toBe(false)
+  })
+
+  it('같은 평가기로 이미 재평가했다면 재접수를 막고 그 이력을 보여 준다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    const child = '30000000-0000-4000-8000-000000000003'
+    fetchMock.mockImplementation(async (path, options) => path === `/api/v1/ops/evaluations/${id}`
+      ? json({ ...completed, status: 'FAILED', postprocessing: {
+        inputs_ready: false, stage: 'publish', can_recover: false, blocked_reason: '이전 평가기와 다릅니다.',
+        can_reassess: false, reassessment_blocked_reason: '같은 평가기로 재평가한 기록이 있습니다. 결과 또는 실패 원인을 확인해 주세요.',
+        attempts: [{ id: child, status: 'FAILED', status_label: '실패', recovery_kind: 'reassessment' }],
+      } }) : original(path, options))
+    open(`/ops/evaluations/${id}`)
+    expect(await screen.findByText(/같은 평가기로 재평가한 기록이 있습니다/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '저장 답변 다시 평가' })).toBeNull()
+    expect(screen.getByRole('link', { name: '재평가 실행 30000000 · 실패' }).getAttribute('href')).toBe(`/ops/evaluations/${child}`)
+  })
+
   it('불완전한 입력은 복구 버튼을 숨기고 이전 복구 이력을 보여 준다', async () => {
     const original = fetchMock.getMockImplementation()!
     const child = '30000000-0000-4000-8000-000000000003'

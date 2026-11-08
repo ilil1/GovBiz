@@ -88,6 +88,76 @@ class RecoveryFixture:
 
 
 class RecoveryTests(RecoveryFixture, TestCase):
+    def test_reassessment_reports_unavailable_prefect_status(self):
+        from .recovery import recovery_state
+        from .services import ResultsUnavailable
+
+        self.source.error_code = "PREFECT_STATUS_UNAVAILABLE"
+
+        def checked(source, *, reassessment=False):
+            if reassessment:
+                return {"reassessment_kind": "stored-response-reassessment"}
+            raise ResultsUnavailable
+
+        with patch("apps.evaluations.recovery.recovery_config", side_effect=checked):
+            state = recovery_state(self.source)
+        self.assertFalse(state["can_reassess"])
+        self.assertIn("종료 상태를 확인할 수 없어", state["reassessment_blocked_reason"])
+
+    def test_stored_response_reassessment_is_distinct_idempotent_and_once_per_evaluator(self):
+        from .services import ResultsUnavailable
+
+        self.source.execution_mode = "live"
+        self.source.candidate_capture_id = "new-model-response"
+        self.source.save(update_fields=["execution_mode", "candidate_capture_id"])
+        target = read_release()["evaluation"]
+        dataset = DATASETS[LEGACY_DATASET_ID]
+        old = "a" * 64
+        config = {
+            "source_run_id": str(self.source.pk),
+            "source_request_sha256": "b" * 64,
+            "source_manifest_sha256": "c" * 64,
+            "source_evaluator_version": old,
+            "source_approved_evaluator_version": target["version"],
+            "evaluator_sha256": target["sha256"],
+            "evaluator_version": target["version"],
+            "fixture_sha256": dataset["fixture_sha256"],
+            "capture_sha256": "d" * 64,
+            "reference_capture_sha256": "e" * 64,
+            "reassessment_kind": "stored-response-reassessment",
+        }
+
+        def checked(source, *, reassessment=False):
+            if reassessment:
+                return config
+            raise ResultsUnavailable
+
+        url = self.url.removesuffix("/recover") + "/reassess"
+        request_id = uuid4()
+        with patch("apps.evaluations.recovery.recovery_config", side_effect=checked):
+            first = self.client.post(url, {"request_id": str(request_id)}, format="json")
+            self.assertEqual(first.status_code, 202)
+            self.assertEqual(first.json()["recovery_kind"], "reassessment")
+            self.assertEqual(first.json()["source_run_id"], str(self.source.pk))
+            self.assertEqual(first.json()["source_evaluator_version"], old)
+            self.assertEqual(first.json()["model_api_calls"], 0)
+            self.assertIsNone(first.json()["live_config"])
+            repeat = self.client.post(url, {"request_id": str(request_id)}, format="json")
+            self.assertEqual(repeat.status_code, 200)
+            self.assertEqual(repeat.json()["id"], first.json()["id"])
+            child = self.source.recoveries.get(pk=request_id)
+            child.status = "FAILED"
+            child.save(update_fields=["status"])
+            duplicate = self.client.post(url, {"request_id": str(uuid4())}, format="json")
+            self.assertEqual(duplicate.status_code, 409)
+            self.assertEqual(duplicate.json()["code"], "REASSESSMENT_ALREADY_EXISTS")
+            detail = self.client.get(self.url.removesuffix("/recover")).json()["postprocessing"]
+            self.assertFalse(detail["can_reassess"])
+            self.assertIn("같은 평가기", detail["reassessment_blocked_reason"])
+            self.assertEqual(detail["attempts"][0]["recovery_kind"], "reassessment")
+        self.assertEqual(self.source.recoveries.count(), 1)
+        self.assertEqual(self.create.call_count, 1)
+
     def test_completed_recovery_uses_own_verified_artifacts_and_can_be_reviewed(self):
         child = EvaluationRun.objects.get(pk=self.post().json()["id"])
         folder = self.root / str(child.pk)
@@ -301,6 +371,52 @@ class RecoveryTests(RecoveryFixture, TestCase):
 
 
 class ConcurrentRecoveryTests(RecoveryFixture, TransactionTestCase):
+    def test_simultaneous_reassessments_allow_only_one_new_evaluation(self):
+        from .services import ResultsUnavailable
+
+        target = read_release()["evaluation"]
+        dataset = DATASETS[LEGACY_DATASET_ID]
+        config = {
+            "source_run_id": str(self.source.pk),
+            "source_request_sha256": "b" * 64,
+            "source_manifest_sha256": "c" * 64,
+            "source_evaluator_version": "a" * 64,
+            "source_approved_evaluator_version": target["version"],
+            "evaluator_sha256": target["sha256"],
+            "evaluator_version": target["version"],
+            "fixture_sha256": dataset["fixture_sha256"],
+            "capture_sha256": "d" * 64,
+            "reference_capture_sha256": "e" * 64,
+            "reassessment_kind": "stored-response-reassessment",
+        }
+
+        def checked(source, *, reassessment=False):
+            if reassessment:
+                return config
+            raise ResultsUnavailable
+
+        barrier = Barrier(2)
+
+        def submit():
+            close_old_connections()
+            try:
+                user = get_user_model().objects.get(pk=self.user.pk)
+                source = EvaluationRun.objects.get(pk=self.source.pk)
+                barrier.wait(timeout=10)
+                try:
+                    return str(submit_recovery(user, source, uuid4(), reassessment=True)[0].pk)
+                except RequestConflict:
+                    return "conflict"
+            finally:
+                close_old_connections()
+
+        with patch("apps.evaluations.recovery.recovery_config", side_effect=checked):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda _: submit(), range(2)))
+        self.assertEqual(results.count("conflict"), 1)
+        self.assertEqual(self.source.recoveries.count(), 1)
+        self.assertEqual(self.create.call_count, 1)
+
     def test_simultaneous_requests_create_only_one_active_recovery(self):
         barrier = Barrier(2)
 

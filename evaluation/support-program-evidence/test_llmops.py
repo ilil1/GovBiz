@@ -127,6 +127,128 @@ def test_score_retry_uses_stable_ids_without_inventing_model_traces(monkeypatch)
     assert result["capture"]["cases"][0]["response"]["answer"] not in payloads
 
 
+def test_score_write_timeout_checks_stored_result_without_reposting(monkeypatch):
+    assert llmops.publish.retries == 0
+    settings = LangfuseSettings(enabled=True, base_url="http://localhost:13000", public_key="test", secret_key="test")
+    payload = {"id": "score-1", "name": "accuracy", "value": 1.0}
+    calls = {"post": 0, "read": 0}
+    clock = [0.0]
+
+    def create(**kwargs):
+        calls["post"] += 1
+        assert kwargs["request_options"]["timeout_in_seconds"] == 20
+        raise llmops.httpx.ReadTimeout("response lost after write")
+
+    def read(**_kwargs):
+        calls["read"] += 1
+        if calls["read"] == 1:
+            raise llmops.httpx.ReadTimeout("temporary read delay")
+        return SimpleNamespace(data=[SimpleNamespace(id="score-1", name="accuracy", value=1.0)])
+
+    monkeypatch.setattr(llmops, "LangfuseAPI", lambda **_: SimpleNamespace(
+        scores=SimpleNamespace(create=create), scores_v3=SimpleNamespace(get_many_v3=read)))
+    monkeypatch.setattr(llmops, "time", SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds)))
+    assert llmops.publish_payloads([payload], settings) == ["score-1"]
+    assert calls["post"] == 1
+    assert calls["read"] == 3  # 임시 조회 실패, 저장 확인, 전체 재확인
+
+
+def test_score_write_timeout_does_not_retry_or_claim_unverified_success(monkeypatch):
+    settings = LangfuseSettings(enabled=True, base_url="http://localhost:13000", public_key="test", secret_key="test")
+    payload = {"id": "score-1", "name": "accuracy", "value": 1.0}
+    posts = []
+    clock = [0.0]
+
+    def create(**_kwargs):
+        posts.append(1)
+        raise llmops.httpx.ReadTimeout("response lost")
+
+    monkeypatch.setattr(llmops, "LangfuseAPI", lambda **_: SimpleNamespace(
+        scores=SimpleNamespace(create=create), scores_v3=SimpleNamespace(get_many_v3=lambda **_: SimpleNamespace(data=[]))))
+    monkeypatch.setattr(llmops, "time", SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds)))
+    with pytest.raises(llmops.httpx.ReadTimeout):
+        llmops.publish_payloads([payload], settings)
+    assert len(posts) == 1
+    assert clock[0] == 60
+
+
+def test_score_readback_requires_matching_value_and_does_not_repost(monkeypatch):
+    settings = LangfuseSettings(enabled=True, base_url="http://localhost:13000", public_key="test", secret_key="test")
+    payload = {"id": "score-1", "name": "accuracy", "value": 1.0}
+    posts = []
+    clock = [0.0]
+    monkeypatch.setattr(llmops, "LangfuseAPI", lambda **_: SimpleNamespace(
+        scores=SimpleNamespace(create=lambda **kwargs: posts.append(kwargs)),
+        scores_v3=SimpleNamespace(get_many_v3=lambda **_: SimpleNamespace(data=[SimpleNamespace(id="score-1", name="accuracy", value=0.0)]))))
+    monkeypatch.setattr(llmops, "time", SimpleNamespace(monotonic=lambda: clock[0], sleep=lambda seconds: clock.__setitem__(0, clock[0] + seconds)))
+    with pytest.raises(RuntimeError, match="persistence verification timed out"):
+        llmops.publish_payloads([payload], settings)
+    assert len(posts) == 1
+    assert clock[0] == 60
+
+
+def reassessment_provenance(source="1f270c5b-4f7d-434d-8415-3285917c796b"):
+    return {"source_run_id": source, "source_evaluator_version": "a" * 64,
+            "source_approved_evaluator_version": "b" * 64,
+            "target_evaluator_version": llmops.EVALUATOR_VERSION}
+
+
+def test_reassessment_score_provenance_and_distinct_deterministic_ids(monkeypatch, tmp_path):
+    base = llmops.load_results(FIXTURE, CAPTURE)
+    settings = LangfuseSettings(enabled=True, base_url="http://localhost:13000", public_key="test", secret_key="test")
+    captured = []
+    monkeypatch.setattr(llmops, "prepare", lambda *_args: deepcopy(base))
+    monkeypatch.setattr(llmops, "render", lambda current, reference, _output: {
+        "evaluation_run_id": current["run_id"], "reference_run_id": reference["run_id"], "artifact_sha256": {}})
+    monkeypatch.setattr(llmops, "publish", lambda current: captured.append(llmops.score_payloads(current, settings)) or
+                        [item["id"] for item in captured[-1]])
+    monkeypatch.setattr(llmops, "flow_run", SimpleNamespace(id="00000000-0000-0000-0000-000000000001"))
+
+    def run(name, provenance=None):
+        output = tmp_path / name
+        result = llmops.evaluate_capture.fn(str(FIXTURE), str(CAPTURE), str(CAPTURE), str(output), reassessment=provenance)
+        comparison = json.loads((output / "comparison.json").read_text(encoding="utf-8"))
+        payloads = captured[-1]
+        assert result["evaluation_run_id"] == comparison["evaluation_run_id"]
+        assert all(item["metadata"]["evaluation_run_id"] == result["evaluation_run_id"] for item in payloads)
+        assert all(item.get("session_id", result["evaluation_run_id"]) == result["evaluation_run_id"] for item in payloads)
+        return result, payloads
+
+    original, original_payloads = run("original")
+    assert original["evaluation_run_id"] == base["run_id"]
+    provenance = reassessment_provenance()
+    reassessed, reassessed_payloads = run("reassessed", provenance)
+    again, again_payloads = run("again", provenance)
+    other, other_payloads = run("other", reassessment_provenance("00000000-0000-0000-0000-000000000002"))
+    monkeypatch.setattr(llmops, "EVALUATOR_VERSION", "c" * 64)
+    other_version, other_version_payloads = run("other-version", reassessment_provenance())
+    assert original["evaluation_run_id"] != reassessed["evaluation_run_id"]
+    assert reassessed["evaluation_run_id"] == again["evaluation_run_id"] != other["evaluation_run_id"]
+    assert {item["id"] for item in original_payloads}.isdisjoint({item["id"] for item in reassessed_payloads})
+    assert [item["id"] for item in reassessed_payloads] == [item["id"] for item in again_payloads]
+    assert {item["id"] for item in reassessed_payloads}.isdisjoint({item["id"] for item in other_payloads})
+    assert reassessed["evaluation_run_id"] != other_version["evaluation_run_id"]
+    assert {item["id"] for item in reassessed_payloads}.isdisjoint({item["id"] for item in other_version_payloads})
+    for item in reassessed_payloads:
+        assert item["metadata"]["record_kind"] == "stored-response-reassessment"
+        assert all(item["metadata"][key] == value for key, value in provenance.items())
+    assert all(item["metadata"]["record_kind"] != "stored-response-reassessment" for item in original_payloads)
+
+
+@pytest.mark.parametrize("mutation", ["empty", "invalid_source", "invalid_digest", "other_target", "extra"])
+def test_reassessment_invalid_provenance_fails_before_writing(tmp_path, mutation):
+    provenance = reassessment_provenance()
+    if mutation == "empty": provenance = {}
+    elif mutation == "invalid_source": provenance["source_run_id"] = "not-a-uuid"
+    elif mutation == "invalid_digest": provenance["source_evaluator_version"] = "invalid"
+    elif mutation == "other_target": provenance["target_evaluator_version"] = "f" * 64
+    else: provenance["untrusted"] = "extra"
+    target = tmp_path / "invalid"
+    with pytest.raises(ValueError, match="invalid reassessment provenance"):
+        llmops.evaluate_capture.fn(str(FIXTURE), str(CAPTURE), str(CAPTURE), str(target), reassessment=provenance)
+    assert not target.exists()
+
+
 @pytest.mark.parametrize("scope", [None, "full-rag", "core-http-mysql-frozen-html-ai-evidence-flow"])
 def test_other_capture_scopes_are_not_relabeled_as_fixed_context(tmp_path, scope):
     capture = json.loads(CAPTURE.read_text())

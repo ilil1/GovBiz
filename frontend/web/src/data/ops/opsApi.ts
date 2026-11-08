@@ -173,7 +173,7 @@ export type ManagedDatasetWrite = { request_id: string; expected_version: number
 export type ManagedDatasetAction = { request_id: string; expected_version: number }
 const externalUrl = z.url().refine((value) => /^https?:\/\//.test(value)).nullable()
 const executionSchema = z.object({
-  run_id: z.string(), model: z.string(), prompt_sha256: z.string(), runner_sha256: z.string(),
+  run_id: z.string(), model: z.string(), prompt_sha256: z.string().nullable(), runner_sha256: z.string().nullable(),
   capture_sha256: z.string(), started_at: z.string().nullable(), source_case_ids: z.array(z.string()),
 })
 const observationSchema = z.object({ outcome: z.enum(['success', 'error', 'missing']), status_match: z.number().nullable(), citation_recall: z.number().nullable() })
@@ -316,10 +316,14 @@ const runSchema = z.object({
   comparison: comparisonSchema.nullable(),
   execution_mode: z.enum(['replay', 'live', 'recovery']), live_config: liveConfigSchema.nullable(),
   source_run_id: z.uuid().nullable().default(null),
+  recovery_kind: z.enum(['recovery', 'reassessment']).nullable().default(null),
+  source_evaluator_version: z.string().nullable().default(null),
+  source_approved_evaluator_version: z.string().nullable().default(null),
   postprocessing: z.object({
     inputs_ready: z.boolean(), stage: z.enum(['unverified', 'report', 'publish', 'completed']),
     can_recover: z.boolean(), blocked_reason: z.string(),
-    attempts: z.array(z.object({ id: z.uuid(), status: z.string(), status_label: z.string() })),
+    can_reassess: z.boolean().default(false), reassessment_blocked_reason: z.string().default(''),
+    attempts: z.array(z.object({ id: z.uuid(), status: z.string(), status_label: z.string(), recovery_kind: z.enum(['recovery', 'reassessment']).nullable().default(null) })),
   }).nullable().default(null),
   status: z.enum(['REQUESTED', 'QUEUED', 'RUNNING', 'CANCELLING', 'COMPLETED', 'FAILED', 'CANCELLED', 'CRASHED', 'RESULT_ERROR']),
   status_label: z.string(), created_at: z.string(), started_at: z.string().nullable(),
@@ -840,6 +844,7 @@ export const promoteEvaluationBaseline = (id: string, reviewId: number, version:
 export const clearEvaluationBaseline = (id: string, version: number, reason: string) => post(`/evaluations/${encodeURIComponent(id)}/baseline`, { baseline_version: version, reason }, reviewSchema, false, undefined, 'DELETE')
 export const cancelEvaluation = (id: string, owner: string) => post(`/evaluations/${encodeURIComponent(id)}/cancel`, {}, runSchema, false, owner)
 export const recoverEvaluation = (id: string, requestId: string) => post(`/evaluations/${encodeURIComponent(id)}/recover`, { request_id: requestId }, runSchema, true)
+export const reassessEvaluation = (id: string, requestId: string) => post(`/evaluations/${encodeURIComponent(id)}/reassess`, { request_id: requestId }, runSchema, true)
 export const submitEvaluation = (requestId: string, datasetId: string, candidateCaptureId: string, referenceCaptureId: string, liveConfig: z.infer<typeof liveConfigSchema> | null = null, baselineVersion: number | null = null, owner?: string, executionProfile: string | null = null) => post('/evaluations', {
   request_id: requestId, dataset_id: datasetId, candidate_capture_id: candidateCaptureId, reference_capture_id: referenceCaptureId,
   execution_mode: liveConfig ? 'live' : 'replay', live_config: liveConfig ?? {}, confirm_paid_run: liveConfig !== null, baseline_version: baselineVersion, execution_profile: executionProfile,

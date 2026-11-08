@@ -244,6 +244,27 @@ def test_live_preflight_rejects_unapproved_or_invalid_inputs_without_calls(monke
     assert len(list(tmp_path.glob("*/preflight.json"))) == 1
 
 
+def test_live_rejects_stale_loaded_evaluator_before_budget_or_model(monkeypatch, tmp_path):
+    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+
+    request_id = str(uuid4())
+    monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
+    monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "stub-key")
+    monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))
+    monkeypatch.setattr(ops_flow, "EVALUATOR_VERSION", "0" * 64)
+    monkeypatch.setattr(ops_flow, "BudgetClient", lambda *a, **k: pytest.fail("must not claim budget"))
+    monkeypatch.setattr(ops_flow.evaluate, "execute", lambda *a, **k: pytest.fail("must not call model"))
+
+    with pytest.raises(ValueError, match="EXECUTION_SPEC_MISMATCH"):
+        run_live(request_id, "fixed-context-e01-v1", LIVE_CAPTURE_ID,
+                 "fixed-context-20260906-diagnostic-v1", "live", live_config("fixed-context-e01-v1"))
+    preflight = json.loads((tmp_path / request_id / "preflight.json").read_text())
+    assert preflight["error_code"] == "EXECUTION_SPEC_MISMATCH"
+    assert preflight["phase"] == "before_model_call"
+    assert preflight["model_api_calls"] == 0
+
+
 def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_path, stub_budget):
     from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))

@@ -13,34 +13,34 @@
     "code_sha256": "b2715707819f120f677aba684790f3f68d6c27c17c1613db455d162d89823b84"
   },
   "evaluation": {
-    "sha256": "4a40f518acca0604e2af67e4fefc1c243a392bd512112decfa9c64917328fab1",
+    "sha256": "c1816fcebb79ceb93cac334c39606a044e3f6c8862544c5e3f83f66617eafba5",
     "files": {
       "evaluation/support-program-evidence/evaluate.py": "f46ca0cd54050d49b9e4daa6ae6c46d7a89f00fcc38a885f2af14a7b4a3fdb02",
       "evaluation/support-program-evidence/official_snapshot.py": "1b97e2d2aa15ca02b50e2a999203c7f685de08afc735bb8456b880041c37abf4",
       "evaluation/support-program-evidence/verify_flow.py": "828ff0faa4c2871dd6a880742184e5700a754a5d5307f7fc95a3c45212ade0ed",
-      "evaluation/support-program-evidence/llmops.py": "2b04b29960c9c404ae04d8b2badd43261cc6511a7346933249391ba9c2abe1f8",
+      "evaluation/support-program-evidence/llmops.py": "9197042d7ae51161565de3bb1bc5fee027371f67d1e6d56cfe7a7d8710379de2",
       "backend/ops-service/apps/evaluations/managed_materials.py": "113173f008eb2b1aab5ce5fd7f354342b7f50692b341f22798dbd6b597ab8f31",
       "backend/ai-service/app/support_program_evidence/models.py": "01e8da480d9ede6a976220a1a3bb6607ec8329783455d6c25c84a245a64b29b6",
       "backend/ai-service/app/support_program_identity.py": "aa706697f294fd4846263e73cd281c4a9d660a7939feb7e2e4e3d60fd5393fb1",
       "backend/ai-service/pyproject.toml": "50ef0fc8c53c9af3e1bb31fafed5200732725ea43691be538d90840d2168037c",
       "backend/ai-service/uv.lock": "349ecdd9152eb2f5479a3db41d39e9d1bf7a8f5a16103426c2cd78207add1fe3"
     },
-    "version": "4a40f518acca0604e2af67e4fefc1c243a392bd512112decfa9c64917328fab1",
+    "version": "c1816fcebb79ceb93cac334c39606a044e3f6c8862544c5e3f83f66617eafba5",
     "scope": "fixed-answer-context-only"
   },
   "rag_evaluation": {
-    "sha256": "562645105ec530383a6f83e7ad9a864ca355a6957b82e9c65523837655c35331",
+    "sha256": "5e71c0774bfa66a35b3d93fde457d1f049acc3cb2f1f3bdf62ed8b3544952ab3",
     "files": {
       "evaluation/support-program-evidence/rag_evaluate.py": "4426b8cc927e2e95e945c1785c3470d1e366281e4c0380f4da85e482991a8b44",
       "evaluation/support-program-evidence/rag_replay_flow.py": "6f6f790516ebc132c88877db78f0ae2d1736c85b4ac372c2cd255ce5399befa3",
-      "evaluation/support-program-evidence/llmops.py": "2b04b29960c9c404ae04d8b2badd43261cc6511a7346933249391ba9c2abe1f8",
+      "evaluation/support-program-evidence/llmops.py": "9197042d7ae51161565de3bb1bc5fee027371f67d1e6d56cfe7a7d8710379de2",
       "backend/ops-service/apps/evaluations/rag_replay.py": "6cd2f97303a4465930db736e8e82092cd9c2ed5763bda42f365ac527efff1333",
       "backend/ai-service/app/support_program_evidence/models.py": "01e8da480d9ede6a976220a1a3bb6607ec8329783455d6c25c84a245a64b29b6",
       "backend/ai-service/app/support_program_identity.py": "aa706697f294fd4846263e73cd281c4a9d660a7939feb7e2e4e3d60fd5393fb1",
       "backend/ai-service/pyproject.toml": "50ef0fc8c53c9af3e1bb31fafed5200732725ea43691be538d90840d2168037c",
       "backend/ai-service/uv.lock": "349ecdd9152eb2f5479a3db41d39e9d1bf7a8f5a16103426c2cd78207add1fe3"
     },
-    "version": "562645105ec530383a6f83e7ad9a864ca355a6957b82e9c65523837655c35331",
+    "version": "5e71c0774bfa66a35b3d93fde457d1f049acc3cb2f1f3bdf62ed8b3544952ab3",
     "scope": "source-chunks-retrieval-answer"
   },
   "generation": {
@@ -123,12 +123,12 @@
     "document_vectors": "content-addressed-evaluation-cache-v1"
   },
   "pipeline": {
-    "sha256": "c6cf75afc96c5bf51ddaec39477d4aaed6a31c319a81407f9fe27e32692bc8ea",
+    "sha256": "414a1f27fd6fad175cfa9604c73781ecdff4b332b2baee1d5a8c70cb8723f2c1",
     "files": {
-      "evaluation/support-program-evidence/ops_flow.py": "72003a1648e36256f4c6c4585c011187a413ace04c9ea3ef533d9c00ebce6fc0",
+      "evaluation/support-program-evidence/ops_flow.py": "b569da2e474606093f9271d66462dc249a1c8b080d4c98decf0d54df3de83f18",
       "evaluation/support-program-evidence/budget_client.py": "5fb2ba03088467201693f94ec2c2b074ab15998f4e2ea6724c0c67cdef6613f9",
       "backend/ops-service/apps/evaluations/catalog.py": "96bc435bd592573ebd70079722d459a9f1bd1c965a0f73d16ddd46a2fb500f29",
-      "backend/ops-service/apps/evaluations/recovery_inputs.py": "0070dfdda076bf3cda0eb2202f6a175a5eef02c02b6e02a6d21c4d434250a3bb",
+      "backend/ops-service/apps/evaluations/recovery_inputs.py": "078d5b0751a77263c56a0e2206031c3ae9c70cb96f49d2dec4e8d8061aa55036",
       "backend/ops-service/apps/evaluations/execution_spec.py": "a6535d7a203c28491b8ff8f481419e70f012a7593e5cb196e126f536c09e3487",
       "backend/ops-service/apps/evaluations/quality_policy.py": "b2715707819f120f677aba684790f3f68d6c27c17c1613db455d162d89823b84",
       "backend/ops-service/apps/evaluations/vector_cache.py": "177707a4d9f60b28daeab7460e69d02b3dbf61323e58a3e47a7e69ffa10f830e",

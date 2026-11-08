@@ -16,7 +16,7 @@ from prefect import flow
 from prefect.runtime import flow_run
 import evaluate
 from budget_client import BudgetClient, BudgetUnavailable
-from llmops import evaluate_capture, load_results, write_json
+from llmops import EVALUATOR_VERSION, evaluate_capture, load_results, write_json
 
 sys.path.insert(0, str(ROOT / "backend/ops-service"))
 from apps.evaluations.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
@@ -61,7 +61,10 @@ def reviewed_reference(dataset_id, config, here, output_root):
 def prepare_recovery(output, dataset_id, candidate_id, reference_id, reference_config, config, *, evidence_root=None):
     """완료 응답의 고정 바이트만 복사한다. 모델 실행 경로를 호출하지 않는다."""
     here = evidence_root or Path(__file__).resolve().parent
-    marker, expected, inputs = read_recovery_inputs(output.parent, here, config["source_run_id"])
+    marker, expected, inputs = read_recovery_inputs(
+        output.parent, here, config["source_run_id"],
+        reassessment=config.get("reassessment_kind") == "stored-response-reassessment",
+    )
     evaluate.require(config == expected, "Recovery inputs changed after dispatch")
     evaluate.require(
         marker["dataset_id"] == dataset_id and marker["candidate_capture_id"] == candidate_id
@@ -125,6 +128,9 @@ def evaluate_saved_capture(
                 here = materialize(snapshot, output / "inputs")
             if execution_mode == "recovery":
                 evaluate.require(not config and bool(recovery_config), "Recovery must not generate responses")
+                if recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+                    evaluate.require(execution_spec is not None and EVALUATOR_VERSION == execution_spec["evaluation"]["version"],
+                                     "Loaded evaluator differs from reassessment specification")
                 dataset, _, _ = selection(dataset_id, candidate_capture_id, reference_capture_id)
                 fixture_path, capture_path, reference_path = prepare_recovery(
                     output, dataset_id, candidate_capture_id, reference_capture_id,
@@ -169,6 +175,10 @@ def evaluate_saved_capture(
                                      "Approved RAG inputs differ")
                     rag_evaluate.evaluate(fixture_path, reference_path)
                 else:
+                    # A long-lived serve process can retain an older imported evaluator
+                    # even when the mounted files and release manifest now match.
+                    evaluate.require(EVALUATOR_VERSION == execution_spec["evaluation"]["version"],
+                                     "Loaded evaluator differs from approved specification")
                     _, prepared, fixture_hash = evaluate.load_fixture(fixture_path)
                     evaluate.require(fixture_hash == config["fixture_sha256"], "Approved fixture has changed")
                     prepared = evaluate.select_cases(prepared, dataset["case_ids"])
@@ -211,9 +221,29 @@ def evaluate_saved_capture(
             return evaluate_rag_capture(str(fixture_path), str(capture_path), str(reference_path),
                                         str(output / "evaluation"), execution_spec=execution_spec,
                                         execution_spec_sha256=execution_spec_sha256)
-        return evaluate_capture(str(fixture_path), str(capture_path), str(reference_path),
-                                str(output / "evaluation"), case_ids=dataset["case_ids"],
-                                **({"execution_spec_sha256": execution_spec_sha256} if execution_spec else {}))
+        reassessment = None
+        if recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+            reassessment = {
+                "source_run_id": recovery_config["source_run_id"],
+                "source_evaluator_version": recovery_config["source_evaluator_version"],
+                "source_approved_evaluator_version": recovery_config["source_approved_evaluator_version"],
+                "target_evaluator_version": recovery_config["evaluator_version"],
+            }
+        result = evaluate_capture(str(fixture_path), str(capture_path), str(reference_path),
+                                  str(output / "evaluation"), case_ids=dataset["case_ids"],
+                                  **({"execution_spec_sha256": execution_spec_sha256} if execution_spec else {}),
+                                  **({"reassessment": reassessment} if reassessment else {}))
+        if recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+            manifest_path = output / "evaluation/manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            provenance = {key: recovery_config[key] for key in (
+                "source_run_id", "source_evaluator_version", "source_approved_evaluator_version",
+                "evaluator_version", "capture_sha256", "source_manifest_sha256",
+            )}
+            manifest["reassessment"] = provenance
+            write_json(manifest_path, manifest)
+            result["reassessment"] = provenance
+        return result
 
 
 if __name__ == "__main__":

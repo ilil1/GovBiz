@@ -295,3 +295,97 @@ def test_managed_replay_can_reuse_reviewed_source_and_recover_report(snapshot, t
     assert result["status"] == "completed" and result["model_api_calls"] == 0
     assert (tmp_path / recovery_id / "capture/capture.json").read_bytes() == encoded(snapshot["capture"])
     assert (tmp_path / recovery_id / "recovery-fixture.json").read_bytes() == encoded(snapshot["fixture"])
+
+
+def test_stored_response_reassessment_preserves_source_and_never_calls_model(snapshot, tmp_path, monkeypatch):
+    from apps.evaluations import recovery_inputs
+
+    dataset_id = snapshot["catalog"]["id"]
+    source_id = str(uuid4())
+    source = tmp_path / source_id
+    (source / "capture").mkdir(parents=True)
+    (source / "evaluation").mkdir()
+    materialize(snapshot, source / "inputs")
+    release = build_release(ops_flow.ROOT)
+    release["datasets"][dataset_id] = release_dataset(snapshot)
+    source_spec = specification(snapshot, "live")
+    config = source_spec["live_config"]
+    capture = deepcopy(snapshot["capture"])
+    capture.update(model=config["model"], modelApiCalls=1, maxModelCalls=1,
+        maxInputTokens=config["max_input_tokens"], maxOutputTokens=config["max_output_tokens"],
+        promptSha256=source_spec["generation"]["prompt_sha256"],
+        runnerSha256=source_spec["generation"]["files"]["evaluation/support-program-evidence/evaluate.py"],
+        apiResponses=[{"httpStatus": 200, "responseStatus": "completed", "usage": {
+            "input_tokens": 10, "output_tokens": 5, "total_tokens": 15}}])
+    capture["cases"][0]["apiResponseIndexes"] = [0]
+    capture_raw = encoded(capture)
+    (source / "capture/capture.json").write_bytes(capture_raw)
+    marker = {"request_id": source_id, "prefect_flow_run_id": str(uuid4()), "dataset_id": dataset_id,
+        "candidate_capture_id": "new-model-response", "reference_capture_id": "manual",
+        "execution_mode": "live", "live_config": config, "reference_config": {},
+        "execution_spec": source_spec, "execution_spec_sha256": digest(source_spec)}
+    (source / "request.json").write_text(json.dumps(marker), encoding="utf-8")
+    manifest = {"status": "failed", "stage": "publish", "scope": "fixed-answer-context-only",
+        "evaluator_version": "a" * 64, "execution_spec_sha256": digest(source_spec),
+        "model_api_calls": 0, "fixture_sha256": snapshot["catalog"]["fixture_sha256"],
+        "capture_sha256": sha256(capture_raw).hexdigest(),
+        "reference_capture_sha256": sha256(encoded(snapshot["capture"])).hexdigest()}
+    source_manifest = json.dumps(manifest).encode()
+    (source / "evaluation/manifest.json").write_bytes(source_manifest)
+    monkeypatch.setattr(recovery_inputs, "read_release", lambda *args: release)
+    with managed_snapshot_context(snapshot):
+        with pytest.raises(ValueError, match="incompatible"):
+            recovery_inputs.read_recovery_inputs(tmp_path, source / "inputs", source_id)
+        _, recovery_config, _ = recovery_inputs.read_recovery_inputs(tmp_path, source / "inputs", source_id, reassessment=True)
+    assert recovery_config["source_evaluator_version"] == "a" * 64
+    assert recovery_config["evaluator_version"] == release["evaluation"]["version"]
+    # Changed response bytes cannot be substituted after the original manifest was written.
+    (source / "capture/capture.json").write_bytes(capture_raw + b" ")
+    with managed_snapshot_context(snapshot), pytest.raises(ValueError, match="Recovery input changed"):
+        recovery_inputs.read_recovery_inputs(tmp_path, source / "inputs", source_id, reassessment=True)
+    (source / "capture/capture.json").write_bytes(capture_raw)
+    # Even if an altered capture hash is copied into a forged manifest, incomplete usage is rejected.
+    altered = deepcopy(capture)
+    altered["apiResponses"][0]["usage"]["total_tokens"] = 0
+    altered_raw = encoded(altered)
+    (source / "capture/capture.json").write_bytes(altered_raw)
+    altered_manifest = {**manifest, "capture_sha256": sha256(altered_raw).hexdigest()}
+    (source / "evaluation/manifest.json").write_text(json.dumps(altered_manifest), encoding="utf-8")
+    with managed_snapshot_context(snapshot), pytest.raises(ValueError, match="usage is incomplete"):
+        recovery_inputs.read_recovery_inputs(tmp_path, source / "inputs", source_id, reassessment=True)
+    (source / "capture/capture.json").write_bytes(capture_raw)
+    (source / "evaluation/manifest.json").write_bytes(source_manifest)
+    recovery_spec = make_spec(release, dataset_id, "recovery", {}, "new-model-response", "manual", recovery_config=recovery_config)
+    monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
+    monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))
+    monkeypatch.setattr(ops_flow, "EVALUATOR_VERSION", recovery_spec["evaluation"]["version"])
+    monkeypatch.setattr(ops_flow.evaluate, "execute", lambda *a, **k: pytest.fail("No model calls"))
+    monkeypatch.setattr(ops_flow, "BudgetClient", lambda *a, **k: pytest.fail("No paid reservation"))
+    def fake_evaluate(fixture, capture, reference, out, **kwargs):
+        assert kwargs["reassessment"] == {
+            "source_run_id": source_id, "source_evaluator_version": "a" * 64,
+            "source_approved_evaluator_version": source_spec["evaluation"]["version"],
+            "target_evaluator_version": release["evaluation"]["version"],
+        }
+        folder = Path(out)
+        folder.mkdir(parents=True)
+        result = {"status": "completed", "model_api_calls": 0, "evaluator_version": release["evaluation"]["version"]}
+        ops_flow.write_json(folder / "manifest.json", result)
+        return result
+    monkeypatch.setattr(ops_flow, "evaluate_capture", fake_evaluate)
+    # A long-lived worker must not evaluate with an unapproved in-memory version.
+    monkeypatch.setattr(ops_flow, "EVALUATOR_VERSION", "b" * 64)
+    with pytest.raises(ValueError, match="EXECUTION_SPEC_MISMATCH"):
+        ops_flow.evaluate_saved_capture.fn(str(uuid4()), dataset_id, "new-model-response", "manual", "recovery",
+            recovery_config=recovery_config, execution_spec=recovery_spec, execution_spec_sha256=digest(recovery_spec))
+    monkeypatch.setattr(ops_flow, "EVALUATOR_VERSION", recovery_spec["evaluation"]["version"])
+    attempt = str(uuid4())
+    result = ops_flow.evaluate_saved_capture.fn(attempt, dataset_id, "new-model-response", "manual", "recovery",
+        recovery_config=recovery_config, execution_spec=recovery_spec, execution_spec_sha256=digest(recovery_spec))
+    assert result["model_api_calls"] == 0
+    provenance = json.loads((tmp_path / attempt / "evaluation/manifest.json").read_bytes())["reassessment"]
+    assert provenance["source_run_id"] == source_id
+    assert provenance["source_evaluator_version"] == "a" * 64
+    assert provenance["evaluator_version"] == release["evaluation"]["version"]
+    assert (source / "evaluation/manifest.json").read_bytes() == source_manifest
+    assert (tmp_path / attempt / "capture/capture.json").read_bytes() == capture_raw

@@ -22,8 +22,39 @@ RECOVERABLE = {"FAILED", "CRASHED", "CANCELLED", "RESULT_ERROR"}
 FINISHED = RECOVERABLE | {"COMPLETED"}
 
 
-def recovery_config(run):
+class ReassessmentAlreadyExists(RequestConflict):
+    """Avoid duplicate Langfuse scores after complete or uncertain publication."""
+
+
+def _same_reassessment(item, evaluator_version):
+    return (
+        item.recovery_config.get("reassessment_kind") == "stored-response-reassessment"
+        and item.recovery_config.get("evaluator_version") == evaluator_version
+    )
+
+
+def _source_identity(run):
+    return digest(
+        {
+            "status": run.status,
+            "error_code": run.error_code,
+            "dataset_id": run.dataset_id,
+            "execution_mode": run.execution_mode,
+            "execution_spec_sha256": run.execution_spec_sha256,
+            "execution_spec": run.execution_spec,
+            "candidate_capture_id": run.candidate_capture_id,
+            "reference_capture_id": run.reference_capture_id,
+            "reference_config": run.reference_config,
+            "live_config": run.live_config,
+            "source_run_id": str(run.source_run_id) if run.source_run_id else None,
+        }
+    )
+
+
+def recovery_config(run, *, reassessment=False):
     try:
+        if reassessment and (run.source_run_id or run.execution_mode != "live"):
+            raise ValueError("Reassessment requires an original live execution")
         read_request(run)
         _, config, _ = read_recovery_inputs(
             settings.LLMOPS_RESULTS_DIR,
@@ -31,6 +62,7 @@ def recovery_config(run):
             str(run.id),
             artifact_reader=lambda name: read_artifact(run.id, name),
             evidence_reader=read_evidence,
+            reassessment=reassessment,
         )
         return config
     except (ValueError, OSError, KeyError, TypeError) as exc:
@@ -49,6 +81,15 @@ def recovery_state(run):
         ready = True
     except ResultsUnavailable:
         ready = False
+    target_version = read_release()["evaluation"]["version"]
+    prior_reassessment = any(_same_reassessment(item, target_version) for item in attempts)
+    reassessment_ready = False
+    if not ready and not prior_reassessment and run.status in RECOVERABLE and active is None:
+        try:
+            recovery_config(run, reassessment=True)
+            reassessment_ready = True
+        except ResultsUnavailable:
+            pass
     stage = "unverified"
     try:
         value = json.loads(read_artifact(run.id, "evaluation/manifest.json")).get("stage")
@@ -62,10 +103,25 @@ def recovery_state(run):
         and active is None
         and run.error_code != "PREFECT_STATUS_UNAVAILABLE"
     )
+    can_reassess = reassessment_ready and run.error_code != "PREFECT_STATUS_UNAVAILABLE"
     return {
         "inputs_ready": ready,
         "stage": stage,
         "can_recover": can_recover,
+        "can_reassess": can_reassess,
+        "reassessment_blocked_reason": ""
+        if can_reassess
+        else (
+            "같은 평가기로 재평가한 기록이 있습니다. 결과 또는 실패 원인을 확인해 주세요."
+            if prior_reassessment
+            else "진행 중인 복구 또는 재평가를 먼저 확인해 주세요."
+            if active
+            else "평가의 종료 상태를 확인할 수 없어 재평가할 수 없습니다."
+            if run.error_code == "PREFECT_STATUS_UNAVAILABLE"
+            else "평가가 종료된 후 재평가할 수 있습니다."
+            if run.status not in RECOVERABLE
+            else "저장된 응답과 재평가 입력을 확인할 수 없습니다."
+        ),
         "blocked_reason": ""
         if can_recover
         else (
@@ -76,23 +132,36 @@ def recovery_state(run):
             else "실행 종료 상태를 확인한 뒤 실패한 후처리만 복구할 수 있습니다."
         ),
         "attempts": [
-            {"id": str(item.id), "status": item.status, "status_label": item.get_status_display()}
+            {
+                "id": str(item.id),
+                "status": item.status,
+                "status_label": item.get_status_display(),
+                "recovery_kind": "reassessment"
+                if item.recovery_config.get("reassessment_kind") == "stored-response-reassessment"
+                else "recovery",
+            }
             for item in attempts
         ],
     }
 
 
-def submit_recovery(user, source, request_id):
+def submit_recovery(user, source, request_id, *, reassessment=False):
     # 이미 접수한 요청은 같은 명세로만 재전송한다. 이후 파일 변경은 실행기에서 거절한다.
     existing = EvaluationRun.objects.filter(pk=request_id).first()
     if existing:
-        if existing.source_run_id != source.pk or existing.requested_by_id != user.pk:
+        if (
+            existing.source_run_id != source.pk
+            or existing.requested_by_id != user.pk
+            or (existing.recovery_config.get("reassessment_kind") == "stored-response-reassessment")
+            != reassessment
+        ):
             raise RequestConflict
         return dispatch_run(existing), False
     sync_run(source)
     if source.status not in RECOVERABLE or source.error_code == "PREFECT_STATUS_UNAVAILABLE":
         raise RequestConflict
-    config = recovery_config(source)
+    identity = _source_identity(source)
+    config = recovery_config(source, reassessment=reassessment)
     spec = make_spec(
         read_release(source.dataset_id),
         source.dataset_id,
@@ -109,13 +178,27 @@ def submit_recovery(user, source, request_id):
         locked = EvaluationRun.objects.select_for_update().get(pk=source.pk)
         existing = EvaluationRun.objects.filter(pk=request_id).first()
         if existing:
-            if existing.source_run_id != source.pk or existing.requested_by_id != user.pk:
+            if (
+                existing.source_run_id != source.pk
+                or existing.requested_by_id != user.pk
+                or (
+                    existing.recovery_config.get("reassessment_kind")
+                    == "stored-response-reassessment"
+                )
+                != reassessment
+            ):
                 raise RequestConflict
             run, created = existing, False
         else:
             require_open(lock_admission())
+            if reassessment and any(
+                _same_reassessment(item, config["evaluator_version"])
+                for item in locked.recoveries.all()
+            ):
+                raise ReassessmentAlreadyExists
             if (
                 locked.status not in RECOVERABLE
+                or _source_identity(locked) != identity
                 or locked.recoveries.exclude(status__in=FINISHED).exists()
             ):
                 raise RequestConflict
@@ -135,6 +218,11 @@ def submit_recovery(user, source, request_id):
                     "model_api_calls": 0,
                 },
             )
-            if run.source_run_id != source.pk or run.requested_by_id != user.pk:
+            if (
+                run.source_run_id != source.pk
+                or run.requested_by_id != user.pk
+                or (run.recovery_config.get("reassessment_kind") == "stored-response-reassessment")
+                != reassessment
+            ):
                 raise RequestConflict
     return dispatch_run(run), created

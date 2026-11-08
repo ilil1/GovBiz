@@ -26,7 +26,7 @@ from .rag_quality import assess as assess_rag_quality
 from .rag_reference_reviews import save_reference_review as save_rag_reference_review
 from .rag_reviews import review_state as rag_review_state
 from .rag_reviews import save_review as save_rag_review
-from .recovery import recovery_state, submit_recovery
+from .recovery import ReassessmentAlreadyExists, recovery_state, submit_recovery
 from .reviews import (
     baseline_choices,
     clear_baseline,
@@ -184,6 +184,17 @@ def run_data(run, viewer_id=None):
         "execution_mode": run.execution_mode,
         "evaluation_scope": run.execution_spec.get("evaluation_scope", run.comparison.get("scope")),
         "source_run_id": str(run.source_run_id) if run.source_run_id else None,
+        "recovery_kind": (
+            "reassessment"
+            if run.recovery_config.get("reassessment_kind") == "stored-response-reassessment"
+            else "recovery"
+        )
+        if run.execution_mode == "recovery"
+        else None,
+        "source_evaluator_version": run.recovery_config.get("source_evaluator_version"),
+        "source_approved_evaluator_version": run.recovery_config.get(
+            "source_approved_evaluator_version"
+        ),
         "live_config": run.live_config or None,
         "execution_profile": run.execution_spec.get("profile_sha256"),
         "execution_spec_sha256": run.execution_spec_sha256 or None,
@@ -470,15 +481,28 @@ class RecoveryRequestSerializer(serializers.Serializer):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_recover(request, run_id):
+    return _api_submit_recovery(request, run_id, reassessment=False)
+
+
+@never_cache
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def api_reassess(request, run_id):
+    return _api_submit_recovery(request, run_id, reassessment=True)
+
+
+def _api_submit_recovery(request, run_id, *, reassessment):
     source = get_object_or_404(EvaluationRun, pk=run_id)
     serializer = RecoveryRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     try:
         run, created = submit_recovery(
-            request.user, source, serializer.validated_data["request_id"]
+            request.user, source, serializer.validated_data["request_id"], reassessment=reassessment
         )
     except AdmissionUnavailable as error:
         return Response({"code": error.code}, status=503)
+    except ReassessmentAlreadyExists:
+        return Response({"code": "REASSESSMENT_ALREADY_EXISTS"}, status=409)
     except RequestConflict:
         return Response({"code": "RECOVERY_CONFLICT"}, status=409)
     except ResultsUnavailable:
