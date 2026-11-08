@@ -425,12 +425,14 @@ describe('React LLMOps 운영 화면', () => {
     if (!delayed) await screen.findByText('조회 시점의 설정·예산에서 차단 사유가 없습니다.')
     fireEvent.click(screen.getByRole('link', { name: '예산 관리' }))
     if (kind === 'limits') {
-      fireEvent.click(await screen.findByRole('button', { name: '누적 한도 설정' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'AI 평가 사용량 변경하기' }))
+      fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
       fireEvent.change(screen.getByLabelText('한도 변경 사유'), { target: { value: '실행 준비 한도 검토' } })
-      fireEvent.click(screen.getByRole('button', { name: '변경 내용 확인' }))
+      fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
       fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
       await screen.findByText('누적 한도 변경 이력을 저장했습니다.')
     } else if (kind === 'daily') {
+      fireEvent.click(await screen.findByText('하루 한도 · 사용 기록 보기'))
       fireEvent.click(await screen.findByRole('button', { name: '일별 한도 설정' }))
       fireEvent.change(screen.getByLabelText('일별 호출 한도'), { target: { value: '12' } })
       fireEvent.change(screen.getByLabelText('일별 입력 토큰 한도'), { target: { value: '400000' } })
@@ -440,7 +442,7 @@ describe('React LLMOps 운영 화면', () => {
       fireEvent.click(screen.getByRole('button', { name: '확인한 일별 정책 저장' }))
       await screen.findByText('일별 정책 변경 이력을 저장했습니다.')
     } else {
-      fireEvent.click(await screen.findByRole('button', { name: '미반영 실행 목록 확인' }))
+      fireEvent.click(await screen.findByRole('button', { name: '이전 평가 기록 확인하기' }))
       fireEvent.click(await screen.findByRole('button', { name: `사용량 확인 ${id}` }))
       fireEvent.change(await screen.findByLabelText('사용량 검토 사유'), { target: { value: '전체 응답 검토' } })
       fireEvent.click(screen.getByRole('checkbox', { name: /위 사용량과 출처를 확인/ }))

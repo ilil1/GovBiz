@@ -171,7 +171,7 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
         <Route path="/ops/evaluations/new" element={<EvaluationCatalogContent key="new" title="새 평가" onExpired={onExpired}>{(datasets) => <EvaluationCreate owner={session.user!.id} datasets={datasets} liveEnabled={session.live_enabled} ragLiveEnabled={session.rag_live_enabled} onExpired={onExpired} draft={draft} onDraftChange={setDraft} />}</EvaluationCatalogContent>} />
         <Route path="/ops/evaluations/:runId" element={<EvaluationDetail key={location.pathname} onExpired={onExpired} onReviewChanged={onReviewChanged} />} />
         <Route path="/ops/evaluations/:runId/report" element={<EvaluationReport key={location.pathname} onExpired={onExpired} />} />
-        <Route path="/ops/budget" element={<><WorkspacePageHeader title="예산 관리" /><div className={styles.content}><p className="text-sm text-ink-muted">누적·일별 한도와 예약·사용 내역을 확인하고 관리합니다.</p><BudgetOverview onExpired={onExpired} refreshKey={0} operatorId={session.user!.id} /></div></>} />
+        <Route path="/ops/budget" element={<><WorkspacePageHeader title="예산 관리" /><div className={styles.content}><BudgetOverview onExpired={onExpired} refreshKey={0} operatorId={session.user!.id} /></div></>} />
         <Route path="/ops/schedules" element={<EvaluationSchedulesPage owner={session.user!.id} onExpired={onExpired} />} />
         <Route path="*" element={<Navigate replace to={dashboardPath} />} />
       </Routes>}

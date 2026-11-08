@@ -49,6 +49,7 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
   const [showUnaccounted, setShowUnaccounted] = useState(false)
+  const [showReservations, setShowReservations] = useState(false)
   const [saved, setSaved] = useState('')
   const expiry = useRef(onExpired); expiry.current = onExpired
   useEffect(() => {
@@ -74,46 +75,59 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
   }, [page, refresh, refreshKey])
   const summary = data?.summary
   return <section id="evaluation-budget" tabIndex={-1} className={styles.card} aria-label="누적 평가 예산">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className={styles.cardTitle}>누적 평가 예산</h2><button className={styles.secondaryButton} onClick={() => setRefresh((value) => value + 1)}>예산 새로고침</button></div>
-    <p className="text-sm leading-6 text-ink-muted">평가의 모델 호출과 토큰 사용 한도를 관리합니다. 금액 한도는 지원하지 않습니다. 서비스 사용량은 <Link className="text-brand-primary underline" to="/ops/usage">실사용 모니터링</Link>에서 확인하세요.</p>
-    <details className="rounded-xl bg-surface-muted px-4 text-sm leading-6">
-      <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">처음 설정하는 방법</summary>
-      <section aria-label="예산 설정 안내" className="space-y-3 pb-4">
-      <ol className="grid gap-4 sm:grid-cols-3">
-        <li><h4 className="font-semibold">1. 평가에 필요한 양 확인</h4><p className="mt-1 text-ink-muted"><Link className="text-brand-primary underline" to="/ops/evaluations/new">새 평가에서 필요량 확인</Link>으로 이동해 자료·새 응답 생성·모델을 선택하고 <strong>실행 설정·예산 점검</strong>을 누르세요. 호출·입력·출력의 최대 예약량을 무료로 조회합니다.</p></li>
-        <li><h4 className="font-semibold">2. 누적 한도 설정</h4><p className="mt-1 text-ink-muted"><strong>현재 할당량 + 앞으로 허용할 평가의 최대 예약량</strong>을 기준으로 총한도를 정하세요. 과거 사용량도 포함되며 날짜가 바뀌어도 초기화되지 않습니다.</p></li>
-        <li><h4 className="font-semibold">3. 일별 한도 설정 후 재점검</h4><p className="mt-1 text-ink-muted">하루에 허용할 평가 횟수와 이월량을 고려해 호출·입력·출력을 각각 정하세요. 정기 실행에는 일별 한도가 필수입니다. 저장 후 새 평가에서 다시 점검하세요.</p></li>
-      </ol>
-      <p className="border-t border-line pt-3 text-xs leading-5 text-ink-muted">점검값은 실제 사용량이나 요금 견적이 아닌 최대 예약량입니다. 설정을 저장해도 유료 평가·정기 실행은 켜지지 않습니다. 현재 월별·원화·달러 금액 한도는 지원하지 않습니다.</p>
-      </section>
-    </details>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className={styles.cardTitle}>누적 평가 예산</h2><button type="button" className={styles.cardTextLink} onClick={() => setRefresh((value) => value + 1)}>예산 새로고침</button></div>
+    <section aria-label="예산 설정 순서" className="rounded-2xl bg-brand-soft p-4 sm:p-6">
+      <div className="space-y-1">
+        <h3 className="text-base font-bold text-ink">새 AI 평가의 사용 범위</h3>
+        <p className="text-sm leading-6 text-ink-muted">AI 답변을 새로 만들 때 쓸 횟수와 양을 정합니다. 금액 한도는 아닙니다.</p>
+      </div>
+      {(!operatorId || error || !data || summary?.state === 'inconsistent' || !summary?.limits_revision) && <p className="mt-4 text-sm font-semibold text-brand-primary">{!operatorId ? '관리자에게 설정을 요청하세요.' : error ? '현재 상태를 확인하지 못했습니다. 예산을 새로고침해 주세요.' : !data ? '현재 상태를 확인하고 있습니다.' : summary?.state === 'inconsistent' ? '사용 기록이 맞지 않아 설정을 변경할 수 없습니다.' : '현재 서버에서 설정을 변경할 수 없습니다. 관리자에게 확인해 주세요.'}</p>}
+      {data && summary && <div className="mt-4 space-y-4">
+        {summary.state === 'inconsistent' && <p role="alert" className="text-sm leading-6 text-red-700">저장된 할당량과 상세 장부가 일치하지 않습니다. 잔여 한도를 확정할 수 없어 표시하지 않습니다.</p>}
+        {summary.state === 'unconfigured' && <p role="status" className="text-sm font-semibold text-ink">아직 사용 한도를 설정하지 않았습니다.</p>}
+        {summary.state !== 'unconfigured' && summary.input_state === 'enforced' && <p className="text-sm font-medium text-brand-primary">입력 한도 적용 중</p>}
+        {summary.state !== 'unconfigured' && summary.input_state === 'unconfigured' && <p className="text-sm leading-6 text-amber-800">입력 한도가 설정되지 않았습니다. 검색·RAG 평가를 하려면 입력 한도도 설정해야 합니다.</p>}
+        {summary.limits && summary.state === 'consistent' && summary.remaining && <section aria-label="남은 사용량" className="space-y-3 rounded-xl bg-white/80 p-4">
+          <h3 className="text-sm font-bold text-ink">남은 한도</h3>
+          <dl className="grid gap-2 sm:grid-cols-3">
+            <div className="min-w-0 rounded-lg bg-white px-3 py-2.5"><dt className="text-xs text-ink-muted">AI 요청</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.calls)}회</dd></div>
+            <div className="min-w-0 rounded-lg bg-white px-3 py-2.5"><dt className="text-xs text-ink-muted">보내는 내용</dt><dd className="mt-1 break-words text-base font-bold text-ink">{inputCount(summary.remaining.input_tokens)}</dd></div>
+            <div className="min-w-0 rounded-lg bg-white px-3 py-2.5"><dt className="text-xs text-ink-muted">AI 답변</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.output_tokens)}토큰</dd></div>
+          </dl>
+          <p className="text-xs leading-5 text-ink-muted">이미 진행 중인 평가에 확보한 양을 제외한 수치입니다.{summary.legacy_live_run_count > 0 && ' 확인되지 않은 이전 평가 사용량은 포함되지 않았습니다.'}</p>
+        </section>}
+        {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
+      </div>}
+    </section>
     {error && <p role="alert" className="text-sm text-red-700">{error} 표시된 값이 있으면 마지막 조회 기록입니다.</p>}
     {saved && <p role="status">{saved}</p>}
     {!data && !error && <p role="status">예산 장부를 불러오고 있습니다.</p>}
     {data && summary && <>
+      {(summary.input_state === 'legacy_unknown' || summary.legacy_live_run_count > 0 || showUnaccounted) && <section aria-label="이전 평가 확인" className="grid gap-3 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+        <div><h3 className="font-bold">이전 평가 확인이 필요해요</h3>
+          {summary.legacy_live_run_count > 0 && <p className="mt-1">이전에 실행한 평가 {count(summary.legacy_live_run_count)}건의 사용량이 확인되지 않았습니다.</p>}
+          {summary.input_state === 'legacy_unknown' && <p className="mt-1">이 사용량을 확인하기 전에는 검색·RAG 평가와 정기 평가에 필요한 입력 한도를 설정할 수 없습니다. {summary.legacy_live_run_count === 0 && '관리자에게 사용 기록 확인을 요청하세요.'}</p>}
+          {summary.legacy_live_run_count > 0 && <p className="mt-1">기록을 열어 확인해 주세요. 기록에 따라 자동으로 반영하지 못할 수 있습니다.</p>}
+        </div>
+        {(summary.legacy_live_run_count > 0 || showUnaccounted) && <button type="button" id="budget-unaccounted" className={`${styles.secondaryButton} justify-self-start`} aria-expanded={showUnaccounted} onClick={() => setShowUnaccounted((value) => !value)}>{showUnaccounted ? '이전 평가 기록 닫기' : '이전 평가 기록 확인하기'}</button>}
+        {showUnaccounted && <UnaccountedRunsPanel onExpired={onExpired} refreshKey={refreshKey + refresh} operatorId={operatorId} onApplied={() => { setSaved('검토한 과거 사용량을 장부에 반영했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
+      </section>}
+
+      {(summary.daily?.state === 'unknown' || summary.daily?.state === 'exceeded') && <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{summary.daily.state === 'unknown' ? '일별 사용량을 확인할 수 없어' : '일별 한도를 초과해'} 새 평가를 예약할 수 없습니다. 아래 ‘하루 한도 · 사용 기록 보기’에서 확인하세요.</p>}
+      <details className="rounded-xl bg-surface-muted px-4 text-sm">
+      <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">하루 한도 · 사용 기록 보기</summary>
+      <div className="grid gap-4 pb-4">
       <p className="text-xs text-ink-muted">조회 시각: {date(data.as_of)} · 15초마다 갱신 · 총계는 전체 예약과 검토 후 반영한 과거 사용량 기준입니다.</p>
-      {summary.input_state === 'legacy_unknown' ? <p className="text-sm text-amber-800">과거 입력 미확인: 누적 입력 사용량을 확정할 수 없습니다. 입력 한도 활성화 전에 과거 기록을 확인해야 합니다.</p>
-        : summary.state === 'unconfigured' ? null
-        : summary.input_state === 'enforced' ? <p className="text-sm">누적 입력 토큰 한도 적용 중</p>
-        : <p className="text-sm text-amber-800">누적 입력 한도 미설정: 호출·출력 한도만 적용됩니다.</p>}
-      {summary.state === 'unconfigured' && <div role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><p className="font-semibold">누적 한도 미설정</p><p className="mt-1">한도가 없어 남은 양을 계산할 수 없습니다.{operatorId && summary.limits_revision ? ' 아래에서 누적 한도를 설정해 주세요.' : ' 관리자에게 한도 설정을 요청하세요.'}</p></div>}
-      {summary.state === 'inconsistent' && <p role="alert" className="text-sm text-red-700">저장된 할당량과 상세 장부가 일치하지 않습니다. 잔여 한도를 확정할 수 없어 표시하지 않습니다.</p>}
-      {summary.legacy_live_run_count > 0 && <p className="text-sm text-amber-800">예약 기록이 없는 과거 모델 실행 {count(summary.legacy_live_run_count)}건이 있습니다. 해당 실행의 사용량은 이 장부에서 확인할 수 없습니다.</p>}
-      {(summary.legacy_live_run_count > 0 || showUnaccounted) && <button className={`${styles.secondaryButton} self-start`} aria-expanded={showUnaccounted} onClick={() => setShowUnaccounted((value) => !value)}>{showUnaccounted ? '미반영 실행 목록 닫기' : '미반영 실행 목록 확인'}</button>}
-      {showUnaccounted && <UnaccountedRunsPanel onExpired={onExpired} refreshKey={refreshKey + refresh} operatorId={operatorId} onApplied={() => { setSaved('검토한 과거 사용량을 장부에 반영했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
-      {Boolean(summary.legacy_accounted_run_count) && <p className="text-sm">저장 응답을 검토해 과거 실행 {count(summary.legacy_accounted_run_count!)}건의 사용량을 합산했습니다. 당시 예약이나 제공자의 청구 확인을 뜻하지 않습니다.</p>}
-      {summary.limits && <>
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">{[
+      {summary.limits && <details className="rounded-xl bg-white px-4 text-sm"><summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">전체 한도와 사용량 보기</summary><div className="grid gap-3 pb-4">
+        <dl className="grid gap-3 sm:grid-cols-3">{([
           ['전체 한도', summary.limits],
           ['사용·예약', summary.allocated],
           ['남은 한도', summary.state === 'consistent' ? summary.remaining : null],
-        ].map(([label, amount]) => {
-          const value = amount as typeof summary.limits
-          return <div className="min-w-0 rounded-xl bg-[#f3f7f5] p-4" key={String(label)}><dt className="text-ink-muted">{String(label)}</dt><dd className="mt-2 break-words font-semibold leading-6">{value ? `${count(value.calls)}회 · 입력 ${inputCount(value.input_tokens)} · 출력 ${count(value.output_tokens)}토큰` : '확인 불가'}</dd></div>
-        })}</dl>
-        <details className="text-sm"><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">누적 한도와 사용·예약이란?</summary><div className="rounded-xl bg-surface-muted p-4 text-ink-muted"><p>전체 한도는 지금까지의 사용과 앞으로 사용할 양을 합친 상한입니다. 날짜가 바뀌어도 초기화되지 않으며 모든 평가 자료와 관리자가 공유합니다.</p><p className="mt-2">사용·예약에는 확인된 사용량과 아직 정리되지 않은 예약이 함께 포함됩니다. 남은 한도는 전체 한도에서 사용·예약을 뺀 값이며, 일별 제한이 켜져 있으면 일별 잔여도 충분해야 합니다.</p></div></details>
-      </>}
-      {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
+        ] as const).map(([label, value]) => <div className="min-w-0 rounded-xl bg-[#f3f7f5] p-4" key={label}><dt className="text-ink-muted">{label}</dt><dd className="mt-2 break-words font-semibold leading-6">{value ? `${count(value.calls)}회 · 입력 ${inputCount(value.input_tokens)} · 출력 ${count(value.output_tokens)}토큰` : '확인 불가'}</dd></div>)}</dl>
+        <p className="leading-6 text-ink-muted">전체 한도는 지금까지의 사용과 앞으로 사용할 양을 합친 상한입니다. 날짜가 바뀌어도 초기화되지 않으며 모든 평가 자료와 관리자가 공유합니다.</p>
+        <p className="leading-6 text-ink-muted">사용·예약에는 확인된 사용량과 아직 정리되지 않은 예약이 함께 포함됩니다. 남은 한도는 전체 한도에서 사용·예약을 뺀 값이며, 일별 제한이 켜져 있으면 일별 잔여도 충분해야 합니다.</p>
+      </div></details>}
+      {Boolean(summary.legacy_accounted_run_count) && <p className="text-sm">저장 응답을 검토해 과거 실행 {count(summary.legacy_accounted_run_count!)}건의 사용량을 합산했습니다. 당시 예약이나 제공자의 청구 확인을 뜻하지 않습니다.</p>}
       <section aria-label="하루 예산 요약" className="grid gap-3 rounded-xl bg-[#f3f7f5] p-4 text-sm">
         <h3 className="font-semibold">하루 예산 · 서울 시간</h3>
         {!summary.daily ? <p>일별 예산 정보를 확인할 수 없습니다.</p>
@@ -131,12 +145,13 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
         <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">일별 예산 상세 보기</summary><DailyBudgetPanel value={summary.daily} /></details>
       </section>
       {summary.breakdown && <details className="rounded-xl bg-surface-muted px-4 text-sm"><summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">누적 예산 상세 내역</summary><div className="pb-4"><Breakdown value={summary.breakdown} /><p className="mt-3 text-xs leading-5 text-ink-muted">응답을 정산해도 실행의 예약을 닫기 전까지 입력·출력 차액은 반환 대기로 남습니다. 승인 기록만으로 모델 전송 완료나 실제 비용을 확정할 수 없습니다.</p></div></details>}
-      <details><summary className="cursor-pointer text-sm font-semibold">실행별 예약 · {count(data.count)}건</summary>
+      <details open={showReservations}><summary onClick={(event) => { event.preventDefault(); setShowReservations((value) => !value) }} className="min-h-11 cursor-pointer py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">실행별 예약 · {count(data.count)}건</summary>
         <p className="py-2 text-xs leading-5 text-ink-muted">각 평가가 확보한 몫과 미확인 호출을 확인합니다. 예약이 닫혀도 확정 사용량과 미확인 몫은 남을 수 있습니다. 실행 링크에서 상세 내역을 확인하세요.</p>
         {!data.results.length ? <p className="py-3 text-sm">예약 기록이 없습니다.</p> : <div className="overflow-x-auto"><table className="mt-3 w-full text-left text-sm">
           <thead><tr><th>실행</th><th>예약 상태</th><th>할당량</th><th>미확인 호출</th></tr></thead>
           <tbody>{data.results.map((row) => <tr key={row.run_id} className="border-t border-line"><td className="py-3 pr-3"><Link className="text-brand-primary underline" to={`/ops/evaluations/${row.run_id}`}>{row.dataset_id} · {row.run_id.slice(0, 8)}</Link></td><td>{row.closed_at ? '닫힘' : '열림'}</td><td>{count(row.breakdown.allocated_calls)}회 · {count(row.breakdown.allocated_output_tokens)}토큰</td><td>{count(row.breakdown.unknown_calls)}회</td></tr>)}</tbody>
         </table></div>}
+        {(data.count > 25 || page > 1) && <nav aria-label="예산 예약 페이지" className="mt-3 flex flex-wrap items-center justify-end gap-3 text-sm"><button type="button" className={styles.secondaryButton} disabled={page === 1} onClick={() => setPage((value) => value - 1)}>예약 이전</button><span>{page}페이지</span><button type="button" className={styles.secondaryButton} disabled={!data.next} onClick={() => setPage((value) => value + 1)}>예약 다음</button></nav>}
       </details>
       <details><summary className="cursor-pointer text-sm font-semibold">한도 변경 이력 · 최근 {summary.recent_changes.length} / 전체 {summary.change_count}건</summary>
         <p className="py-2 text-xs text-ink-muted">CLI 변경자는 운영자가 입력한 값이며 Core 로그인으로 인증한 신원은 아닙니다. CORE_ADMIN은 기존 프로젝트의 관리자 세션을 확인한 기록입니다. 기존 한도의 과거 변경 기록은 소급 생성하지 않습니다.</p>
@@ -147,8 +162,18 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
           <p className="break-words">사유: {change.reason}</p><p className="break-all text-xs text-ink-muted">요청 ID: {change.request_id}</p>
         </li>)}</ol>}
       </details>
+      </div>
+      </details>
     </>}
-    {(data && data.count > 25 || page > 1) && <nav aria-label="예산 예약 페이지" className="flex items-center justify-end gap-3 text-sm"><button className={styles.secondaryButton} disabled={page === 1} onClick={() => setPage((value) => value - 1)}>예약 이전</button><span>{page}페이지</span><button className={styles.secondaryButton} disabled={!data?.next} onClick={() => setPage((value) => value + 1)}>예약 다음</button></nav>}
+    <details className="rounded-xl bg-surface-muted px-4 text-sm leading-6">
+      <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">한도 계산과 주의사항</summary>
+      <div className="space-y-2 pb-4 text-ink-muted">
+        <p>누적 한도는 모든 평가 자료와 관리자가 함께 쓰며, 이전 사용량과 아직 정리되지 않은 예약을 포함합니다. 날짜가 바뀌어도 초기화되지 않습니다.</p>
+        <p>수동 평가에 일별 한도는 필수가 아닙니다. 정기 실행에는 누적 입력 한도와 일별 한도가 모두 필요합니다.</p>
+        <p>서비스 전체 사용량은 <Link className="text-brand-primary underline" to="/ops/usage">실사용 모니터링</Link>에서 확인하세요.</p>
+        <p>필요량 점검은 실제 사용량이나 비용 견적이 아닌 최대 예약량입니다. 한도를 저장해도 유료 평가나 정기 실행이 시작되지 않습니다. 월별·원화·달러 금액 한도는 지원하지 않습니다.</p>
+      </div>
+    </details>
   </section>
 }
 

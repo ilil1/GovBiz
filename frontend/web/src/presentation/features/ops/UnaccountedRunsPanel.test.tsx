@@ -61,7 +61,7 @@ describe('미반영 실행 사용량 확인', () => {
     expect(url).toBe(`/api/v1/ops/evaluations/${first}/legacy-usage`)
     expect(options?.headers).toMatchObject({ 'X-CSRFToken': 'csrf-test' })
     expect(JSON.parse(options!.body as string)).toMatchObject({ evidence_sha256: verified.evidence_sha256, reason: '전체 저장 응답 검토' })
-    expect(await screen.findByText('미반영 실행이 없습니다.')).toBeTruthy()
+    expect(await screen.findByText('사용량을 확인할 기록이 없습니다.')).toBeTruthy()
     expect(screen.queryByRole('form', { name: '과거 사용량 반영' })).toBeNull()
   })
 
@@ -122,6 +122,9 @@ describe('미반영 실행 사용량 확인', () => {
     expect(screen.getByText(/반영 시 예상 전체 할당량/)).toBeTruthy()
     expect(screen.getByText(/장부 반영이나 한도 변경을 하지 않습니다/)).toBeTruthy()
     expect(screen.getByText(/별도 검토·반영이 필요/)).toBeTruthy()
+    expect(screen.getByText(/확인만으로 예산이 바뀌지는 않습니다/)).toBeTruthy()
+    const details = screen.getByText('검증 정보 보기').closest('details')
+    expect(details?.open).toBe(false)
     expect(fetch.mock.calls.every((call) => !(call as unknown as [string, RequestInit])[1]?.method)).toBe(true)
   })
 
@@ -145,6 +148,22 @@ describe('미반영 실행 사용량 확인', () => {
     expect(await screen.findByText('사용량 확인 불가 · 0으로 반영하지 않습니다.')).toBeTruthy()
     expect(screen.queryByText(/저장 응답 사용량:/)).toBeNull()
     expect(screen.getByText('전체 호출 사용량을 확인할 수 없습니다.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '평가 상세 보기' }).getAttribute('href')).toBe(`/ops/evaluations/${first}`)
+    expect(screen.getByText(/확인할 자료가 없으면 관리자에게 문의/)).toBeTruthy()
+  })
+
+  it('지원 대상이 아닌 기록은 이해하기 쉽게 안내하고 다른 차단 사유는 유지한다', async () => {
+    const reason = '예약·실행 명세 도입 전 완료된 원본 live 실행만 대상입니다.'
+    const other = '별도로 확인해야 하는 사유입니다.'
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => json(url.includes('unaccounted-runs') ? listing : {
+      as_of: at, run_id: first, applied: false, state: 'unavailable', blockers: [reason, other],
+    })))
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: `사용량 확인 ${first}` }))
+    expect(await screen.findByText(/이 평가는 이 화면에서 사용량을 반영할 수 없습니다/)).toBeTruthy()
+    expect(screen.queryByText(reason)).toBeNull()
+    expect(screen.getByText(other)).toBeTruthy()
+    expect(screen.queryByRole('form', { name: '과거 사용량 반영' })).toBeNull()
   })
 
   it('다른 실행 선택 후 늦게 도착한 이전 결과를 표시하지 않는다', async () => {
@@ -169,12 +188,12 @@ describe('미반영 실행 사용량 확인', () => {
     mount()
     fireEvent.click(await screen.findByRole('button', { name: `사용량 확인 ${first}` }))
     await screen.findByText(/저장 응답 사용량:/)
-    fireEvent.click(screen.getByRole('button', { name: '미반영 다음' }))
+    fireEvent.click(screen.getByRole('button', { name: '다음 기록' }))
     await screen.findByRole('button', { name: `사용량 확인 ${second}` })
     expect(screen.queryByRole('region', { name: '과거 사용량 미리보기' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: `사용량 확인 ${second}` }))
     await screen.findByText(/저장 응답 사용량:/)
-    fireEvent.click(screen.getByRole('button', { name: '미반영 목록 새로고침' }))
+    fireEvent.click(screen.getByRole('button', { name: '기록 새로고침' }))
     await screen.findByRole('button', { name: `사용량 확인 ${second}` })
     expect(screen.queryByText(/저장 응답 사용량:/)).toBeNull()
   })
@@ -192,7 +211,7 @@ describe('미반영 실행 사용량 확인', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({}, 503)))
     mount()
     expect(await screen.findByRole('alert')).toBeTruthy()
-    expect(screen.queryByText('미반영 실행이 없습니다.')).toBeNull()
+    expect(screen.queryByText('사용량을 확인할 기록이 없습니다.')).toBeNull()
   })
 
   it.each([
