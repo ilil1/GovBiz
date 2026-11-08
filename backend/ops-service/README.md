@@ -53,6 +53,12 @@ WSGI 시작 시 URL 설정과 view 모듈도 읽어 첫 관리자 요청이 모�
 
 ## LLMOps 운영 화면
 
+실행 추적 집계는 Langfuse에서 수집된 `search.total`, `evidence.total`, `assistant.total`만 대상으로
+완료·진행 중·오류·주의와 소요 시간 중앙값·p95를 보여 줍니다. 지연 기록이 없는 완료 건수는 별도로 표시합니다.
+추적 비활성·샘플링·전송 실패로 빠진 요청이 있어 전체 사용자 요청의 실패율이나 지연 분포가 아닙니다.
+환경을 필터링하지 않으므로 같은 Langfuse 프로젝트의 개발·운영 추적이 함께 포함될 수 있습니다.
+기간 내 모든 페이지를 확인하지 못하면 부분 결과 대신 오류를 반환합니다.
+
 ### 운영 표본 품질
 
 React `/ops/production-quality`는 **실제 업무 실행이 완료된 뒤 수신·저장한 표본**을 기능별로
@@ -1459,6 +1465,7 @@ Prefect 등록 상태를 표시합니다. 정상 진단 응답의 `503 / FAIL`�
 | `POST /api/v1/ops/datasets/{UUID}/publish` | 초안의 불변 버전 게시(`200`) | 누락된 답변·채점 조건·보관 자료 `400`, 버전·요청 충돌 `409`; 모델 호출 없음 |
 | `POST /api/v1/ops/datasets/{UUID}/archive` | `archived: true` 보관, `false` 복원(`200`) | 입력 오류 `400`, 없음 `404`, 버전·요청 충돌 `409`; 기존 이력 유지 |
 | `GET /api/v1/ops/traces` | Langfuse의 실행 시작 단계 목록; `name`, `from_time`, `to_time`, `cursor` 조회 조건 | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·설정 누락 `503` |
+| `GET /api/v1/ops/trace-metrics` | 수집된 세 기능의 실행 건수·오류·지연 집계; `from_time`, `to_time`, 최대 30일 | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·페이지 또는 시간 제한 초과 `503` |
 | `GET /api/v1/ops/traces/{trace_id}` | 같은 trace ID의 단계·입출력·사용량; `cursor`로 다음 페이지 조회 | 인증·권한 오류 `401/403`, 없음 `404`, 추적 서버 장애 `503` |
 | `GET /api/v1/ops/evaluations/{UUID}/report` | `200`, CSP sandbox가 적용된 HTML | 미인증 `401`, 비관리자 `403`, Core 장애 `503`, 없거나 훼손된 보고서 `404` |
 | `POST /api/v1/ops/evaluations` | 최초 `202`, 재전송 `200`; 실행 메타데이터 | 자료/UUID 오류 `400`, 미인증 `401`, 권한·CSRF `403`, 요청 충돌 `409`, 인증 서버 장애·접수 미확인 `503` |

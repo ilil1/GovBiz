@@ -22,6 +22,7 @@ data class AiUsageRecordDbRow(
     var priceId: Long? = null,
     var cacheWriteInputTokens: Long? = null,
     var cacheWrite12hInputTokens: Long? = null,
+    var traceId: String? = null,
 )
 
 data class AiModelPriceDbRow(
@@ -105,6 +106,8 @@ interface AiUsageMapper {
     fun insertPrice(row: AiModelPriceDbRow): Int
 
     fun sumTotals(@Param("from") from: LocalDate, @Param("to") to: LocalDate, @Param("accountId") accountId: Long?, @Param("utc") utc: Boolean = false): AiUsageTotalsDbRow
+
+    fun sumByTraceId(@Param("traceId") traceId: String): AiUsageTotalsDbRow
 
     fun sumByFeature(@Param("from") from: LocalDate, @Param("to") to: LocalDate): List<AiUsageTotalsDbRow>
 

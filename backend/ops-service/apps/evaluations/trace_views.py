@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .trace_client import CURSOR_PATTERN, LangfuseUnavailable, read_roots, read_trace, valid_id
+from .trace_metrics import read_metrics
 
 
 class TraceCursorSerializer(serializers.Serializer):
@@ -48,6 +49,29 @@ def unavailable():
             "detail": "AI 실행 추적 서버에 연결할 수 없습니다. 잠시 후 다시 시도하세요.",
         },
         status=503,
+    )
+
+
+@never_cache
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_trace_metrics(request):
+    query = TraceListSerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    params = query.validated_data
+    if params["name"] or params["cursor"]:
+        raise serializers.ValidationError("집계에는 이름이나 페이지 커서를 지정할 수 없습니다.")
+    try:
+        results = read_metrics(from_time=params["from_time"], to_time=params["to_time"])
+    except LangfuseUnavailable:
+        return unavailable()
+    return Response(
+        {
+            "from_time": params["from_time"].isoformat(),
+            "to_time": params["to_time"].isoformat(),
+            "scope": "observed-root-traces",
+            "results": results,
+        }
     )
 
 

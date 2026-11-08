@@ -32,7 +32,7 @@ class AiUsageRecordingInterceptor(
                 AiModelUsage(it.model, it.serviceTier, it.calls, it.inputTokens, it.cachedInputTokens, it.outputTokens,
                     it.cacheWriteInputTokens, it.cacheWrite12hInputTokens)
             }
-            service.record(operation, usages, AiUsageContextHelper.current())
+            service.record(operation, usages, AiUsageContextHelper.current(), traceIdOf(request.headers.getFirst("traceparent")))
         } catch (error: Exception) {
             log.warn("ai_usage_not_recorded operation={} error={}", operation, error.javaClass.simpleName)
         }
@@ -42,6 +42,14 @@ class AiUsageRecordingInterceptor(
     companion object {
         const val USAGE_HEADER = "X-GovBiz-OpenAI-Usage"
         private const val INTERNAL_PREFIX = "/internal/v1/"
+        private val TRACE_PARENT = Regex("^00-([0-9a-f]{32})-([0-9a-f]{16})-01$")
+
+        /** AI 서비스에 실제로 전파한 유효한 sampled trace만 연결합니다. */
+        fun traceIdOf(header: String?): String? {
+            val match = TRACE_PARENT.matchEntire(header ?: return null) ?: return null
+            val (traceId, spanId) = match.destructured
+            return traceId.takeIf { it.any { digit -> digit != '0' } && spanId.any { digit -> digit != '0' } }
+        }
 
         /** `/internal/v1/support-program-rankings/rank` → `support-program-rankings/rank` */
         fun operationOf(path: String): String = path.removePrefix(INTERNAL_PREFIX).take(80).ifBlank { "unknown" }

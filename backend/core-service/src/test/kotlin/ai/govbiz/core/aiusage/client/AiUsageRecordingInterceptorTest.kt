@@ -7,6 +7,7 @@ import ai.govbiz.core.aiusage.helper.AiUsageContextHelper
 import ai.govbiz.core.aiusage.service.AiUsageService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyList
 import org.mockito.ArgumentMatchers.anyString
@@ -32,6 +33,21 @@ class AiUsageRecordingInterceptorTest {
     private val client = builder.baseUrl("http://ai.test").build()
     private val usage = """[{"model":"gpt-5.6-sol-2026-07-30","serviceTier":"priority","calls":1,"inputTokens":900,"cachedInputTokens":0,"outputTokens":120},""" +
         """{"model":"text-embedding-3-small","serviceTier":"default","calls":2,"inputTokens":40,"cachedInputTokens":0,"outputTokens":0}]"""
+
+    @Test
+    fun sampledTraceparentIsConnectedToUsageAndMalformedIdsAreIgnored() {
+        val trace = "1234567890abcdef1234567890abcdef"
+        server.expect(requestTo("http://ai.test/internal/v1/assistant/agent"))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON).header(AiUsageRecordingInterceptor.USAGE_HEADER, usage))
+        client.post().uri("/internal/v1/assistant/agent")
+            .header("traceparent", "00-$trace-1234567890abcdef-01")
+            .retrieve().body(String::class.java)
+        Mockito.verify(service).record(Mockito.eq("assistant/agent") ?: "", anyList(), Mockito.isNull(), Mockito.eq(trace))
+        assertNull(AiUsageRecordingInterceptor.traceIdOf("00-$trace-1234567890abcdef-00"))
+        assertNull(AiUsageRecordingInterceptor.traceIdOf("00-${"0".repeat(32)}-1234567890abcdef-01"))
+        assertNull(AiUsageRecordingInterceptor.traceIdOf("00-$trace-${"0".repeat(16)}-01"))
+        assertNull(AiUsageRecordingInterceptor.traceIdOf("bad-value"))
+    }
 
     @Test
     fun recordsTheUsageHeaderWithTheCallersAccountAndFeature() {
@@ -89,7 +105,7 @@ class AiUsageRecordingInterceptorTest {
             client.post().uri("/internal/v1/combination-reviews/analyze").retrieve().toBodilessEntity()
         }
 
-        Mockito.verify(service).record(Mockito.eq("combination-reviews/analyze") ?: "", anyList(), Mockito.isNull())
+        Mockito.verify(service).record(Mockito.eq("combination-reviews/analyze") ?: "", anyList(), Mockito.isNull(), Mockito.isNull())
     }
 
     @Test
@@ -98,11 +114,11 @@ class AiUsageRecordingInterceptorTest {
             .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON).header(AiUsageRecordingInterceptor.USAGE_HEADER, "not-json"))
         server.expect(requestTo("http://ai.test/internal/v1/assistant/answers"))
             .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON).header(AiUsageRecordingInterceptor.USAGE_HEADER, usage))
-        Mockito.doThrow(IllegalStateException("db down")).`when`(service).record(anyString(), anyList(), Mockito.any())
+        Mockito.doThrow(IllegalStateException("db down")).`when`(service).record(anyString(), anyList(), Mockito.any(), Mockito.isNull())
 
         repeat(2) { assertEquals("{}", client.post().uri("/internal/v1/assistant/answers").retrieve().body(String::class.java)) }
 
-        Mockito.verify(service, Mockito.times(1)).record(anyString(), anyList(), Mockito.any())
+        Mockito.verify(service, Mockito.times(1)).record(anyString(), anyList(), Mockito.any(), Mockito.isNull())
     }
 
     @Test

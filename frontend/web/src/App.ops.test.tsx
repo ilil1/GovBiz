@@ -55,6 +55,8 @@ beforeEach(() => {
   vi.spyOn(crypto, 'randomUUID').mockReturnValue(id)
   fetchMock = vi.fn(async (path: string, _options?: RequestInit) => {
     if (path === '/api/v1/ops/session') return json(session())
+    if (path.startsWith('/api/v1/ops/trace-metrics?')) return json({ from_time: '2026-10-01T00:00:00Z', to_time: '2026-10-08T00:00:00Z', scope: 'observed-root-traces', results: [] })
+    if (path.startsWith('/api/v1/admin/ai-request-metrics?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ from: query.get('from'), to: query.get('to'), scope: 'core-http-requests', features: [] }) }
     if (path === '/api/v1/ops/evaluation-catalog') return json({ datasets: [dataset, comparisonDataset] })
     if (path === '/api/v1/ops/datasets') return json({ datasets: [], builtin_count: 10 })
     if (path.includes('/api/v1/admin/ai-costs?')) return json(serviceUsage)

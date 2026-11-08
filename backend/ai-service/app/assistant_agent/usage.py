@@ -6,6 +6,7 @@ from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.outputs import LLMResult
 
 from app.tracing import LLMTracing, error_code
+from app.assistant_agent.tracing import active_prompt_hash
 
 
 class AssistantModelUsage(AsyncCallbackHandler):
@@ -28,8 +29,12 @@ class AssistantModelUsage(AsyncCallbackHandler):
             params = kwargs.get("invocation_params") or {}
             model = metadata.get("ls_model_name") or params.get("model_name") or params.get("model")
             model = model if isinstance(model, str) and model else None
+            prompt_hash = active_prompt_hash.get()
             self._generations[run_id] = self._tracing.start_generation(
-                "assistant.model", model=model, metadata={"model_known": model is not None},
+                "assistant.model", model=model, metadata={
+                    "model_known": model is not None,
+                    **({"prompt_sha256": prompt_hash} if prompt_hash is not None else {}),
+                },
             )
 
     async def on_llm_end(self, response: LLMResult, *, run_id: UUID, **kwargs) -> None:

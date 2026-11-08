@@ -1,6 +1,8 @@
 package ai.govbiz.core.aiusage.service
 
 import ai.govbiz.core.admin.service.AdminAccessLogService
+import ai.govbiz.core.admin.domain.AdminActor
+import ai.govbiz.core.admin.domain.AdminAccessAction
 import ai.govbiz.core.aiusage.config.AiCostProperties
 import ai.govbiz.core.aiusage.domain.AiModelPrice
 import ai.govbiz.core.aiusage.domain.AiModelUsage
@@ -13,12 +15,33 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.mockito.Mockito
 
 class AiUsageServiceTest {
     private val repository = Mockito.mock(AiUsageRepository::class.java)
     private val clock = Clock.fixed(Instant.parse("2026-10-01T20:00:00Z"), ZoneId.of("Asia/Seoul"))
-    private val service = AiUsageService(repository, Mockito.mock(AdminAccessLogService::class.java), AiCostProperties(), clock)
+    private val accessLog = Mockito.mock(AdminAccessLogService::class.java)
+    private val service = AiUsageService(repository, accessLog, AiCostProperties(), clock)
+
+    @Test
+    fun traceLookupDoesNotReturnWithoutAuditRecord() {
+        val actor = AdminActor.of(1, "198.51.100.7", null)
+        val traceId = "1234567890abcdef1234567890abcdef"
+        Mockito.doReturn(AiUsageTotals.EMPTY).`when`(repository).sumByTraceId(traceId)
+        Mockito.doThrow(IllegalStateException("audit unavailable")).`when`(accessLog)
+            .record(actor, AdminAccessAction.AI_COST_VIEW, null, "traceIdLength=32")
+        assertThrows(IllegalStateException::class.java) { service.traceTotals(actor, traceId) }
+    }
+
+    @Test
+    fun traceLookupRejectsMalformedIdentifiersBeforeQuerying() {
+        val actor = AdminActor.of(1, "198.51.100.7", null)
+        for (traceId in listOf("bad", "0".repeat(32), "A".repeat(32))) {
+            assertThrows(IllegalArgumentException::class.java) { service.traceTotals(actor, traceId) }
+        }
+        Mockito.verifyNoInteractions(repository)
+    }
 
     @Test
     fun priceDateIsUtcEvenWhenTheStoredApplicationTimestampIsAlreadyTheNextSeoulDay() {

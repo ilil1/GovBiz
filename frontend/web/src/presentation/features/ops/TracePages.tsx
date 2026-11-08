@@ -4,6 +4,7 @@ import { OpsApiError } from '../../../data/ops/opsApi'
 import { getTrace, listTraces, type TraceDetail, type TracePage, type TraceSummary } from '../../../data/ops/traceApi'
 import { WorkspacePageHeader } from '../../shared/workspace/WorkspacePageHeader'
 import { workspacePageStyles as styles, workspaceTagClassName } from '../../shared/workspace/WorkspacePage.styles'
+import { TraceUsagePanel } from './TraceUsagePanel'
 
 const path = '/ops/traces'
 const names = [
@@ -185,6 +186,7 @@ export function TraceDetailPage({ onExpired }: { onExpired: () => void }) {
     <div className={styles.content}>
       <Link to={back} className={styles.quietLink}>← 조회하던 실행 목록으로</Link>
       <p className="text-xs break-all text-ink-muted">추적 ID: {traceId}</p>
+      <TraceUsagePanel key={traceId} traceId={traceId} />
       {error ? <ErrorNotice error={error} onRetry={() => setReload((value) => value + 1)} /> : !data ? <p role="status">실행 단계를 불러오고 있습니다.</p> : <>
         <p className="text-sm text-ink-muted">이 페이지 {data.observations.length}개 단계입니다. 모델 호출 단계(GENERATION·EMBEDDING)는 펼쳐 표시하며 모델·기록된 비용·토큰 사용량을 확인할 수 있습니다. 단계별 비용은 중첩될 수 있으므로 합산하지 않습니다.</p>
         <section aria-label="실행 단계" className="flex min-w-0 flex-col gap-3">

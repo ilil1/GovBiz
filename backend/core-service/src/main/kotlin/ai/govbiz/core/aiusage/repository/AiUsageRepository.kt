@@ -35,6 +35,7 @@ class AiUsageRepository(private val mapper: AiUsageMapper) {
         operation: String,
         usage: AiModelUsage,
         price: AiModelPrice?,
+        traceId: String? = null,
     ) {
         mapper.insertUsage(
             AiUsageRecordDbRow(
@@ -53,6 +54,7 @@ class AiUsageRepository(private val mapper: AiUsageMapper) {
                 priceId = price?.id,
                 cacheWriteInputTokens = usage.cacheWriteInputTokens,
                 cacheWrite12hInputTokens = usage.cacheWrite12hInputTokens,
+                traceId = traceId,
             ),
         )
     }
@@ -78,6 +80,8 @@ class AiUsageRepository(private val mapper: AiUsageMapper) {
     }
 
     fun sumTotals(from: LocalDate, to: LocalDate, accountId: Long? = null, utc: Boolean = false): AiUsageTotals = mapper.sumTotals(from, to, accountId, utc).toTotals()
+
+    fun sumByTraceId(traceId: String): AiUsageTotals = mapper.sumByTraceId(traceId).toTotals()
 
     fun sumByFeature(from: LocalDate, to: LocalDate): List<AiUsageGroup> =
         mapper.sumByFeature(from, to).map { AiUsageGroup(it.groupKey, null, it.toTotals()) }

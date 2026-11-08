@@ -10,7 +10,9 @@ from app import bootstrap
 from app import tracing as tracing_module
 from app.assistant_agent.errors import AssistantAgentError, AssistantAgentTimeoutError
 from app.assistant_agent.models import AssistantAgentRequest
-from app.assistant_agent.prompts import MAP_INSTRUCTIONS
+from app.assistant_agent.prompts import (
+    ANSWER_INSTRUCTIONS, CLASSIFY_INSTRUCTIONS, MAP_INSTRUCTIONS, PLAN_INSTRUCTIONS, REDUCE_INSTRUCTIONS,
+)
 from app.config import LangfuseSettings
 from app.main import create_app
 from fastapi.testclient import TestClient
@@ -130,6 +132,14 @@ async def test_tool_flow_and_validation_retry_keep_parent_links_and_usage(
     assert Counter(by_id[span.parent.span_id].name for span in generations) == {
         "assistant.classify": 1, "assistant.plan": 2, "assistant.answer": 2,
     }
+    expected = {
+        "assistant.classify": CLASSIFY_INSTRUCTIONS,
+        "assistant.plan": PLAN_INSTRUCTIONS,
+        "assistant.answer": ANSWER_INSTRUCTIONS,
+    }
+    for generation in generations:
+        prompt = expected[by_id[generation.parent.span_id].name]
+        assert attribute(generation, "prompt_sha256") == sha256(prompt.encode()).hexdigest()
     assert sum(json.loads(span.attributes["langfuse.observation.usage_details"])["input"] for span in generations) == 750
     verifications = named(spans, "assistant.verify")
     assert [attribute(span, "validation_passed") for span in verifications] == [False, True]
@@ -168,6 +178,10 @@ async def test_saved_programs_parallel_map_has_nested_spans_and_versions(trace_e
     assert {span.parent.span_id for span in generations} == {
         *(span.context.span_id for span in judges), named(spans, "assistant.saved.reduce")[0].context.span_id,
     }
+    judge_ids = {span.context.span_id for span in judges}
+    for generation in generations:
+        prompt = MAP_INSTRUCTIONS if generation.parent.span_id in judge_ids else REDUCE_INSTRUCTIONS
+        assert attribute(generation, "prompt_sha256") == sha256(prompt.encode()).hexdigest()
     assert attribute(retrieval, "retrieved_documents") == 2
     assert attribute(retrieval, "retrieved_chunks") == 3
     assert attribute(root, "document_count") == 3

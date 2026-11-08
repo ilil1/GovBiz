@@ -65,6 +65,19 @@ class AdminAiCostControllerTest {
     }
 
     @Test
+    fun traceUsageShowsOnlyAggregateWithNoStore() {
+        val trace = "1234567890abcdef1234567890abcdef"
+        doReturn(AiUsageTotals(2, 100, 10, 15, BigDecimal("0.004"), 0, 0, 0))
+            .`when`(usage).traceTotals(actor, trace)
+        mvc.perform(asAdmin(get("$PATH/traces/$trace")))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+            .andExpect(jsonPath("$.calls").value(2))
+            .andExpect(jsonPath("$.estimatedUsd").value("0.004000"))
+            .andExpect(jsonPath("$.accountId").doesNotExist())
+    }
+
+    @Test
     fun summaryShowsEstimatedAndActualCostsAsExactUsdStrings() {
         val from = LocalDate.of(2026, 10, 1)
         val totals = AiUsageTotals(12, 50_000, 30_000, 4_000, BigDecimal("0.0123456789"), 2)

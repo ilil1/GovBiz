@@ -311,6 +311,8 @@ assistant.agent
 위 노드는 일반 처리 기록(`SPAN`, `record_kind=processing`)입니다. 모델을 쓰는 노드에는
 `configured_model`·프롬프트 SHA-256을 남기고, 실제 채팅 모델 호출마다 그 노드 아래에
 `assistant.model`(`GENERATION`, `record_kind=model_call`)을 하나씩 기록합니다.
+각 모델 호출에도 해당 노드의 고정 시스템 지침 `prompt_sha256`을 남깁니다. 입력 질문·도구 결과와
+도구 스키마는 이 해시에 포함되지 않으므로 전체 입력 또는 실행 구성의 지문으로 해석하지 않습니다.
 병렬 `assistant.saved.judge` 호출은 각각 분리하며, `map` 자체를 모델 호출로 세지 않습니다.
 기존 검색·근거 답변의 생성 기록도 `GENERATION`, 임베딩 호출은 `EMBEDDING`으로 구분합니다.
 

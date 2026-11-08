@@ -51,6 +51,18 @@ class AiUsageRepositoryIntegrationTest {
     private val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
 
     @Test
+    fun usageRetainsTheSampledTraceIdAndAllowsMissingTrace() {
+        val operation = "trace-test-${UUID.randomUUID()}"
+        val traceId = "1234567890abcdef1234567890abcdef"
+        val usage = AiModelUsage("gpt-6-luna", "default", 1, 10, 0, 5, 0, 0)
+        service.record(operation, listOf(usage), null, traceId)
+        service.record(operation, listOf(usage), null)
+        val ids = jdbc.queryForList("SELECT trace_id FROM ai_usage_record WHERE operation = ? ORDER BY id", String::class.java, operation)
+        assertEquals(listOf(traceId, null), ids)
+        assertEquals(1L, repository.sumByTraceId(traceId).calls)
+    }
+
+    @Test
     fun recordsPricedAndUnpricedUsageAndSumsItByFeatureModelDayAndAccount() {
         val member = account()
         val actor = AdminActor(account(), "198.51.100.7", null)

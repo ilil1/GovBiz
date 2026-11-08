@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ai.govbiz.core.airequestmetrics.repository.mapper.AiRequestMetricMapper">
+    <resultMap id="metric" type="ai.govbiz.core.airequestmetrics.repository.mapper.AiRequestMetricDbRow">
+        <result property="feature" column="feature" />
+        <result property="outcome" column="outcome" />
+        <result property="latencyBucketMs" column="latency_bucket_ms" />
+        <result property="requestCount" column="request_count" />
+    </resultMap>
+    <insert id="increment">
+        INSERT INTO ai_request_metric (metric_date, feature, outcome, latency_bucket_ms, request_count)
+        VALUES (#{date}, #{feature}, #{outcome}, #{bucket}, 1)
+        ON DUPLICATE KEY UPDATE request_count = request_count + 1
+    </insert>
+    <select id="list" resultMap="metric">
+        SELECT feature, outcome, latency_bucket_ms, SUM(request_count) AS request_count
+        FROM ai_request_metric
+        WHERE metric_date BETWEEN #{from} AND #{to}
+        GROUP BY feature, outcome, latency_bucket_ms
+    </select>
+</mapper>

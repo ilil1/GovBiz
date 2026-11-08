@@ -238,12 +238,37 @@ transaction에서 `WithdrawalMarkService.inherit → PlanUsageService.inherit`�
 
 ## AI 사용량과 비용
 
+### 공개 AI 요청의 HTTP 집계
+
+`AiRequestMetricFilter → AiRequestMetricService → AiRequestMetricRepository → MyBatis → MySQL(V67)`은
+검색(`GET/POST /support-programs/search`), 공고 근거 답변·검색 대화·도우미·Gov 에이전트,
+신청서 양식 탐색·문항 해석/초안·문서 작업 접수, 중복 지원 검토 실행의 공개 HTTP 요청을 기록합니다.
+`/search/results`는 저장된 결과만 복원하여 AI를 호출하지 않으므로 제외합니다.
+UTC 시작 날짜·고정 기능명·HTTP 결과 종류·지연 구간별 건수만 저장하며 계정, 원문, 요청별 ID, 동적 URL은 기록하지 않습니다.
+기존 데이터 소급·자동 삭제는 없으며 집계 행은 운영 DB에 계속 보관합니다.
+
+`GET /api/v1/admin/ai-request-metrics?from=YYYY-MM-DD&to=YYYY-MM-DD`는 관리자에게 UTC 최대 31일의
+기능별 집계·지연 중앙값과 p95의 **구간 상한 근사값**을 반환합니다. 지연은 100·250·500·1000·2500·5000·10000·30000·60000·120000ms와
+120초 초과로 묶으며 초과 구간의 백분위 상한은 null입니다. 202는 접수로 별도 계수하며 비동기 작업의 최종 성공이 아닙니다.
+4xx는 인증·요청 검증·한도 등 클라이언트 응답을 포함하고, 5xx는 HTTP 서버 오류입니다. 성공 응답이 모델 품질을 보장하지 않습니다.
+비동기 작업을 다시 접수해 기존 작업을 반환할 때는 HTTP 200일 수 있어 성공 응답도 최종 작업 성공으로 해석하지 않습니다.
+
+필터가 관측한 HTTP 요청에 한정되며 평가 호출도 해당 경로에 들어오면 포함됩니다. 진입 전 네트워크 장애,
+강제 종료, DB 저장 실패는 누락될 수 있어 전체 요청의 완전한 전수 통계는 아닙니다. 각 요청 종료 후 집계 DB에
+동기 UPSERT를 한 번 실행합니다. 응답 시간은 이 기록 작업을 제외하므로 사용자가 실제로 기다린 시간보다 짧을 수 있고,
+DB 지연·장애 시 기록 작업 때문에 응답이 늦어질 수 있습니다. 저장 실패는 본문 없이 경고를 기록하며 사용자 업무 결과는 바꾸지 않습니다.
+
+### 앱 사용량과 조직 비용
+
 `ai.govbiz.core.aiusage`는 앱의 회원·기능별 기록과 OpenAI 조직 사용량을 별도로 저장합니다. `/ops/usage`와 관리자 AI 비용 화면의
 주 비교는 **같은 UTC 날짜·동기화에서 가져온 OpenAI 사용량 추정과 실제 비용**이며, 앱 기록을 이 합계에 다시 더하지 않습니다.
 
 - **앱 기록:** `ai-service OpenAI 응답 → X-GovBiz-OpenAI-Usage → Core AiUsageRecordingInterceptor → AiUsageService.record(REQUIRES_NEW)
   → AiUsageRepository → MyBatis → ai_usage_record`입니다. 회원·기능은 `AiUsageContextHelper`로 전달합니다.
   AI 응답 헤더를 받기 전에 연결이 끊기거나 기록에 실패하면 앱 장부에 남지 않을 수 있습니다.
+  내부 AI 요청에 유효한 sampled `traceparent`가 전달된 경우에만 trace ID를 함께 저장합니다(V66).
+  추적이 비활성이거나 문맥이 전파되지 않은 호출과 기존 기록은 연결되지 않으며,
+  이 기록이 Langfuse 전송 성공이나 전체 요청의 사용량 수집을 보장하지는 않습니다.
 - **Core 밖 호출:** `AiCostSyncService → OpenAiUsageClient → OpenAI organization/usage/completions + organization/usage/embeddings`에서
   조직·프로젝트 전체의 UTC 일별 모델·처리 등급·Batch 여부·토큰을 조회해 V65 `ai_provider_usage_daily`에 저장합니다.
   Catalog 색인·평가·직접 호출도 같은 범위에 속하면 포함됩니다. 개별 호출의 회원·기능·trace로 소급 연결하지는 않습니다.
@@ -271,6 +296,7 @@ transaction에서 `WithdrawalMarkService.inherit → PlanUsageService.inherit`�
 | 관리자 AI 비용 API | 동작 |
 |---|---|
 | `GET /api/v1/admin/ai-costs?from&to` | UTC 날짜 기간(최대 92일), 앱 기록 `totals`·기능·모델·회원별 합계와 조직 비교 `comparison`. 회원 이메일 접근은 `AI_COST_VIEW` 감사 기록. no-store |
+| `GET /api/v1/admin/ai-costs/traces/{traceId}` | 해당 trace에 연결된 앱 사용량·추정 비용 합계. 관리자 인증·`AI_COST_VIEW` 감사·no-store; 연결된 기록이 없으면 호출 수 0 |
 | `GET /api/v1/admin/ai-costs/prices`, `POST .../prices` | 가격표 조회·시작일별 추가. 캐시 쓰기 `cacheWriteInputUsdPerMillion`과 `cacheWrite12hInputUsdPerMillion`은 nullable |
 | `POST /api/v1/admin/ai-costs/sync` | 같은 UTC 범위의 사용량·비용을 함께 가져옴. 관리자 키 없음 503, 권한 거절·잘못된 응답·조회 장애 502 |
 

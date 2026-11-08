@@ -2,8 +2,11 @@
 
 from hashlib import sha256
 from inspect import isawaitable
+from contextvars import ContextVar
 
 from app.tracing import LLMTracing
+
+active_prompt_hash: ContextVar[str | None] = ContextVar("assistant_prompt_hash", default=None)
 
 
 def traced_node(tracing: LLMTracing, name: str, operation, *, model=None, prompt: str | None = None):
@@ -15,6 +18,13 @@ def traced_node(tracing: LLMTracing, name: str, operation, *, model=None, prompt
         metadata["prompt_sha256"] = sha256(prompt.encode()).hexdigest()
 
     async def run(state):
+        token = active_prompt_hash.set(metadata.get("prompt_sha256"))
+        try:
+            return await run_traced(state)
+        finally:
+            active_prompt_hash.reset(token)
+
+    async def run_traced(state):
         with tracing.observation(name, metadata=metadata) as observation:
             result = operation(state)
             if isawaitable(result):

@@ -39,13 +39,13 @@ class AiUsageService(
 ) {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    fun record(operation: String, usages: List<AiModelUsage>, attribution: AiUsageAttribution?) {
+    fun record(operation: String, usages: List<AiModelUsage>, attribution: AiUsageAttribution?, traceId: String? = null) {
         if (usages.isEmpty()) return
         val now = LocalDateTime.now(clock)
         val pricingDate = LocalDate.now(clock.withZone(ZoneOffset.UTC))
         val prices = repository.findPrices()
         usages.forEach { usage ->
-            repository.insertUsage(now, attribution, operation, usage, AiModelPrice.find(prices, usage.model, usage.serviceTier, pricingDate))
+            repository.insertUsage(now, attribution, operation, usage, AiModelPrice.find(prices, usage.model, usage.serviceTier, pricingDate), traceId)
         }
     }
 
@@ -75,6 +75,14 @@ class AiUsageService(
         )
         accessLog.record(actor, AdminAccessAction.AI_COST_VIEW, requestSummary = accessSummaryOf("from" to from, "to" to to, "accounts" to topAccounts.size))
         return summary
+    }
+
+    /** 추적 ID에 연결된 앱 추정 사용량만 반환하며, 조회 전에 관리자 접속을 기록합니다. */
+    fun traceTotals(actor: AdminActor, traceId: String): AiUsageTotals {
+        require(Regex("^[0-9a-f]{32}$").matches(traceId) && traceId.any { it != '0' }) { "invalid trace ID" }
+        val totals = repository.sumByTraceId(traceId)
+        accessLog.record(actor, AdminAccessAction.AI_COST_VIEW, requestSummary = accessSummaryOf("traceIdLength" to traceId.length))
+        return totals
     }
 
     /** 관리자 계정 상세의 이번 달(서울) AI 사용 합계입니다. */

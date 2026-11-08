@@ -24,6 +24,8 @@ import { EvaluationLogsPanel } from './EvaluationLogsPanel'
 import { TraceDetailPage, TraceListPage } from './TracePages'
 import { ProductionQualityPage } from './ProductionQualityPage'
 import { DatasetManagementPage } from './DatasetManagementPage'
+import { TraceMetricsPanel } from './TraceMetricsPanel'
+import { RequestMetricsPanel } from './RequestMetricsPanel'
 
 const dashboardPath = '/ops/dashboard'
 const listPath = '/ops/evaluations'
@@ -157,9 +159,11 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
             <h2 className={styles.cardTitle}>서비스 사용량과 실행 추적</h2>
             <p className="text-sm text-ink-muted">서비스에서 기록한 AI 호출·토큰·비용을 기간별로 조회합니다. 기능·모델별 집계와 사용량이 많은 회원 상위 10명을 확인할 수 있습니다.</p>
             <p className="mt-2 text-sm text-ink-muted">호출 수는 기록된 OpenAI 호출 수입니다. 사용자 요청 건수·실패율·응답 시간은 이 집계에 포함되지 않습니다.</p>
-            <p className="mt-2 text-sm text-ink-muted">검색·도우미·공고 근거 답변의 단계와 오류는 AI 실행 추적에서 확인합니다. 사용자·비용 기록과 개별 trace의 자동 연결은 아직 제공하지 않습니다.</p>
+            <p className="mt-2 text-sm text-ink-muted">검색·도우미·공고 근거 답변의 단계와 오류는 AI 실행 추적에서 확인합니다. 추적에 연결된 앱 사용량은 실행 상세에서 조회할 수 있습니다.</p>
             <Link to="/ops/traces" className={`${styles.secondaryButton} mt-3`}>실행 목록 열기</Link>
           </section>
+          <RequestMetricsPanel onExpired={onExpired} />
+          <TraceMetricsPanel onExpired={onExpired} />
         </AdminAiCostsPage>} />
         <Route path="/ops" element={<Navigate replace to={dashboardPath} />} />
         <Route path="/ops/evaluations" element={<EvaluationList onExpired={onExpired} />} />
