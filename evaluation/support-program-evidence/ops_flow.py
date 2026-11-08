@@ -222,7 +222,7 @@ def evaluate_saved_capture(
                                         str(output / "evaluation"), execution_spec=execution_spec,
                                         execution_spec_sha256=execution_spec_sha256)
         reassessment = None
-        if recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+        if recovery_config and recovery_config.get("reassessment_kind") == "stored-response-reassessment":
             reassessment = {
                 "source_run_id": recovery_config["source_run_id"],
                 "source_evaluator_version": recovery_config["source_evaluator_version"],
@@ -233,7 +233,7 @@ def evaluate_saved_capture(
                                   str(output / "evaluation"), case_ids=dataset["case_ids"],
                                   **({"execution_spec_sha256": execution_spec_sha256} if execution_spec else {}),
                                   **({"reassessment": reassessment} if reassessment else {}))
-        if recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+        if recovery_config and recovery_config.get("reassessment_kind") == "stored-response-reassessment":
             manifest_path = output / "evaluation/manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             provenance = {key: recovery_config[key] for key in (

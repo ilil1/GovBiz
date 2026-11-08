@@ -118,13 +118,14 @@ def test_invalid_reviewed_baseline_never_spends(monkeypatch, tmp_path, failure):
     assert (tmp_path / request_id / "preflight.json").is_file()
 
 
-def test_registered_entrypoint_uses_saved_inputs_and_correlates_request(monkeypatch, tmp_path):
+@pytest.mark.parametrize("recovery_kwargs", [{}, {"recovery_config": None}], ids=["omitted", "null"])
+def test_registered_entrypoint_uses_saved_inputs_and_correlates_request(monkeypatch, tmp_path, recovery_kwargs):
     request_id, flow_id = str(uuid4()), str(uuid4())
     calls = []
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=flow_id))
     monkeypatch.setattr(ops_flow, "evaluate_capture", lambda *args, **kwargs: calls.append((args, kwargs)) or {"status": "completed"})
-    assert ops_flow.evaluate_saved_capture.fn(request_id, ops_flow.DATASET_ID)["status"] == "completed"
+    assert ops_flow.evaluate_saved_capture.fn(request_id, ops_flow.DATASET_ID, **recovery_kwargs)["status"] == "completed"
     marker = json.loads((tmp_path / request_id / "request.json").read_text())
     assert marker["prefect_flow_run_id"] == flow_id
     (fixture, capture, reference, output), options = calls[0]
@@ -181,7 +182,8 @@ def test_different_captures_share_explicit_cases_and_reject_cross_dataset(monkey
         assert (tmp_path / rejected_id / "preflight.json").is_file()
 
 
-def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(monkeypatch, tmp_path, stub_budget):
+@pytest.mark.parametrize("recovery_kwargs", [{}, {"recovery_config": None}], ids=["omitted", "null"])
+def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(monkeypatch, tmp_path, stub_budget, recovery_kwargs):
     from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
     request_id = str(uuid4())
     config = live_config("fixed-context-e01-v1")
@@ -210,7 +212,7 @@ def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(
     monkeypatch.setattr(ops_flow, "evaluate_capture", compare)
     args = (request_id, "fixed-context-e01-v1", LIVE_CAPTURE_ID,
             "fixed-context-20260906-diagnostic-v1", "live", config)
-    assert run_live(*args)["status"] == "completed"
+    assert run_live(*args, **recovery_kwargs)["status"] == "completed"
     with pytest.raises(FileExistsError):
         run_live(*args)
     assert calls == ["model", "compare"]

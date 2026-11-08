@@ -675,7 +675,8 @@ export type ReviewStamp = { capture_sha256: string; fixture_sha256: string; rubr
 
 export class OpsApiError extends Error {
   readonly status: number
-  constructor(message: string, status: number) { super(message); this.status = status }
+  readonly code?: string
+  constructor(message: string, status: number, code?: string) { super(message); this.status = status; this.code = code }
 }
 
 async function request<T>(path: string, schema: z.ZodType<T>, options: RequestInit = {}, dispatch = false): Promise<T> {
@@ -708,7 +709,7 @@ async function request<T>(path: string, schema: z.ZodType<T>, options: RequestIn
   if (!response.ok && !(dispatch && response.status === 503)) {
     const error = body
     const message = response.status === 400 && error?.code === 'LIVE_BUDGET_UNAVAILABLE'
-      ? '누적 평가 한도가 부족하거나 설정되지 않아 접수하지 않았습니다. 운영자에게 예약·미확인 사용량과 한도를 확인해 주세요.'
+      ? '평가 예산 또는 실행 설정을 확인할 수 없어 접수하지 않았습니다.'
       : ['BUDGET_CHANGE_CONFLICT', 'DAILY_BUDGET_CHANGE_CONFLICT', 'LEGACY_USAGE_CONFLICT', 'SCHEDULE_SETTINGS_CONFLICT', 'SCHEDULE_DISABLED', 'SCHEDULE_BUDGET_UNAVAILABLE', 'EXECUTION_PROFILE_CHANGED', 'REVIEWED_BASELINE_REQUIRED', 'ACTIVE_SCHEDULE_EXISTS'].includes(error?.code) && typeof error?.detail === 'string'
         ? error.detail
       : path.startsWith('/datasets') && ['DATASET_VALIDATION_ERROR', 'DATASET_CONFLICT'].includes(error?.code) && typeof error?.detail === 'string' ? error.detail
@@ -734,7 +735,7 @@ async function request<T>(path: string, schema: z.ZodType<T>, options: RequestIn
       : response.status === 409 ? '평가 조건이나 검토 기록이 변경되었습니다. 새로고침 후 확인하세요.'
       : response.status === 400 ? '평가 조건 또는 실행 설정이 변경되었습니다. 새로고침 후 자료와 예산을 확인하세요.'
       : '요청을 처리하지 못했습니다. 다시 시도해 주세요.'
-    throw new OpsApiError(message, response.status)
+    throw new OpsApiError(message, response.status, typeof error?.code === 'string' ? error.code : undefined)
   }
   const parsed = schema.safeParse(body)
   if (!parsed.success) throw new OpsApiError('운영 서버 응답을 확인할 수 없습니다.', response.status)

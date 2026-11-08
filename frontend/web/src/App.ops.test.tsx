@@ -98,6 +98,17 @@ async function evaluationStep(target: 1 | 2 | 3) {
   if (target === 3 && screen.queryByRole('button', { name: '다음: 비교하고 실행' })) fireEvent.click(screen.getByRole('button', { name: '다음: 비교하고 실행' }))
 }
 
+function expectInlineHelp(button: HTMLElement) {
+  const panelId = button.getAttribute('aria-controls')
+  expect(panelId).toBeTruthy()
+  const panel = document.getElementById(panelId!)!
+  expect(panel).toBeTruthy()
+  expect(button.parentElement?.nextElementSibling).toBe(panel)
+  expect(panel.className).not.toMatch(/(?:^|\s)(?:absolute|fixed|overflow-y-auto)(?:\s|$)/)
+  expect(panel.className).not.toMatch(/(?:^|\s)max-h-/)
+  return panel
+}
+
 describe('운영 세션과 평가 자료 조회 분리', () => {
   it.each([
     ['/ops/dashboard', '성능 대시보드'], ['/ops/usage', '실사용 모니터링'],
@@ -240,6 +251,81 @@ describe('React LLMOps 운영 화면', () => {
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
+  it('모델과 비교 답변 도움말을 열고 닫아도 선택이나 요청이 바뀌지 않는다', async () => {
+    open()
+    await evaluationStep(2)
+    fireEvent.click(screen.getByRole('radio', { name: '새 응답 생성' }))
+    expect(screen.getByText('자료를 OpenAI에 전송하며 비용이 발생할 수 있습니다.')).toBeTruthy()
+    const model = screen.getByLabelText('평가 모델')
+    const modelHelp = screen.getByRole('button', { name: '평가 모델 도움말' })
+    expect(modelHelp.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(modelHelp)
+    expect(modelHelp.getAttribute('aria-expanded')).toBe('true')
+    const modelPanel = expectInlineHelp(modelHelp)
+    expect(modelPanel.textContent).toContain('한 번에 선택한 모델 하나를 평가합니다.')
+    expect(model).toHaveProperty('value', liveConfig.model)
+    expect(screen.getByText('자료를 OpenAI에 전송하며 비용이 발생할 수 있습니다.')).toBeTruthy()
+    fireEvent.click(modelHelp)
+    expect(modelHelp.getAttribute('aria-expanded')).toBe('false')
+    expect(document.body.contains(modelPanel)).toBe(false)
+    await evaluationStep(3)
+    expect(screen.getByRole('checkbox', { name: /위 자료의 OpenAI 전송/ })).toHaveProperty('checked', false)
+    expect(screen.getByRole('button', { name: '새 응답 생성 및 평가' })).toHaveProperty('disabled', true)
+    const referenceHelp = screen.getByRole('button', { name: '비교 기준 답변 도움말' })
+    expect(referenceHelp.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(referenceHelp)
+    expect(referenceHelp.getAttribute('aria-expanded')).toBe('true')
+    const referencePanel = expectInlineHelp(referenceHelp)
+    expect(referencePanel.textContent).toContain('비교 기준이라고 해서 정답으로 승인된 것은 아닙니다.')
+    expect(screen.getByRole('checkbox', { name: /위 자료의 OpenAI 전송/ })).toHaveProperty('checked', false)
+    expect(screen.getByRole('button', { name: '새 응답 생성 및 평가' })).toHaveProperty('disabled', true)
+    fireEvent.click(referenceHelp)
+    expect(referenceHelp.getAttribute('aria-expanded')).toBe('false')
+    expect(document.body.contains(referencePanel)).toBe(false)
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+
+  it('기존 답변 확인의 두 비교 도움말과 재현 경고를 확인해도 실행하지 않는다', async () => {
+    open()
+    await evaluationStep(3)
+    expect(screen.getByText('같은 저장 답변을 비교합니다. 현재 AI 성능 측정이 아닌 재현 확인입니다.')).toBeTruthy()
+    for (const [label, description] of [['비교 기준 답변 도움말', '비교 기준이라고 해서 정답으로 승인된 것은 아닙니다.'], ['다시 확인할 답변 도움말', '같은 답변을 고르면 결과가 다시 계산되는지만 확인합니다.']] as const) {
+      const help = screen.getByRole('button', { name: label })
+      expect(help.getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(help)
+      expect(help.getAttribute('aria-expanded')).toBe('true')
+      const panel = expectInlineHelp(help)
+      expect(panel.textContent).toContain(description)
+      expect(screen.getByText('같은 저장 답변을 비교합니다. 현재 AI 성능 측정이 아닌 재현 확인입니다.')).toBeTruthy()
+      fireEvent.click(help)
+      expect(help.getAttribute('aria-expanded')).toBe('false')
+      expect(document.body.contains(panel)).toBe(false)
+    }
+    expect(screen.getByLabelText('비교 기준 답변')).toHaveProperty('value', capture.id)
+    expect(screen.getByLabelText('다시 확인할 답변')).toHaveProperty('value', capture.id)
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+
+  it('새 응답이 비활성화된 이유는 모델 도움말을 열고 닫아도 보인다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((path, options) => path === '/api/v1/ops/session'
+      ? Promise.resolve(json({ ...session(), live_enabled: false })) : original(path, options))
+    open()
+    await evaluationStep(2)
+    fireEvent.click(screen.getByRole('radio', { name: '새 응답 생성' }))
+    const help = screen.getByRole('button', { name: '평가 모델 도움말' })
+    fireEvent.click(help)
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    const panel = expectInlineHelp(help)
+    expect(screen.getByText(/새 응답 생성이 비활성화되어 있습니다/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: '다음: 비교하고 실행' })).toHaveProperty('disabled', true)
+    fireEvent.click(help)
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(document.body.contains(panel)).toBe(false)
+    expect(screen.getByText(/새 응답 생성이 비활성화되어 있습니다/)).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+  })
+
   it('설정 요약에서 같은 저장 답변을 비교하면 재현 확인임을 알린다', async () => {
     open()
     await evaluationStep(3)
@@ -276,6 +362,7 @@ describe('React LLMOps 운영 화면', () => {
     fireEvent.change(select, { target: { value: quality.id } })
     const explanation = within(screen.getByRole('region', { name: '선택한 평가 자료 설명' }))
     expect(explanation.getByRole('heading', { name: quality.selection_guide.title })).toBeTruthy()
+    fireEvent.click(explanation.getByRole('button', { name: '선택한 평가 자료 도움말' }))
     expect(explanation.getByText(quality.selection_guide.material)).toBeTruthy()
     expect(explanation.getByText(quality.selection_guide.limitations)).toBeTruthy()
     expect(explanation.queryByText(development.selection_guide.purpose)).toBeNull()
@@ -289,6 +376,7 @@ describe('React LLMOps 운영 화면', () => {
     fireEvent.click(await screen.findByRole('link', { name: '새 평가' }))
     await evaluationStep(1)
     expect(await screen.findByLabelText('평가 자료')).toHaveProperty('value', quality.id)
+    fireEvent.click(screen.getByRole('button', { name: '선택한 평가 자료 도움말' }))
     expect(screen.getByText(quality.selection_guide.limitations)).toBeTruthy()
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
@@ -324,6 +412,7 @@ describe('React LLMOps 운영 화면', () => {
     await evaluationStep(2)
     expect(screen.getByRole('radio', { name: '새 응답 생성' })).toHaveProperty('disabled', true)
     await evaluationStep(1)
+    fireEvent.click(screen.getByRole('button', { name: '선택한 평가 자료 도움말' }))
     expect(screen.getByText('저장 응답 재평가만 가능')).toBeTruthy()
     await evaluationStep(1)
     fireEvent.change(screen.getByLabelText('평가 자료'), { target: { value: quality.id } })
@@ -1076,7 +1165,15 @@ describe('React LLMOps 운영 화면', () => {
     expect((screen.getByLabelText('비교 기준 답변') as HTMLSelectElement).value).toBe('reference')
     await evaluationStep(3)
     expect((screen.getByLabelText('다시 확인할 답변') as HTMLSelectElement).value).toBe('candidate')
-    expect(screen.getByText(/비교 범위: E01/)).toBeTruthy()
+    const scopeHelp = screen.getByRole('button', { name: '비교 범위 도움말' })
+    expect(scopeHelp.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(scopeHelp)
+    expect(scopeHelp.getAttribute('aria-expanded')).toBe('true')
+    const scopePanel = expectInlineHelp(scopeHelp)
+    expect(scopePanel.textContent).toContain('E01')
+    fireEvent.click(scopeHelp)
+    expect(scopeHelp.getAttribute('aria-expanded')).toBe('false')
+    expect(document.body.contains(scopePanel)).toBe(false)
     await evaluationStep(3)
     fireEvent.click(screen.getByRole('button', { name: '평가 실행' }))
     await screen.findByRole('button', { name: '같은 요청으로 재시도' })
@@ -1678,6 +1775,86 @@ it('복원 조회 장애는 새 UUID 생성이나 자동 재접수로 처리하�
   expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
 })
 
+it('첫 유료 접수가 예산 또는 실행 설정으로 거절되면 확인 경로를 안내하고 조건 재선택 시 동의를 초기화한다', async () => {
+  const original = fetchMock.getMockImplementation()!
+  const requests: Array<Record<string, unknown>> = []
+  fetchMock.mockImplementation(async (path, options) => {
+    if (path === '/api/v1/ops/evaluations' && options?.method === 'POST') {
+      requests.push(JSON.parse(String(options.body)))
+      return json({ code: 'LIVE_BUDGET_UNAVAILABLE' }, 400)
+    }
+    return original(path, options)
+  })
+  open()
+  await evaluationStep(2)
+  fireEvent.click(screen.getByRole('radio', { name: '새 응답 생성' }))
+  await evaluationStep(3)
+  const consent = screen.getByRole('checkbox', { name: /위 자료의 OpenAI 전송/ })
+  fireEvent.click(consent)
+  expect(consent).toHaveProperty('checked', true)
+  fireEvent.click(screen.getByRole('button', { name: '새 응답 생성 및 평가' }))
+  expect(await screen.findByText(/평가 예산 또는 실행 설정을 확인할 수 없어 접수하지 않았습니다/)).toBeTruthy()
+  expect(screen.getByRole('link', { name: '예산 관리에서 확인' }).getAttribute('href')).toBe('/ops/budget')
+  expect(screen.queryByText(/재시도할 때 보관한 요청을 사용합니다/)).toBeNull()
+  expect(screen.getByRole('button', { name: '같은 요청으로 재시도' })).toHaveProperty('disabled', true)
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({ request_id: id, execution_mode: 'live', confirm_paid_run: true })
+  expect(readPendingEvaluation('core:99')?.request_id).toBe(id)
+
+  fireEvent.click(screen.getByRole('button', { name: '접수되지 않은 조건 다시 선택' }))
+  await evaluationStep(2)
+  expect(readPendingEvaluation('core:99')).toBeNull()
+  fireEvent.click(screen.getByRole('radio', { name: '새 응답 생성' }))
+  await evaluationStep(3)
+  expect(screen.getByRole('checkbox', { name: /위 자료의 OpenAI 전송/ })).toHaveProperty('checked', false)
+  expect(screen.getByRole('button', { name: '새 응답 생성 및 평가' })).toHaveProperty('disabled', true)
+  expect(requests).toHaveLength(1)
+})
+
+it('예산 관리에 다녀온 뒤 보관 요청을 먼저 조회하고 명시적으로 같은 UUID와 조건으로 재시도한다', async () => {
+  const original = fetchMock.getMockImplementation()!
+  const requests: Array<Record<string, unknown>> = []
+  let reads = 0
+  fetchMock.mockImplementation(async (path, options) => {
+    if (path === `/api/v1/ops/evaluations/${id}` && requests.length < 2) {
+      reads += 1
+      return json({}, 404)
+    }
+    if (path === '/api/v1/ops/evaluations' && options?.method === 'POST') {
+      requests.push(JSON.parse(String(options.body)))
+      return requests.length === 1 ? json({ code: 'LIVE_BUDGET_UNAVAILABLE' }, 400) : json(completed, 202)
+    }
+    return original(path, options)
+  })
+  open()
+  await evaluationStep(2)
+  fireEvent.click(screen.getByRole('radio', { name: '새 응답 생성' }))
+  await evaluationStep(3)
+  fireEvent.click(screen.getByRole('checkbox', { name: /위 자료의 OpenAI 전송/ }))
+  fireEvent.click(screen.getByRole('button', { name: '새 응답 생성 및 평가' }))
+  await screen.findByText(/평가 예산 또는 실행 설정을 확인할 수 없어 접수하지 않았습니다/)
+  expect(requests).toHaveLength(1)
+  expect(readPendingEvaluation('core:99')?.request_id).toBe(id)
+
+  fireEvent.click(screen.getByRole('link', { name: '예산 관리에서 확인' }))
+  await screen.findByRole('region', { name: '평가 예산' })
+  expect(requests).toHaveLength(1)
+  fireEvent.click(screen.getByRole('link', { name: '새 평가' }))
+  await screen.findByText(/아직 접수된 요청을 찾지 못했습니다/)
+  expect(reads).toBe(1)
+  expect(requests).toHaveLength(1)
+  expect(readPendingEvaluation('core:99')?.request_id).toBe(id)
+  expect(screen.getByRole('button', { name: '같은 요청으로 재시도' })).toHaveProperty('disabled', false)
+
+  fireEvent.click(screen.getByRole('button', { name: '같은 요청으로 재시도' }))
+  await screen.findByRole('heading', { name: '평가 실행 상세' })
+  expect(reads).toBe(2)
+  expect(requests).toHaveLength(2)
+  expect(requests[1]).toEqual(requests[0])
+  expect(requests[1]).toMatchObject({ request_id: id, execution_mode: 'live', confirm_paid_run: true })
+  expect(readPendingEvaluation('core:99')).toBeNull()
+}, 15000)
+
 it.each(['INVALID_REFERENCE', 'LIVE_BUDGET_UNAVAILABLE'])('서버가 접수를 거절한 조건(%s)은 명시적으로 다시 선택하고 기존 유료 확인을 해제한다', async (code) => {
   storePendingEvaluation('core:99', pendingRequest())
   const original = fetchMock.getMockImplementation()!
@@ -1691,7 +1868,7 @@ it.each(['INVALID_REFERENCE', 'LIVE_BUDGET_UNAVAILABLE'])('서버가 접수를 �
   expect(within(screen.getByRole('region', { name: '평가 설정 요약' })).getByText(`새 응답 생성 · ${liveConfig.model}`)).toBeTruthy()
   expect(screen.queryByRole('button', { name: '이전: 답변 확인 방법' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '같은 요청으로 재시도' }))
-  if (code === 'LIVE_BUDGET_UNAVAILABLE') await screen.findByText(/누적 평가 한도가 부족하거나 설정되지 않아 접수하지 않았습니다/)
+  if (code === 'LIVE_BUDGET_UNAVAILABLE') await screen.findByText(/평가 예산 또는 실행 설정을 확인할 수 없어 접수하지 않았습니다/)
   fireEvent.click(await screen.findByRole('button', { name: '접수되지 않은 조건 다시 선택' }))
   await evaluationStep(3)
   await screen.findByRole('button', { name: '평가 실행' })
@@ -1722,6 +1899,9 @@ it.each([
   fireEvent.click(await screen.findByRole('button', { name: '평가 실행' }))
   await screen.findByText(message, { exact: false })
   expect(screen.queryByRole('heading', { name: '평가 실행 상세' })).toBeNull()
+  expect(screen.queryByRole('link', { name: '예산 관리에서 확인' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '접수되지 않은 조건 다시 선택' })).toBeNull()
+  expect(readPendingEvaluation('core:99')?.request_id).toBe(id)
   fireEvent.click(screen.getByRole('button', { name: '같은 요청으로 재시도' }))
   expect(await screen.findByRole('heading', { name: '평가 실행 상세' })).toBeTruthy()
   expect(requests).toHaveLength(2)

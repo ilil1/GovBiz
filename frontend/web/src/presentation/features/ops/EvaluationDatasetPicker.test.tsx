@@ -26,20 +26,35 @@ afterEach(cleanup)
 const mount = (items = datasets, value = items[0]?.id ?? '', disabled = false, onChange = vi.fn()) =>
   render(<EvaluationDatasetPicker datasets={items} value={value} disabled={disabled} onChange={onChange} />)
 const showComposition = () => {
+  const guide = screen.getByRole('button', { name: '평가 자료 선택 도움말' })
+  if (guide.getAttribute('aria-expanded') !== 'true') fireEvent.click(guide)
   fireEvent.click(screen.getByText('등록 자료 구성 보기'))
   return within(screen.getByRole('table', { name: '등록된 평가 자료 구성' }))
 }
-const showGuide = () => fireEvent.click(screen.getByText('어떤 자료를 골라야 하나요?'))
+const showGuide = () => fireEvent.click(screen.getByRole('button', { name: '평가 자료 선택 도움말' }))
+
+function expectInlineHelp(button: HTMLElement) {
+  const panelId = button.getAttribute('aria-controls')
+  expect(panelId).toBeTruthy()
+  const panel = document.getElementById(panelId!)!
+  expect(panel).toBeTruthy()
+  expect(button.parentElement?.nextElementSibling).toBe(panel)
+  expect(panel.className).not.toMatch(/(?:^|\s)(?:absolute|fixed|overflow-y-auto)(?:\s|$)/)
+  expect(panel.className).not.toMatch(/(?:^|\s)max-h-/)
+  return panel
+}
 
 describe('평가 자료 선택 안내', () => {
   it('현재 등록된 10개 자료를 용도별 2·4·4개로 설명하고 모든 자료의 목적과 사례 수를 보여준다', () => {
     mount()
     expect(screen.getByText('등록된 평가 자료 10개')).toBeTruthy()
     const select = screen.getByRole('combobox', { name: '평가 자료' })
-    const guide = screen.getByText('어떤 자료를 골라야 하나요?').closest('details')!
-    expect(select.compareDocumentPosition(guide) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(guide.open).toBe(false)
+    const guideButton = screen.getByRole('button', { name: '평가 자료 선택 도움말' })
+    expect(select).toHaveProperty('value', datasets[0].id)
+    expect(guideButton.getAttribute('aria-expanded')).toBe('false')
     showGuide()
+    expect(guideButton.getAttribute('aria-expanded')).toBe('true')
+    expectInlineHelp(guideButton)
     const cards = within(screen.getByRole('list', { name: '평가 자료 용도 안내' })).getAllByRole('listitem')
     expect(cards.map((card) => card.querySelector('p')?.textContent)).toEqual(['실제 품질 평가용 2개', '개발 검증용 4개', '과거 자료 4개'])
     expect(screen.getByText(/같은 질문이 여러 묶음에 포함될 수 있습니다/)).toBeTruthy()
@@ -103,15 +118,22 @@ describe('평가 자료 선택 안내', () => {
     expect(select).toHaveProperty('value', selected.id)
     expect(onChange).not.toHaveBeenCalled()
     const explanation = within(screen.getByRole('region', { name: '선택한 평가 자료 설명' }))
-    const detail = explanation.getByText('사용 자료와 평가 범위 자세히 보기').closest('details')!
-    expect(detail.open).toBe(false)
-    fireEvent.click(explanation.getByText('사용 자료와 평가 범위 자세히 보기'))
-    expect(detail.open).toBe(true)
+    const detailButton = explanation.getByRole('button', { name: '선택한 평가 자료 도움말' })
+    expect(detailButton.getAttribute('aria-expanded')).toBe('false')
     expect(explanation.getByText(selected.selection_guide!.purpose)).toBeTruthy()
+    expect(explanation.getByText(/여러 공고 중 알맞은 공고를 찾는 능력은 확인하지 않습니다/)).toBeTruthy()
+    fireEvent.click(detailButton)
+    expect(detailButton.getAttribute('aria-expanded')).toBe('true')
+    expectInlineHelp(detailButton)
     expect(explanation.getByText(selected.selection_guide!.material)).toBeTruthy()
     expect(explanation.getByText(selected.selection_guide!.limitations)).toBeTruthy()
     expect(explanation.getByText(`질문 ${selected.case_ids.length}개`)).toBeTruthy()
     expect(explanation.getByText(/자료 분류는 검토 승인이나 품질 합격을 뜻하지 않습니다/)).toBeTruthy()
+    fireEvent.click(detailButton)
+    expect(detailButton.getAttribute('aria-expanded')).toBe('false')
+    expect(explanation.queryByText(selected.selection_guide!.material)).toBeNull()
+    expect(explanation.getByText(selected.selection_guide!.purpose)).toBeTruthy()
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('선택한 자료의 실제 평가 범위를 구분하고 저장 결과 재평가의 한계를 안내한다', () => {
@@ -125,6 +147,7 @@ describe('평가 자료 선택 안내', () => {
     expect(selected().getByText('공고 안에서 내용 찾기와 답변 확인:')).toBeTruthy()
     expect(selected().getByText(/미리 정한 공고 원문 안에서 필요한 부분을 찾고 답변하는 과정/)).toBeTruthy()
     expect(selected().getByText(/여러 공고 중 알맞은 공고를 찾는 능력은 확인하지 않습니다/)).toBeTruthy()
+    fireEvent.click(selected().getByRole('button', { name: '선택한 평가 자료 도움말' }))
     expect(selected().getByText(/이전에 저장한 답변을 다시 확인하며 AI 호출이나 검색을 하지 않습니다/)).toBeTruthy()
     expect(selected().getByText(/AI가 다시 답변하며 비용이 발생할 수 있습니다/)).toBeTruthy()
     expect(selected().queryByText('답변 확인:')).toBeNull()

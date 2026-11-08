@@ -13,6 +13,7 @@ import { RagComparisonResult } from './RagComparisonResult'
 import { RagMaterialPanel } from './RagMaterialPanel'
 import { EvaluationReviewPanel } from './EvaluationReviewPanel'
 import { EvaluationDatasetPicker } from './EvaluationDatasetPicker'
+import { EvaluationHelp } from './EvaluationHelp'
 import { BudgetOverview, RunBudgetPanel } from './BudgetPanel'
 import { LiveReadinessPanel } from './LiveReadinessPanel'
 import { EvaluationSchedulesPanel } from './EvaluationSchedulesPanel'
@@ -276,6 +277,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   const [pending, setPending] = useState<EvaluationSubmission | null>(restored.pending)
   const [storageError, setStorageError] = useState(restored.error)
   const [rejected, setRejected] = useState(false)
+  const [budgetRejected, setBudgetRejected] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [busy, setBusy] = useState(false)
   const [step, setStep] = useState<1 | 2 | 3>(restored.pending ? 3 : 1)
@@ -337,7 +339,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   const submit = async () => {
     if (step !== 3 || submitting.current || busy || storageError || (!pending && mode === 'live' && (!approved || !liveEnabled || !canGenerate || !selectedOption))) return
     if (!pending && (!supported || !(mode === 'live' ? liveProfile : selected?.execution_profiles.replay))) return
-    submitting.current = true; setBusy(true); setSubmitError(''); setRejected(false)
+    submitting.current = true; setBusy(true); setSubmitError(''); setRejected(false); setBudgetRejected(false)
     try {
       let request = pending ?? readPendingEvaluation(owner)
       const retrying = request !== null
@@ -363,8 +365,10 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
     } catch (reason) {
       if (reason instanceof OpsApiError && [401, 403].includes(reason.status)) expiry.current()
       else {
-        setRejected(reason instanceof OpsApiError && reason.status === 400)
-        setSubmitError(`${message(reason)} 재시도할 때 보관한 요청을 사용합니다.`)
+        const wasRejected = reason instanceof OpsApiError && reason.status === 400
+        setRejected(wasRejected)
+        setBudgetRejected(wasRejected && reason.code === 'LIVE_BUDGET_UNAVAILABLE')
+        setSubmitError(wasRejected ? `${message(reason)} 접수되지 않은 조건을 다시 선택할 수 있습니다.` : `${message(reason)} 재시도할 때 보관한 요청을 사용합니다.`)
       }
     } finally { submitting.current = false; setBusy(false) }
   }
@@ -377,48 +381,51 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
     <WorkspacePageHeader title="새 평가" actions={<Link className={styles.secondaryButton} to="/ops/datasets">평가 자료 등록·관리</Link>} />
     <div className={styles.content}>
       <section id="new-evaluation" className={`${styles.card} scroll-mt-28`} aria-label="평가 실행">
-        <h2 className={styles.cardTitle}>평가 준비하기</h2>
-        <p className="text-sm leading-6 text-ink-muted">처음이라면 아래 순서대로 선택해 보세요. 기존 답변을 다시 확인하면 추가 AI 호출이 없습니다.</p>
+        <h2 className="text-xl font-bold leading-snug text-ink sm:text-2xl">평가 준비하기</h2>
         {pending && <div className="rounded-xl bg-amber-50 p-3 text-sm" role="status"><p>보관한 요청: {pending.request_id}</p><p>{pending.dataset_id} · 기준 {pending.reference_capture_id}{pending.baseline_version ? ` · 기준 버전 ${pending.baseline_version}` : ''} · {pending.live_config ? `${pending.live_config.model} · 최대 ${pending.live_config.max_model_calls}회 · 출력 ${pending.live_config.max_output_tokens}토큰/회 · 입력 ${pending.live_config.max_input_tokens ?? '기록 없음'}토큰/회` : '저장 응답 재평가'}</p><p>새로고침·재로그인 뒤에도 이 탭에서 같은 요청을 확인합니다. 탭을 닫기 전 실행 이력에서 접수 여부를 확인하세요.</p></div>}
         {storageError && <p role="alert" className="text-sm text-red-700">{storageError}</p>}
-        {submitError && <p role="alert" className="text-sm text-red-700">{submitError}</p>}
+        {submitError && <div role="alert" className="space-y-2 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-700"><p>{submitError}</p>{budgetRejected && <>
+          <p>누적·일별 잔여 한도와 예약·미확인 사용량을 확인하세요. 설정을 확인한 뒤 이 화면으로 돌아오면 같은 요청으로 재시도할 수 있습니다.</p>
+          <Link className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary" to="/ops/budget">예산 관리에서 확인</Link>
+          <p>조건을 바꾸려면 아래 버튼을 누르고, 다시 실행하기 전에 ‘실행 설정·예산 점검’으로 차단 사유를 확인하세요.</p>
+        </>}</div>}
         {rejected && <button className={styles.secondaryButton} onClick={reselect}>접수되지 않은 조건 다시 선택</button>}
         <ol aria-label="평가 준비 단계" className="grid list-none gap-2 p-0 text-sm sm:grid-cols-3">
           {(['평가 자료', '답변 확인 방법', '비교 및 실행'] as const).map((label, index) => <li key={label} aria-current={step === index + 1 ? 'step' : undefined} className={`rounded-lg px-3 py-2 ${step === index + 1 ? 'bg-brand-primary font-bold text-white' : 'bg-surface-muted text-ink-muted'}`}><span className="mr-2">{index + 1}</span>{label}{step === index + 1 && <span className="sr-only"> · 현재 단계</span>}</li>)}
         </ol>
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (step === 3) void submit() }}>
+        <form className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (step === 3) void submit() }}>
           {step === 1 && <>
-          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-base font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">1. 평가 자료 선택</h3>
+          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-lg font-bold leading-snug sm:text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">1. 평가 자료 선택</h3>
           <EvaluationDatasetPicker datasets={datasets} value={dataset} disabled={busy || requestId.current !== null} onChange={changeDataset} />
           {!supported && <p className="text-sm text-amber-800 md:col-span-2">이 자료는 평가 범위를 확인할 수 없어 실행할 수 없습니다. 다른 자료를 선택해 주세요.</p>}
           <button type="button" className={`${styles.primaryButton} justify-self-start md:col-span-2`} disabled={!dataset || !supported || busy} onClick={() => setStep(2)}>다음: 답변 확인 방법</button>
           </>}
           {step === 2 && <>
-          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-base font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">2. 답변 확인 방법 선택</h3>
+          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-lg font-bold leading-snug sm:text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">2. 답변 확인 방법 선택</h3>
           <p className="text-sm text-ink-muted md:col-span-2">선택한 자료: <strong className="text-ink">{selected?.selection_guide?.title ?? selected?.label}</strong> · 질문 {selected?.case_ids.length ?? 0}개</p>
           <fieldset className="min-w-0 md:col-span-2">
-            <legend className="text-sm font-semibold">답변을 확인하는 방법</legend>
-            <p className="mt-1 text-sm text-ink-muted">무엇을 확인하고 싶은지에 따라 하나를 선택하세요.</p>
+            <legend className="text-base font-semibold">답변을 확인하는 방법</legend>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm leading-6 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary ${mode === 'replay' ? 'border-brand-primary bg-brand-soft' : 'border-line bg-white'}`}>
                 <input type="radio" name="evaluation-mode" aria-label="기존 답변 다시 확인" value="replay" className="mt-1" checked={mode === 'replay'} disabled={busy || requestId.current !== null} onChange={() => { setMode('replay'); setApproved(false) }} />
-                <span><strong className="block text-ink">기존 답변 다시 확인</strong><span className="block text-ink-muted">저장된 답변을 비교합니다. 추가 AI 호출은 없습니다.</span><span className="mt-1 block text-ink-muted">현재 AI의 성능을 새로 측정하는 것은 아닙니다.</span></span>
+                <span><strong className="block text-base text-ink">기존 답변 다시 확인</strong><span className="block text-ink-muted">저장된 답변을 비교합니다. 추가 AI 호출은 없습니다.</span><span className="mt-1 block text-ink-muted">현재 AI의 성능을 새로 측정하는 것은 아닙니다.</span></span>
               </label>
               <label className={`flex items-start gap-3 rounded-xl border p-4 text-sm leading-6 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-primary ${!canGenerate ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${mode === 'live' ? 'border-brand-primary bg-brand-soft' : 'border-line bg-white'}`}>
                 <input type="radio" name="evaluation-mode" aria-label="새 응답 생성" value="live" className="mt-1" checked={mode === 'live'} disabled={!canGenerate || busy || requestId.current !== null} onChange={() => { setMode('live'); setApproved(false) }} />
-                <span><strong className="block text-ink">새 응답 생성</strong><span className="block text-ink-muted">선택한 모델로 새 답변을 만듭니다.</span><span className="mt-1 block text-amber-800">자료를 OpenAI에 전송하며 비용이 발생할 수 있습니다.</span>{!canGenerate && <span className="mt-1 block text-ink-muted">이 자료에서는 새 응답을 만들 수 없습니다.</span>}</span>
+                <span><strong className="block text-base text-ink">새 응답 생성</strong><span className="block text-ink-muted">선택한 모델로 새 답변을 만듭니다.</span><span className="mt-1 block text-amber-800">자료를 OpenAI에 전송하며 비용이 발생할 수 있습니다.</span>{!canGenerate && <span className="mt-1 block text-ink-muted">이 자료에서는 새 응답을 만들 수 없습니다.</span>}</span>
               </label>
             </div>
           </fieldset>
-          {mode === 'live' && <p className="text-sm leading-6 text-ink-muted md:col-span-2">{ragLive ? '등록된 공고 안에서 필요한 내용을 찾고 새 답변을 만듭니다. AI 사용 비용이 발생합니다.' : '질문과 공고 내용을 OpenAI에 보내 새 답변을 만듭니다. 공고 검색은 다시 하지 않으며 AI 사용 비용이 발생합니다.'}</p>}
           {ragLive && <details className="text-sm leading-6 text-ink-muted md:col-span-2"><summary className="cursor-pointer font-semibold">검색과 AI 호출 상세 보기</summary><p className="mt-2">{ragLiveNotice(liveConfig)}</p></details>}
           {selected && <p className="text-sm md:col-span-2" role="status">확인 범위: {selected.evaluation_scope === 'fixed-answer-context-only' ? '미리 고른 공고 내용을 바탕으로 답변을 확인합니다. 여러 공고 중 알맞은 공고를 찾는 능력은 측정하지 않습니다.' : selected.evaluation_scope === 'source-chunks-retrieval-answer' ? (ragLive ? '정해진 공고 안에서 필요한 내용을 찾고 새 답변을 확인합니다. 실제 서비스의 공고 검색 성능은 측정하지 않습니다.' : '정해진 공고의 저장된 검색과 답변을 다시 확인합니다. 새로운 검색이나 답변 생성은 하지 않습니다.') : '평가할 범위를 확인할 수 없습니다.'}</p>}
-          {mode === 'live' && <label className="grid min-w-0 gap-2 text-sm font-semibold md:col-span-2">평가 모델<select className={field} value={model} disabled={busy || requestId.current !== null} onChange={(event) => { setModel(event.target.value); setApproved(false) }}>
-            {!selectedOption && <option value={model} disabled>{model ? `${model} · ${pending ? '보관한 요청의 모델' : '현재 선택 불가'}` : '평가할 모델을 선택하세요'}</option>}
-            {options.map((option) => <option key={option.live_config.model} value={option.live_config.model}>{option.live_config.model}</option>)}
-          </select></label>}
+          {mode === 'live' && <div className="grid min-w-0 grid-cols-1 gap-1 md:col-span-2">
+            <EvaluationHelp label="평가 모델" title={<label htmlFor="evaluation-model" className="text-base font-semibold">평가 모델</label>}><p>한 번에 선택한 모델 하나를 평가합니다. 같은 평가 자료로 다른 모델도 실행하면 <Link className="text-brand-primary underline" to="/ops/dashboard">성능 대시보드</Link>에서 모델별 결과를 비교할 수 있습니다.</p></EvaluationHelp>
+            <select id="evaluation-model" className={`${field} min-w-0 max-w-full !text-base`} value={model} disabled={busy || requestId.current !== null} onChange={(event) => { setModel(event.target.value); setApproved(false) }}>
+              {!selectedOption && <option value={model} disabled>{model ? `${model} · ${pending ? '보관한 요청의 모델' : '현재 선택 불가'}` : '평가할 모델을 선택하세요'}</option>}
+              {options.map((option) => <option key={option.live_config.model} value={option.live_config.model}>{option.live_config.model}</option>)}
+            </select>
+          </div>}
           {mode === 'live' && !pending && !selectedOption && <p role="alert" className="text-sm text-red-700 md:col-span-2">선택했던 모델을 현재 자료에서 사용할 수 없습니다. 허용된 평가 모델을 다시 선택하세요.</p>}
-          {mode === 'live' && <p className="text-sm text-ink-muted md:col-span-2">한 번에 선택한 모델 하나를 평가합니다. 같은 평가 자료로 다른 모델도 실행하면 <Link className="text-brand-primary underline" to="/ops/dashboard">성능 대시보드</Link>에서 모델별 결과를 비교할 수 있습니다.</p>}
           {ragLive && <div className="md:col-span-2"><VectorPlan config={liveConfig} /></div>}
           {mode === 'live' && !liveEnabled && <p role="status" className="text-sm text-amber-800 md:col-span-2">새 응답 생성이 비활성화되어 있습니다. 실행기와 서버 설정을 확인하거나 기존 답변 확인을 선택해 주세요.</p>}
           <div className="flex flex-wrap gap-3 md:col-span-2">
@@ -427,12 +434,19 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
           </div>
           </>}
           {step === 3 && <>
-          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-base font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">3. 비교하고 실행</h3>
-          <div className="grid min-w-0 gap-2 text-sm"><label className="grid gap-2 font-semibold">비교 기준 답변<select className={field} value={reference} disabled={busy || requestId.current !== null} onChange={(event) => setReference(event.target.value)}>{selected?.baseline && <option value={selected.baseline.id}>{selected.baseline.label}</option>}{selected?.captures.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><p className="text-ink-muted">선택한 답변과 비교할 기존 기록입니다. 비교 기준이라고 해서 정답으로 승인된 것은 아닙니다.</p></div>
-          {mode === 'replay' && <div className="grid min-w-0 gap-2 text-sm"><label className="grid gap-2 font-semibold">다시 확인할 답변<select className={field} value={candidate} disabled={busy || requestId.current !== null} onChange={(event) => setCandidate(event.target.value)}>{selected?.captures.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><p className="text-ink-muted">비교 기준 답변과 견줄 저장된 답변입니다. 같은 답변을 고르면 결과가 다시 계산되는지만 확인합니다.</p></div>}
-          <section aria-label="평가 설정 요약" className="rounded-xl border border-brand-primary bg-brand-soft p-4 text-sm leading-6 md:col-span-2">
-            <h4 className="font-bold">실행 전 선택한 내용을 확인하세요</h4>
-            <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+          <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-lg font-bold leading-snug sm:text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">3. 비교하고 실행</h3>
+          <div className="grid min-w-0 grid-cols-1 content-start gap-1">
+            <EvaluationHelp label="비교 기준 답변" title={<label htmlFor="evaluation-reference" className="text-base font-semibold">비교 기준 답변</label>}><p>선택한 답변과 비교할 기존 기록입니다. 비교 기준이라고 해서 정답으로 승인된 것은 아닙니다.</p></EvaluationHelp>
+            <select id="evaluation-reference" className={`${field} min-w-0 max-w-full !text-base`} value={reference} disabled={busy || requestId.current !== null} onChange={(event) => setReference(event.target.value)}>{selected?.baseline && <option value={selected.baseline.id}>{selected.baseline.label}</option>}{selected?.captures.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+            <p className="text-sm leading-6 text-ink-muted">비교 기준은 정답 승인을 뜻하지 않습니다.</p>
+          </div>
+          {mode === 'replay' && <div className="grid min-w-0 grid-cols-1 content-start gap-1">
+            <EvaluationHelp label="다시 확인할 답변" title={<label htmlFor="evaluation-candidate" className="text-base font-semibold">다시 확인할 답변</label>}><p>비교 기준 답변과 견줄 저장된 답변입니다. 같은 답변을 고르면 결과가 다시 계산되는지만 확인합니다.</p></EvaluationHelp>
+            <select id="evaluation-candidate" className={`${field} min-w-0 max-w-full !text-base`} value={candidate} disabled={busy || requestId.current !== null} onChange={(event) => setCandidate(event.target.value)}>{selected?.captures.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+          </div>}
+          <section aria-label="평가 설정 요약" className="min-w-0 rounded-xl border border-brand-primary bg-brand-soft p-4 text-sm leading-6 md:col-span-2">
+            {selected ? <EvaluationHelp label="비교 범위" title={<h4 className="text-base font-bold">실행 전 선택한 내용을 확인하세요</h4>}><p>비교 범위: {selected.case_ids.join(', ')} · {selected.case_ids.length}건. {mode === 'live' ? '선택한 모델의 새 응답과 선택한 기준 응답을 비교합니다.' : reference === candidate ? '같은 저장 결과의 재현 검증입니다.' : '두 실행의 위 사례만 비교합니다. 원본의 다른 사례는 평가 범위에 포함하지 않습니다.'}</p></EvaluationHelp> : <h4 className="text-base font-bold">실행 전 선택한 내용을 확인하세요</h4>}
+            <dl className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 [overflow-wrap:anywhere]">
               <div><dt className="text-ink-muted">평가 자료</dt><dd className="font-semibold break-words">{selected?.selection_guide?.title ?? selected?.label ?? '선택되지 않음'} · 질문 {selected?.case_ids.length ?? 0}개</dd></div>
               <div><dt className="text-ink-muted">확인 방법</dt><dd className="font-semibold">{mode === 'live' ? `새 응답 생성 · ${liveConfig?.model ?? '모델 선택 필요'}` : '기존 답변 다시 확인 · 추가 AI 호출 없음'}</dd></div>
               <div><dt className="text-ink-muted">비교 기준 답변</dt><dd className="font-semibold">{(selected?.baseline?.id === reference ? selected.baseline.label : selected?.captures.find((item) => item.id === reference)?.label) ?? '선택되지 않음'}</dd></div>
@@ -457,7 +471,6 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
           </div>
           </>}
         </form>
-        {step === 3 && selected && <p className="text-xs leading-5 text-ink-muted">비교 범위: {selected.case_ids.join(', ')} · {selected.case_ids.length}건. {mode === 'live' ? '선택한 모델의 새 응답과 선택한 기준 응답을 비교합니다.' : reference === candidate ? '같은 저장 결과의 재현 검증입니다.' : '두 실행의 위 사례만 비교합니다. 원본의 다른 사례는 평가 범위에 포함하지 않습니다.'}</p>}
       </section>
     </div>
   </>
