@@ -191,7 +191,7 @@ describe('관리자 예산 장부', () => {
     fireEvent.click(details)
     expect(calls).toHaveProperty('value', '20')
     expect(fetch).toHaveBeenCalledTimes(2)
-    expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
   })
 
   it('관리자에게도 최신 예산 조회 실패 시 먼저 새로고침하도록 안내한다', async () => {
