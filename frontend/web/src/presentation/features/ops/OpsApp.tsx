@@ -26,8 +26,9 @@ import { EvaluationLogsPanel } from './EvaluationLogsPanel'
 import { TraceDetailPage, TraceListPage } from './TracePages'
 import { ProductionQualityPage } from './ProductionQualityPage'
 import { DatasetManagementPage } from './DatasetManagementPage'
-import { TraceMetricsPanel } from './TraceMetricsPanel'
-import { RequestMetricsPanel } from './RequestMetricsPanel'
+import { MonitoringOverview } from './MonitoringOverview'
+import { MonitoringDetailPage, type MonitoringSection } from './MonitoringDetailPage'
+import { MonitoringDemoProvider } from './MonitoringDemoContext'
 
 const dashboardPath = '/ops/dashboard'
 const listPath = '/ops/evaluations'
@@ -106,8 +107,8 @@ const liveOptions = (dataset: EvaluationCatalog['datasets'][number] | undefined)
   ?? (dataset?.live_config && dataset.execution_profiles.live ? [{ live_config: dataset.live_config, execution_profile: dataset.execution_profiles.live }] : [])
 const opsPageGroups = [
   { id: 'production', label: '운영', pages: [
-    { path: '/ops/usage', label: '실사용 모니터링', description: '서비스 AI 사용량과 비용' },
-    { path: '/ops/traces', label: 'AI 실행 추적', description: '실행 단계·입출력·오류' },
+    { path: '/ops/usage', label: '실사용 모니터링', description: '요청·모델·비용의 전체 현황' },
+    { path: '/ops/traces', label: 'AI 실행 추적', description: '개별 실행 단계와 오류 조사' },
     { path: '/ops/production-quality', label: '운영 표본 품질', description: '저장 표본의 근거·답변 검토' },
   ] },
   { id: 'testing', label: '테스트', pages: [
@@ -125,9 +126,13 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
   const location = useLocation()
   const [draft, setDraft] = useState<EvaluationDraft | null>(null)
   const previousPath = useRef(location.pathname)
+  const monitoringExample = (location.pathname === '/ops/usage' || location.pathname.startsWith('/ops/usage/'))
+    && new URLSearchParams(location.search).get('example') === '1'
   const current = opsPages.find((page) => page.path === location.pathname)
-    ?? opsPages.find((page) => page.path === (location.pathname.startsWith(listPath) ? listPath : location.pathname.startsWith('/ops/traces/') ? '/ops/traces' : dashboardPath))!
-  const title = location.pathname.startsWith(`${listPath}/`) && location.pathname.endsWith('/report') ? 'Evidently 평가 보고서' : current.label
+    ?? opsPages.find((page) => page.path === (location.pathname.startsWith(listPath) ? listPath : location.pathname.startsWith('/ops/traces/') ? '/ops/traces' : location.pathname.startsWith('/ops/usage/') ? '/ops/usage' : dashboardPath))!
+  const monitoringTitles: Record<string, string> = { requests: '요청과 서버 오류', jobs: '작업 결과', models: '모델 실행', traces: '추적 수집과 연결', costs: '사용량과 비용' }
+  const monitoringSection = location.pathname.startsWith('/ops/usage/') ? location.pathname.slice('/ops/usage/'.length) : ''
+  const title = monitoringTitles[monitoringSection] ?? (location.pathname.startsWith(`${listPath}/`) && location.pathname.endsWith('/report') ? 'Evidently 평가 보고서' : current.label)
   const legacyPath = location.pathname === listPath ? ({ '#new-evaluation': `${listPath}/new`, '#evaluation-budget': '/ops/budget', '#evaluation-schedules': '/ops/schedules' } as Record<string, string>)[location.hash] : undefined
   useEffect(() => {
     document.title = `GovBiz · ${title}`
@@ -143,7 +148,7 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
         {opsPageGroups.map((group) => <section key={group.id} aria-labelledby={`ops-menu-${group.id}`} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
           <h2 id={`ops-menu-${group.id}`} className="mb-2 px-3 text-xs font-bold tracking-wide text-ink-muted">{group.label}</h2>
           <div className="grid grid-cols-2 gap-1 lg:grid-cols-1 lg:gap-2">
-            {group.pages.map((page) => <Link key={page.path} to={page.path} aria-label={page.label} aria-current={current.path === page.path ? 'page' : undefined}
+            {group.pages.map((page) => <Link key={page.path} to={page.path === '/ops/usage' && monitoringExample ? '/ops/usage?example=1' : page.path} aria-label={page.label} aria-current={current.path === page.path ? 'page' : undefined}
               className={`min-w-0 rounded-lg border-l-[3px] px-3 py-3 text-sm no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary ${current.path === page.path ? 'border-brand-primary bg-brand-soft font-bold text-brand-primary' : 'border-transparent text-ink-muted hover:bg-surface-muted hover:text-ink'}`}>
               <span className="block">{page.label}</span><span className="mt-1 hidden text-xs font-normal lg:block">{page.description}</span>
             </Link>)}
@@ -157,17 +162,8 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
         <Route path="/ops/traces" element={<TraceListPage onExpired={onExpired} />} />
         <Route path="/ops/traces/:traceId" element={<TraceDetailPage key={location.pathname} onExpired={onExpired} />} />
         <Route path="/ops/production-quality" element={<ProductionQualityPage owner={session.user!.id} onExpired={onExpired} />} />
-        <Route path="/ops/usage" element={<AdminAiCostsPage title="실사용 모니터링" onExpired={onExpired}>
-          <section className={styles.card} aria-label="서비스 사용량과 실행 추적">
-            <h2 className={styles.cardTitle}>서비스 사용량과 실행 추적</h2>
-            <p className="text-sm text-ink-muted">서비스에서 기록한 AI 호출·토큰·비용을 기간별로 조회합니다. 기능·모델별 집계와 사용량이 많은 회원 상위 10명을 확인할 수 있습니다.</p>
-            <p className="mt-2 text-sm text-ink-muted">호출 수는 기록된 OpenAI 호출 수입니다. 사용자 요청 건수·실패율·응답 시간은 이 집계에 포함되지 않습니다.</p>
-            <p className="mt-2 text-sm text-ink-muted">검색·도우미·공고 근거 답변의 단계와 오류는 AI 실행 추적에서 확인합니다. 추적에 연결된 앱 사용량은 실행 상세에서 조회할 수 있습니다.</p>
-            <Link to="/ops/traces" className={`${styles.secondaryButton} mt-3`}>실행 목록 열기</Link>
-          </section>
-          <RequestMetricsPanel onExpired={onExpired} />
-          <TraceMetricsPanel onExpired={onExpired} />
-        </AdminAiCostsPage>} />
+        <Route path="/ops/usage" element={<MonitoringRoute onExpired={onExpired} />} />
+        <Route path="/ops/usage/:section" element={<MonitoringRoute onExpired={onExpired} />} />
         <Route path="/ops" element={<Navigate replace to={dashboardPath} />} />
         <Route path="/ops/evaluations" element={<EvaluationList onExpired={onExpired} />} />
         <Route path="/ops/datasets" element={<DatasetManagementPage owner={session.user!.id} onExpired={onExpired} />} />
@@ -180,6 +176,29 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
       </Routes>}
     </main>
   </div>
+}
+
+function MonitoringRoute({ onExpired }: { onExpired: () => void }) {
+  const { section } = useParams()
+  const [search, setSearch] = useSearchParams()
+  const example = search.get('example') === '1'
+  const setExample = () => {
+    const next = new URLSearchParams(search)
+    if (example) next.delete('example'); else next.set('example', '1')
+    setSearch(next, { replace: true })
+  }
+  const banner = <div className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border px-4 py-4 ${example ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-line bg-white text-ink'}`}>
+    <div className="min-w-0" role="status"><p className="m-0 text-base font-bold">{example ? '예시 화면을 보고 있습니다' : '저장된 데이터로 보고 있습니다'}</p><p className={`mt-1 mb-0 text-xs ${example ? 'text-amber-950' : 'text-ink-muted'}`}>{example ? '연습용 수치 · 실제 기록에 반영되지 않음' : '테스트 기록이 포함될 수 있음'}</p></div>
+    <button type="button" aria-pressed={example} className={`${styles.secondaryButton} min-h-11`} onClick={setExample}>{example ? '실제 데이터로 돌아가기' : '예시 데이터로 살펴보기'}</button>
+  </div>
+  const modeKey = example ? 'example' : 'live'
+  const back = example ? '/ops/usage?example=1' : '/ops/usage'
+  if (section && !['requests', 'jobs', 'models', 'traces', 'costs'].includes(section)) return <Navigate replace to={back} />
+  return <MonitoringDemoProvider enabled={example}>
+    {!section ? <><WorkspacePageHeader title="실사용 모니터링" /><div className={styles.content}>{banner}<MonitoringOverview key={modeKey} onExpired={onExpired} /></div></>
+      : section === 'costs' ? <AdminAiCostsPage key={modeKey} title="사용량과 비용" onExpired={onExpired} monitoringDetail monitoringBackTo={back}>{banner}</AdminAiCostsPage>
+        : <MonitoringDetailPage key={modeKey} section={section as MonitoringSection} onExpired={onExpired} modeBanner={banner} />}
+  </MonitoringDemoProvider>
 }
 
 // 자료가 필요한 화면에 진입할 때만 조회한다. 경로·계정이 바뀌면 진행 중인 조회를 취소한다.

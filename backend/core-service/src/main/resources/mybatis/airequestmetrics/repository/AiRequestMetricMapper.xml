@@ -7,6 +7,9 @@
         <result property="latencyBucketMs" column="latency_bucket_ms" />
         <result property="requestCount" column="request_count" />
     </resultMap>
+    <resultMap id="dailyMetric" type="ai.govbiz.core.airequestmetrics.repository.mapper.AiRequestMetricDbRow" extends="metric">
+        <result property="metricDate" column="metric_date" />
+    </resultMap>
     <insert id="increment">
         INSERT INTO ai_request_metric (metric_date, feature, outcome, latency_bucket_ms, request_count)
         VALUES (#{date}, #{feature}, #{outcome}, #{bucket}, 1)
@@ -17,5 +20,11 @@
         FROM ai_request_metric
         WHERE metric_date BETWEEN #{from} AND #{to}
         GROUP BY feature, outcome, latency_bucket_ms
+    </select>
+    <select id="listDaily" resultMap="dailyMetric">
+        SELECT metric_date, feature, outcome, latency_bucket_ms, request_count
+        FROM ai_request_metric
+        WHERE metric_date BETWEEN #{from} AND #{to}
+        ORDER BY metric_date, feature, outcome, latency_bucket_ms
     </select>
 </mapper>

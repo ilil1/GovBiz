@@ -36,7 +36,8 @@ class AssistantAgentService:
         started = perf_counter()
         outcome = "failed"
         state: dict = {}
-        usage = AssistantModelUsage(self._tracing)
+        deadline = asyncio.timeout(self._timeout_seconds)
+        usage = AssistantModelUsage(self._tracing, deadline)
         trace_id = trace_id or uuid4().hex
         documents = request.saved_program_documents or []
         metadata = {
@@ -51,7 +52,7 @@ class AssistantAgentService:
             "assistant.agent", trace_id=trace_id, parent_span_id=parent_span_id, metadata=metadata,
         ) as observation:
             try:
-                async with asyncio.timeout(self._timeout_seconds):
+                async with deadline:
                     async for update in self._graph.astream({
                         "request": request, "messages": [], "tool_results": [], "answer_attempts": 0,
                         "model_calls": 0, "input_tokens": 0, "output_tokens": 0,

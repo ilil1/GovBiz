@@ -7,6 +7,7 @@ import ai.govbiz.core.aiusage.config.AiCostProperties
 import ai.govbiz.core.aiusage.domain.AiModelPrice
 import ai.govbiz.core.aiusage.domain.AiModelUsage
 import ai.govbiz.core.aiusage.domain.AiUsageTotals
+import ai.govbiz.core.aiusage.domain.AiTraceCoverage
 import ai.govbiz.core.aiusage.repository.AiUsageRepository
 import java.math.BigDecimal
 import java.time.Clock
@@ -23,6 +24,22 @@ class AiUsageServiceTest {
     private val clock = Clock.fixed(Instant.parse("2026-10-01T20:00:00Z"), ZoneId.of("Asia/Seoul"))
     private val accessLog = Mockito.mock(AdminAccessLogService::class.java)
     private val service = AiUsageService(repository, accessLog, AiCostProperties(), clock)
+
+    @Test
+    fun traceCoverageValidatesPeriodAndRequiresAuditBeforeReturning() {
+        val actor = AdminActor.of(1, "198.51.100.7", null)
+        val from = LocalDate.of(2026, 10, 1)
+        val to = from.plusDays(2)
+        val rows = listOf(AiTraceCoverage("AI_SEARCH", 4, 2), AiTraceCoverage(null, 1, 0))
+        Mockito.doReturn(rows).`when`(repository).traceCoverageByFeature(from, to)
+        org.junit.jupiter.api.Assertions.assertEquals(rows, service.traceCoverage(actor, from, to))
+        Mockito.verify(accessLog).record(actor, AdminAccessAction.AI_COST_VIEW, null, "from=2026-10-01, to=2026-10-03, features=2")
+        assertThrows(IllegalArgumentException::class.java) { service.traceCoverage(actor, to, from) }
+        assertThrows(IllegalArgumentException::class.java) { service.traceCoverage(actor, from, from.plusDays(92)) }
+        Mockito.doThrow(IllegalStateException("audit unavailable")).`when`(accessLog)
+            .record(actor, AdminAccessAction.AI_COST_VIEW, null, "from=2026-10-01, to=2026-10-03, features=2")
+        assertThrows(IllegalStateException::class.java) { service.traceCoverage(actor, from, to) }
+    }
 
     @Test
     fun traceLookupDoesNotReturnWithoutAuditRecord() {

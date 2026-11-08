@@ -77,7 +77,7 @@ export function DailyBudgetLimitsForm({ daily, owner, onSaved, onExpired }: {
       {!proposal ? <form className="grid gap-3 text-sm sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); review() }}>
         {previous?.limits && previous.state !== 'disabled' && <div className="space-y-1 sm:col-span-2">
           <label className="grid gap-1">일별 정책 변경<select className="min-h-11 rounded-lg border border-line px-3 py-2 focus:outline-2 focus:outline-brand-primary" value={disable ? 'disable' : 'enable'} disabled={stale || conflict} onChange={(event) => setDisable(event.target.value === 'disable')} aria-describedby={`${helpId}-policy`}>
-            <option value="enable">한도 설정·적용</option><option value="disable" disabled={!previous?.limits || previous.state === 'disabled'}>일별 제한 해제</option>
+            <option value="enable">한도 설정·적용</option><option value="disable">일별 제한 해제</option>
           </select></label>
           <p id={`${helpId}-policy`} className="sr-only">적용하려면 세 한도를 모두 입력하세요. 숫자 0은 제한 해제가 아닌 한도 0입니다. 일별 제한을 해제해도 누적 한도와 기존 사용 기록은 유지되지만, 정기 실행에 필요한 일별 예산 조건을 충족하지 못합니다. 선택 후 최종 저장해야 반영됩니다.</p>
         </div>}

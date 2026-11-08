@@ -55,11 +55,14 @@ beforeEach(() => {
   vi.spyOn(crypto, 'randomUUID').mockReturnValue(id)
   fetchMock = vi.fn(async (path: string, _options?: RequestInit) => {
     if (path === '/api/v1/ops/session') return json(session())
-    if (path.startsWith('/api/v1/ops/trace-metrics?')) return json({ from_time: '2026-10-01T00:00:00Z', to_time: '2026-10-08T00:00:00Z', scope: 'observed-root-traces', results: [] })
-    if (path.startsWith('/api/v1/admin/ai-request-metrics?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ from: query.get('from'), to: query.get('to'), scope: 'core-http-requests', features: [] }) }
+    if (path.startsWith('/api/v1/ops/trace-metrics?')) return json({ from_time: '2026-10-01T00:00:00Z', to_time: '2026-10-08T00:00:00Z', scope: 'observed-root-traces', environment: 'production', results: [] })
+    if (path.startsWith('/api/v1/ops/model-trace-metrics?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ from_time: query.get('from_time'), to_time: query.get('to_time'), scope: 'observed-model-generations', environment: query.get('environment'), results: [] }) }
+    if (path.includes('/api/v1/admin/ai-request-metrics/jobs?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ from: query.get('from'), to: query.get('to'), scope: 'stored-ai-jobs', features: [] }) }
+    if (path.includes('/api/v1/admin/ai-request-metrics/daily?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ from: query.get('from'), to: query.get('to'), scope: 'core-http-requests', days: [] }) }
+    if (path.includes('/api/v1/admin/ai-request-metrics?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ from: query.get('from'), to: query.get('to'), scope: 'core-http-requests', features: [] }) }
     if (path === '/api/v1/ops/evaluation-catalog') return json({ datasets: [dataset, comparisonDataset] })
     if (path === '/api/v1/ops/datasets') return json({ datasets: [], builtin_count: 10 })
-    if (path.includes('/api/v1/admin/ai-costs?')) return json(serviceUsage)
+    if (path.includes('/api/v1/admin/ai-costs?')) { const query = new URL(path, 'http://localhost').searchParams; return json({ ...serviceUsage, from: query.get('from'), to: query.get('to') }) }
     if (path.endsWith('/api/v1/admin/ai-costs/prices')) return json([])
     if (path === '/api/v1/ops/dashboard') return json({ as_of: '2026-10-07T00:00:00Z', configured_model: 'gpt-6-luna', window: { limit: 200, loaded: 0, total: 0, truncated: false }, states: { completed: 0, failed: 0, active: 0, cancelled: 0 }, excluded: { replay: 0, incomplete: 0, unverifiable: 0, duplicate: 0 }, series: [] })
     if (path.startsWith('/api/v1/ops/schedules?')) return json({ enabled: false, timezone: 'Asia/Seoul', page: 1, total: 0, results: [] })
@@ -448,23 +451,53 @@ describe('React LLMOps 운영 화면', () => {
     expect(fetchMock.mock.calls.some(([path]) => path.includes('/production-quality'))).toBe(false)
   })
 
-  it('실사용 메뉴에서 Core 사용량을 읽고 기간 조회·회원 상세·실행 추적을 연결한다', async () => {
+  it('실사용 첫 화면에서 핵심 수치를 확인하고 요청 상세로 이동한다', async () => {
+    open('/ops/usage')
+    const overview = await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    const requests = within(overview).getByRole('link', { name: /서버 오류 응답/ })
+    await waitFor(() => expect(requests.textContent).toContain('기록 없음'))
+    expect(within(overview).getByRole('link', { name: /수집된 모델 실행 오류/ }).getAttribute('href')).toBe('/ops/usage/models')
+    expect(within(overview).getByRole('link', { name: /완료된 작업/ }).getAttribute('href')).toBe('/ops/usage/jobs')
+    expect(within(overview).getByRole('link', { name: /앱 기록 추정 비용/ }).getAttribute('href')).toBe('/ops/usage/costs')
+    expect(screen.getByRole('region', { name: '날짜별 요청 추세' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'AI 기능 HTTP 요청 집계' })).toBeNull()
+    fireEvent.click(requests)
+    expect(await screen.findByRole('heading', { level: 1, name: '요청과 서버 오류' })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: 'AI 기능 HTTP 요청 집계' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: '전체 현황으로 돌아가기' }))
+    expect(await screen.findByRole('region', { name: '주요 모니터링 수치' })).toBeTruthy()
+  })
+
+  it('실사용 요약에서 조회 실패를 확인하고 상세에서 재시도한다', async () => {
     const original = fetchMock.getMockImplementation()!
-    fetchMock.mockImplementation((path, options) => path === '/api/v1/ops/session'
-      ? Promise.resolve(json({ ...session(), search_traces_url: 'http://localhost:13000/project/development/traces' }))
-      : original(path, options))
+    let failed = true
+    fetchMock.mockImplementation((path, options) => failed && path.includes('/api/v1/admin/ai-request-metrics?')
+      ? Promise.resolve(json({}, 503)) : original(path, options))
+    open('/ops/usage')
+    const overview = await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    const errors = within(overview).getByRole('link', { name: /서버 오류 응답/ })
+    await waitFor(() => expect(errors.textContent).toContain('조회 실패'))
+    fireEvent.click(errors)
+    const requests = await screen.findByRole('region', { name: 'AI 기능 HTTP 요청 집계' })
+    expect((await within(requests).findByRole('alert')).textContent).toContain('서버 상태')
+    failed = false
+    fireEvent.click(within(requests).getByRole('button', { name: '다시 조회' }))
+    expect(await within(requests).findByText('이 기간에 저장된 요청 기록이 없습니다.')).toBeTruthy()
+  })
+
+  it('실사용 비용 상세에서 Core 사용량, 기간 조회와 회원 상세를 확인한다', async () => {
     open('/ops/dashboard')
     fireEvent.click(await screen.findByRole('link', { name: '실사용 모니터링' }))
+    const overview = await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    const cost = within(overview).getByRole('link', { name: /앱 기록 추정 비용/ })
+    await waitFor(() => expect(cost.textContent).toContain('0.012'))
+    fireEvent.click(cost)
     const stats = await screen.findByRole('region', { name: '앱 사용량 요약' })
     expect(within(stats).getByText('7회')).toBeTruthy()
     expect(within(screen.getByRole('region', { name: '기능별' })).getByText('AI 대화 검색')).toBeTruthy()
     expect(within(screen.getByRole('region', { name: '모델별' })).getByText('gpt-6-luna')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'member@example.com' }).getAttribute('href')).toBe('/app/admin/accounts/detail?accountId=11')
-    expect(screen.getByRole('link', { name: '실사용 모니터링' }).getAttribute('aria-current')).toBe('page')
-    expect(document.title).toBe('GovBiz · 실사용 모니터링')
-    const traceLink = screen.getByRole('link', { name: '실행 목록 열기' })
-    expect(traceLink.getAttribute('href')).toBe('/ops/traces')
-    expect(traceLink.getAttribute('target')).toBeNull()
+    expect(screen.getByRole('link', { name: '실사용 모니터링', current: 'page' }).getAttribute('aria-current')).toBe('page')
     fireEvent.change(screen.getByLabelText('시작일', { selector: 'input[name="from"]' }), { target: { value: '2026-10-01' } })
     fireEvent.change(screen.getByLabelText('종료일'), { target: { value: '2026-10-13' } })
     fireEvent.click(screen.getByRole('button', { name: '조회' }))
@@ -474,25 +507,111 @@ describe('React LLMOps 운영 화면', () => {
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
-  it('실사용 주소를 바로 열면 빈 사용량과 내부 실행 추적 진입을 표시한다', async () => {
+  it('실사용 비용 상세 주소를 바로 열면 빈 사용량을 표시한다', async () => {
     const original = fetchMock.getMockImplementation()!
     fetchMock.mockImplementation((path, options) => path.includes('/api/v1/admin/ai-costs?')
       ? Promise.resolve(json({ ...serviceUsage, totals: { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, estimatedUsd: '0.000000', unpricedCalls: 0 }, byFeature: [], byModel: [], days: [], topAccounts: [] }))
       : original(path, options))
-    open('/ops/usage')
-    expect(await screen.findByRole('heading', { level: 1, name: '실사용 모니터링' })).toBeTruthy()
+    open('/ops/usage/costs')
+    expect(await screen.findByRole('heading', { level: 1, name: '사용량과 비용' })).toBeTruthy()
     expect(await screen.findByText('회원에게 붙은 AI 호출이 없어요.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: '실행 목록 열기' }).getAttribute('href')).toBe('/ops/traces')
     expect(screen.queryByRole('region', { name: '실측 결과 추이' })).toBeNull()
     expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/ops/dashboard')).toBe(false)
   })
 
-  it('실사용 조회 장애는 빈 결과로 숨기지 않고 다시 조회한다', async () => {
+  it.each([
+    ['requests', '요청과 서버 오류'], ['jobs', '작업 결과'], ['models', '모델 실행'],
+    ['traces', '추적 수집과 연결'], ['costs', '사용량과 비용'],
+  ])('모니터링 상세 %s 주소로 직접 진입하고 전체 현황으로 돌아간다', async (section, title) => {
+    open(`/ops/usage/${section}`)
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '실사용 모니터링', current: 'page' }).getAttribute('aria-current')).toBe('page')
+    fireEvent.click(screen.getByRole('link', { name: '실사용 모니터링', current: 'page' }))
+    expect(await screen.findByRole('heading', { level: 1, name: '실사용 모니터링' })).toBeTruthy()
+  })
+
+  it('전체 모니터링과 개별 실행 조사를 오가며 각 화면의 데이터만 조회한다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((path, options) => path === '/api/v1/ops/traces'
+      ? Promise.resolve(json({ results: [], next_cursor: null, from_time: '2026-10-07T00:00:00Z', to_time: '2026-10-14T00:00:00Z' }))
+      : original(path, options))
+    open('/ops/usage')
+    await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => path.includes('/model-trace-metrics'))).toBe(true))
+    expect(fetchMock.mock.calls.some(([path]) => path.startsWith('/api/v1/ops/traces'))).toBe(false)
+    fetchMock.mockClear()
+    fireEvent.click(screen.getByRole('link', { name: '개별 실행 조사' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'AI 실행 추적' })).toBeTruthy()
+    expect(await screen.findByText('이 기간에 기록된 실행이 없습니다.')).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([path]) => path === '/api/v1/ops/traces')).toBe(true)
+    expect(fetchMock.mock.calls.some(([path]) => path.includes('/ai-request-metrics') || path.includes('/model-trace-metrics') || path.includes('/ai-costs'))).toBe(false)
+    fireEvent.click(screen.getByRole('link', { name: '전체 현황 보기' }))
+    expect(await screen.findByRole('heading', { level: 1, name: '실사용 모니터링' })).toBeTruthy()
+  })
+
+  it('예시 모드는 페이지 이동과 사이드바에서 유지되고 실제 API와 가격 쓰기를 차단한다', async () => {
+    open('/ops/usage')
+    const overview = await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    await waitFor(() => expect(within(overview).getByRole('link', { name: /앱 기록 추정 비용/ }).textContent).toContain('0.012'))
+    const callsBefore = fetchMock.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: '예시 데이터로 살펴보기' }))
+    expect(await screen.findByText('예시 화면을 보고 있습니다')).toBeTruthy()
+    const exampleOverview = screen.getByRole('region', { name: '주요 모니터링 수치' })
+    fireEvent.click(within(exampleOverview).getByRole('link', { name: /수집된 모델 실행 오류/ }))
+    const modelMetrics = await screen.findByRole('region', { name: '수집된 모델 실행 현황' })
+    expect(await within(modelMetrics).findByText('공고 검색 순위')).toBeTruthy()
+    expect(within(modelMetrics).getByText(/예시 데이터 · 실제 모델 실행 기록이 아닙니다/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: '전체 현황으로 돌아가기' }).getAttribute('href')).toBe('/ops/usage?example=1')
+    fireEvent.click(screen.getByRole('link', { name: '전체 현황으로 돌아가기' }))
+    fireEvent.click(within(await screen.findByRole('region', { name: '주요 모니터링 수치' })).getByRole('link', { name: /앱 기록 추정 비용/ }))
+    expect(await screen.findByText(/예시 데이터 · 아래 사용량과 비용/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '사용량·비용 가져오기' })).toBeNull()
+    expect(screen.queryByRole('form', { name: '가격 추가' })).toBeNull()
+    const sidebar = screen.getByRole('link', { name: '실사용 모니터링', current: 'page' })
+    expect(sidebar.getAttribute('aria-current')).toBe('page')
+    expect(sidebar.getAttribute('href')).toBe('/ops/usage?example=1')
+    fireEvent.click(sidebar)
+    expect(await screen.findByText('예시 화면을 보고 있습니다')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '개별 실행 조사' })).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(callsBefore)
+    fireEvent.click(screen.getByRole('button', { name: '실제 데이터로 돌아가기' }))
+    expect(await screen.findByText('저장된 데이터로 보고 있습니다')).toBeTruthy()
+    expect(await screen.findByRole('link', { name: '개별 실행 조사' })).toBeTruthy()
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
+  })
+
+  it('예시 상세 주소로 바로 열어도 실제 모니터링 API를 호출하지 않는다', async () => {
+    open('/ops/usage/models?example=1')
+    expect(await screen.findByText('예시 화면을 보고 있습니다')).toBeTruthy()
+    expect(await screen.findByText('공고 검색 순위')).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([path]) => path.includes('/model-trace-metrics') || path.includes('/ai-costs') || path.includes('/ai-request-metrics'))).toBe(false)
+  })
+
+  it('모델 실행 조회가 실패해도 다른 주요 수치를 볼 수 있다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((path, options) => path.startsWith('/api/v1/ops/model-trace-metrics?')
+      ? Promise.resolve(json({}, 503)) : original(path, options))
+    open('/ops/usage')
+    const overview = await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    const model = within(overview).getByRole('link', { name: /수집된 모델 실행 오류/ })
+    await waitFor(() => expect(model.textContent).toContain('조회 실패'))
+    await waitFor(() => expect(within(overview).getByRole('link', { name: /앱 기록 추정 비용/ }).textContent).toContain('0.012'))
+    expect(within(overview).getByRole('link', { name: /서버 오류 응답/ })).toBeTruthy()
+    fireEvent.click(model)
+    const modelMetrics = await screen.findByRole('region', { name: '수집된 모델 실행 현황' })
+    expect((await within(modelMetrics).findByRole('alert')).textContent).toContain('서버 상태')
+  })
+
+  it('실사용 비용 조회 장애는 빈 결과로 숨기지 않고 상세에서 다시 조회한다', async () => {
     const original = fetchMock.getMockImplementation()!
     let failed = true
     fetchMock.mockImplementation((path, options) => failed && path.includes('/api/v1/admin/ai-costs?')
       ? Promise.resolve(json({}, 503)) : original(path, options))
     open('/ops/usage')
+    const overview = await screen.findByRole('region', { name: '주요 모니터링 수치' })
+    const cost = within(overview).getByRole('link', { name: /앱 기록 추정 비용/ })
+    await waitFor(() => expect(cost.textContent).toContain('조회 실패'))
+    fireEvent.click(cost)
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('AI 비용을 불러오지 못했어요.'))
     expect(screen.queryByRole('region', { name: '비용 요약' })).toBeNull()
     failed = false
@@ -512,11 +631,12 @@ describe('React LLMOps 운영 화면', () => {
       if (path.includes('/api/v1/admin/ai-costs?')) return Promise.resolve(json({ ...serviceUsage, actualConfigured: true }))
       return original(path, options)
     })
-    open('/ops/usage')
+    open('/ops/usage/costs')
     if (operation !== 'summary') {
       await screen.findByRole('region', { name: '비용 요약' })
       if (operation === 'sync') fireEvent.click(screen.getByRole('button', { name: '사용량·비용 가져오기' }))
       else {
+        fireEvent.click(screen.getByText('모델 가격표와 단가 설정'))
         const form = within(screen.getByRole('form', { name: '가격 추가' }))
         fireEvent.change(form.getByLabelText('모델'), { target: { value: 'gpt-6-luna' } })
         fireEvent.change(form.getByLabelText('입력'), { target: { value: '1' } })
@@ -533,7 +653,7 @@ describe('React LLMOps 운영 화면', () => {
     const original = fetchMock.getMockImplementation()!
     fetchMock.mockImplementation((path, options) => path.includes('/api/v1/admin/ai-costs?')
       ? Promise.resolve(json({}, 403)) : original(path, options))
-    open('/ops/usage')
+    open('/ops/usage/costs')
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('관리자 권한이 필요해요.'))
     expect(screen.queryByRole('region', { name: '비용 요약' })).toBeNull()
     expect(screen.queryByRole('region', { name: '가격표' })).toBeNull()

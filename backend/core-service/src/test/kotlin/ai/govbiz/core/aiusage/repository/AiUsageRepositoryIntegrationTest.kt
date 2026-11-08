@@ -51,6 +51,23 @@ class AiUsageRepositoryIntegrationTest {
     private val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
 
     @Test
+    fun traceCoverageGroupsRecordedCallsAndUsesUtcDateBoundaries() {
+        val day = LocalDate.of(2002, 2, 3)
+        val start = day.atStartOfDay().plusHours(9)
+        val attribution = AiUsageAttribution(null, AiUsageFeature.AI_SEARCH)
+        val trace = "1234567890abcdef1234567890abcdef"
+        repository.insertUsage(start, attribution, "coverage", AiModelUsage("test-model", "default", 2, 10, 0, 1, 0, 0), null, trace)
+        repository.insertUsage(start.plusHours(23), attribution, "coverage", AiModelUsage("test-model", "default", 3, 10, 0, 1, 0, 0), null)
+        repository.insertUsage(start.plusDays(1), attribution, "coverage", AiModelUsage("test-model", "default", 4, 10, 0, 1, 0, 0), null, trace)
+        repository.insertUsage(start, null, "coverage", AiModelUsage("test-model", "default", 1, 10, 0, 1, 0, 0), null)
+        val rows = repository.traceCoverageByFeature(day, day)
+        assertEquals(5L, rows.single { it.feature == "AI_SEARCH" }.calls)
+        assertEquals(2L, rows.single { it.feature == "AI_SEARCH" }.linkedCalls)
+        assertEquals(1L, rows.single { it.feature == null }.calls)
+        assertEquals(0L, rows.single { it.feature == null }.linkedCalls)
+    }
+
+    @Test
     fun usageRetainsTheSampledTraceIdAndAllowsMissingTrace() {
         val operation = "trace-test-${UUID.randomUUID()}"
         val traceId = "1234567890abcdef1234567890abcdef"

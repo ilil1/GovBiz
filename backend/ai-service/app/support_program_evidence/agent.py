@@ -64,12 +64,12 @@ class SupportProgramEvidenceAnswerAgent:
             ],
         }
         try:
-            async with asyncio.timeout(self._run_timeout_seconds):
-                with self._tracing.observation(
-                    "evidence.model", as_type="generation", model=self._model_name,
-                    metadata={"usage_reported": False},
-                    model_parameters={"max_tokens": 2_000, "reasoning_effort": "none", "max_retries": 0},
-                ) as generation:
+            with self._tracing.observation(
+                "evidence.model", as_type="generation", model=self._model_name,
+                metadata={"usage_reported": False},
+                model_parameters={"max_tokens": 2_000, "reasoning_effort": "none", "max_retries": 0},
+            ) as generation:
+                async with asyncio.timeout(self._run_timeout_seconds):
                     result = await invoke_support_program_model(
                         self._model, instructions=SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS, payload=payload,
                         output_type=SupportProgramEvidenceAnswerSelection, timeout_seconds=self._model_timeout_seconds,

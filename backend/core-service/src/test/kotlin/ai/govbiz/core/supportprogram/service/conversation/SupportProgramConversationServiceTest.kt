@@ -2,6 +2,9 @@ package ai.govbiz.core.supportprogram.service.conversation
 
 import ai.govbiz.core._common.exception.AiServiceCallException
 import ai.govbiz.core._common.exception.AiServiceFailure
+import ai.govbiz.core.aiusage.domain.AiUsageAttribution
+import ai.govbiz.core.aiusage.domain.AiUsageFeature
+import ai.govbiz.core.aiusage.helper.AiUsageContextHelper
 import ai.govbiz.core.supportprogram.client.ai.AiSupportProgramConversationClient
 import ai.govbiz.core.supportprogram.client.ai.dto.AiSupportProgramConversationCompanyConditionsRequest
 import ai.govbiz.core.supportprogram.client.ai.dto.AiSupportProgramConversationContextRequest
@@ -61,6 +64,24 @@ class SupportProgramConversationServiceTest {
         stub(payload)
         val error = assertThrows(AiServiceCallException::class.java) { service.interpret(message, initial, null) }
         assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
+    }
+
+    @Test
+    fun recordsDirectConversationAsSearchWhilePreservingExistingAttribution() {
+        val observed = mutableListOf<AiUsageAttribution?>()
+        Mockito.doAnswer { observed.add(AiUsageContextHelper.current()); response() }.`when`(client).interpret(anyRequest())
+
+        service.interpret("부산으로 변경", context, null)
+        assertEquals(AiUsageAttribution(null, AiUsageFeature.AI_SEARCH), observed.last())
+        assertNull(AiUsageContextHelper.current())
+
+        val parent = AiUsageAttribution(42L, AiUsageFeature.GOV_AGENT)
+        AiUsageContextHelper.within(parent) {
+            service.interpret("부산으로 변경", context, null)
+            assertEquals(parent, observed.last())
+            assertEquals(parent, AiUsageContextHelper.current())
+        }
+        assertNull(AiUsageContextHelper.current())
     }
 
     @Test

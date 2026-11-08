@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/v1/ops/datasets/<uuid:dataset_id>/archive", dataset_views.api_dataset_archive),
     path("api/v1/ops/traces", trace_views.api_traces),
     path("api/v1/ops/trace-metrics", trace_views.api_trace_metrics),
+    path("api/v1/ops/model-trace-metrics", trace_views.api_model_trace_metrics),
     path("api/v1/ops/traces/<str:trace_id>", trace_views.api_trace_detail),
     path("internal/llmops/production-samples", production_views.api_ingest),
     path("api/v1/ops/production-quality", production_views.api_samples),

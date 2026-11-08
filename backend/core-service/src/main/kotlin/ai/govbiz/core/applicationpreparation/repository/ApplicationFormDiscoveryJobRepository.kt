@@ -1,5 +1,6 @@
 package ai.govbiz.core.applicationpreparation.repository
 
+import ai.govbiz.core._common.domain.JobStatusSummary
 import ai.govbiz.core.applicationpreparation.domain.ApplicationFormDiscoveryJob
 import ai.govbiz.core.applicationpreparation.domain.ApplicationFormDiscoveryJobStatus
 import ai.govbiz.core.applicationpreparation.domain.ApplicationFormDiscoveryResult
@@ -25,6 +26,8 @@ class ApplicationFormDiscoveryJobRepository(
     /** 결과 불명(UNKNOWN) 작업이 계정 한도를 잡아 두는 최대 시간. RUNNING 20분 만료보다 길어야 늦은 완료가 먼저 판정된다. */
     @param:Value("\${app.application-form-discovery.unknown-ttl:PT30M}") private val unknownTtl: Duration,
 ) {
+    fun summarize(from: LocalDateTime, until: LocalDateTime): List<JobStatusSummary> =
+        mapper.summarize(from, until).map { JobStatusSummary(it.status, it.count, it.durationSamples, it.durationMillis) }
     init {
         require(unknownTtl >= Duration.ofMinutes(20)) { "app.application-form-discovery.unknown-ttl must be at least PT20M" }
     }

@@ -6,6 +6,7 @@ import ai.govbiz.core.aiusage.domain.AiCostComparisonDay
 import ai.govbiz.core.aiusage.domain.AiModelUsage
 import ai.govbiz.core.aiusage.domain.AiUsageAccount
 import ai.govbiz.core.aiusage.domain.AiUsageAttribution
+import ai.govbiz.core.aiusage.domain.AiTraceCoverage
 import ai.govbiz.core.aiusage.domain.AiUsageGroup
 import ai.govbiz.core.aiusage.domain.AiUsageTotals
 import ai.govbiz.core.aiusage.domain.NewAiModelPrice
@@ -82,6 +83,9 @@ class AiUsageRepository(private val mapper: AiUsageMapper) {
     fun sumTotals(from: LocalDate, to: LocalDate, accountId: Long? = null, utc: Boolean = false): AiUsageTotals = mapper.sumTotals(from, to, accountId, utc).toTotals()
 
     fun sumByTraceId(traceId: String): AiUsageTotals = mapper.sumByTraceId(traceId).toTotals()
+
+    fun traceCoverageByFeature(from: LocalDate, to: LocalDate): List<AiTraceCoverage> =
+        mapper.traceCoverageByFeature(from, to).map { AiTraceCoverage(it.feature, it.calls, it.linkedCalls) }
 
     fun sumByFeature(from: LocalDate, to: LocalDate): List<AiUsageGroup> =
         mapper.sumByFeature(from, to).map { AiUsageGroup(it.groupKey, null, it.toTotals()) }

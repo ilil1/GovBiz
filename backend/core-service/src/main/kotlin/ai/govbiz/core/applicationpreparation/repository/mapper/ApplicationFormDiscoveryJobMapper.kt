@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper
 
 @Mapper
 interface ApplicationFormDiscoveryJobMapper {
+    fun summarize(from: LocalDateTime, until: LocalDateTime): List<ApplicationJobSummaryDbRow>
     fun lockActiveAccount(ownerId: Long): Long?
     fun findRequest(ownerId: Long, requestKey: String): ApplicationFormDiscoveryJobDbRow?
     fun findActive(sourceCode: String, sourceProgramId: String): ApplicationFormDiscoveryJobDbRow?

@@ -12,7 +12,7 @@ from .trace_views import api_trace_metrics
 NOW = datetime(2026, 10, 14, 2, tzinfo=UTC)
 
 
-def row(name, identifier, *, level="DEFAULT", latency=1.0, ended=True):
+def row(name, identifier, *, level="DEFAULT", latency=1.0, ended=True, environment=None):
     return {
         "id": identifier,
         "traceId": "a" * 32,
@@ -23,6 +23,7 @@ def row(name, identifier, *, level="DEFAULT", latency=1.0, ended=True):
         "isRootObservation": True,
         "level": level,
         "latency": latency,
+        "environment": environment,
     }
 
 
@@ -77,6 +78,49 @@ class TraceMetricsTests(SimpleTestCase):
         read_page.return_value = ([row("assistant.total", "1")], None)
         with self.assertRaises(LangfuseUnavailable):
             read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
+
+    @patch("apps.evaluations.trace_metrics.read_page")
+    def test_environment_filters_without_guessing_missing_values(self, read_page):
+        rows = [
+            row("search.total", "1", environment="production"),
+            row("search.total", "2", environment="development"),
+            row("search.total", "3", environment=None),
+            row("search.total", "4", environment="staging"),
+        ]
+        for env, expected in (
+            ("all", 4),
+            ("production", 1),
+            ("development", 1),
+            ("unknown", 1),
+            ("other", 1),
+        ):
+            with self.subTest(environment=env):
+                read_page.side_effect = [(rows, None), ([], None), ([], None)]
+                result = read_metrics(
+                    from_time=NOW - timedelta(days=1), to_time=NOW, environment=env
+                )
+                self.assertEqual(result[0]["observed"], expected)
+
+    @patch("apps.evaluations.trace_metrics.read_page")
+    def test_excluded_environment_does_not_hide_incomplete_or_duplicate_pages(self, read_page):
+        dev = row("search.total", "1", environment="development")
+        read_page.side_effect = [([dev], "cursor1"), ([dev], None)]
+        with self.assertRaises(LangfuseUnavailable):
+            read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW, environment="production")
+
+    def test_environment_query_rejects_unsupported_values(self):
+        request = APIRequestFactory().get("/api/v1/ops/trace-metrics?environment=invalid")
+        force_authenticate(request, user=SimpleNamespace(is_authenticated=True))
+        self.assertEqual(api_trace_metrics(request).status_code, 400)
+
+    @patch("apps.evaluations.trace_views.read_metrics", return_value=[])
+    def test_environment_query_is_forwarded_and_echoed(self, read):
+        request = APIRequestFactory().get("/api/v1/ops/trace-metrics?environment=production")
+        force_authenticate(request, user=SimpleNamespace(is_authenticated=True))
+        response = api_trace_metrics(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["environment"], "production")
+        self.assertEqual(read.call_args.kwargs["environment"], "production")
 
     @patch("apps.evaluations.trace_views.read_metrics", side_effect=LangfuseUnavailable)
     def test_upstream_failure_is_503_without_partial_values(self, _read):

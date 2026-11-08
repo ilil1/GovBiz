@@ -2,6 +2,9 @@ package ai.govbiz.core.supportprogram.service.conversation
 
 import ai.govbiz.core._common.domain.RegionDictionary
 import ai.govbiz.core._common.exception.AiServiceCallException
+import ai.govbiz.core.aiusage.domain.AiUsageAttribution
+import ai.govbiz.core.aiusage.domain.AiUsageFeature
+import ai.govbiz.core.aiusage.helper.AiUsageContextHelper
 import ai.govbiz.core.supportprogram.client.ai.AiSupportProgramConversationClient
 import ai.govbiz.core.supportprogram.client.ai.dto.AiSupportProgramConversationCompanyConditionsRequest
 import ai.govbiz.core.supportprogram.client.ai.dto.AiSupportProgramConversationContextRequest
@@ -37,17 +40,21 @@ class SupportProgramConversationService(
     ): SupportProgramConversationResult {
         require(pendingClarification == null || pendingProposal == null) { "only one pending conversation state is allowed" }
         val referenceDate = LocalDate.now(clock)
-        val payload = client.interpret(
-            AiSupportProgramConversationRequest(
-                SCHEMA_VERSION,
-                referenceDate.toString(),
-                message,
-                context.toRequest(),
-                pendingClarification?.let { AiSupportProgramPendingClarificationRequest(it.question, it.draftContext.toRequest()) },
-                pendingProposal?.toRequest(),
-                lastSearch?.let { AiSupportProgramConversationLastSearchRequest(it.context.toRequest(), it.resultCount) },
-            ),
-        )
+        // 직접 호출은 검색 대화로 귀속하되, Gov 에이전트 등 상위 흐름이 이미 지정한 귀속은 유지합니다.
+        val attribution = AiUsageContextHelper.current() ?: AiUsageAttribution(null, AiUsageFeature.AI_SEARCH)
+        val payload = AiUsageContextHelper.within(attribution) {
+            client.interpret(
+                AiSupportProgramConversationRequest(
+                    SCHEMA_VERSION,
+                    referenceDate.toString(),
+                    message,
+                    context.toRequest(),
+                    pendingClarification?.let { AiSupportProgramPendingClarificationRequest(it.question, it.draftContext.toRequest()) },
+                    pendingProposal?.toRequest(),
+                    lastSearch?.let { AiSupportProgramConversationLastSearchRequest(it.context.toRequest(), it.resultCount) },
+                ),
+            )
+        }
         if (payload.schemaVersion != SCHEMA_VERSION) invalidResponse()
         val status = SupportProgramConversationStatus.entries.firstOrNull { it.name == payload.status } ?: invalidResponse()
         val updates = payload.updates?.takeIf { it.size <= 7 } ?: invalidResponse()

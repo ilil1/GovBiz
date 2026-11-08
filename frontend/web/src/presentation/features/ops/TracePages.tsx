@@ -105,7 +105,16 @@ export function TraceListPage({ onExpired }: { onExpired: () => void }) {
   return <>
     <WorkspacePageHeader title="AI 실행 추적" actions={<button className={styles.secondaryButton} onClick={() => setReload((value) => value + 1)}>다시 조회</button>} />
     <div className={styles.content}>
-      <p className="text-sm text-ink-muted">공고 검색·도우미·근거 답변의 실행 단계와 입력·출력·오류를 확인합니다. GovBiz 관리자 로그인으로 조회하며 새 AI 호출은 발생하지 않습니다. 선택 업무의 서비스별 시작 단계를 최신순으로 조회하며 같은 추적이 여러 행에 나타날 수 있습니다.</p>
+      <section aria-label="실행 추적 안내" className="rounded-xl border border-line bg-white px-5 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="max-w-3xl">
+            <h2 className="m-0 text-base font-bold text-ink">문제가 발생한 실행을 찾아보세요</h2>
+            <p className="mt-1 mb-0 text-sm leading-6 text-ink-muted">수집된 개별 실행을 선택하면 모델 호출과 처리 단계, 기록된 오류를 확인할 수 있습니다. 새 AI 호출은 발생하지 않습니다.</p>
+          </div>
+          <Link to="/ops/usage" className={styles.secondaryButton}>전체 현황 보기</Link>
+        </div>
+        <p className="mt-3 mb-0 text-xs leading-5 text-ink-muted">전체 요청·비용과 기능별 추세는 실사용 모니터링에서 확인하세요. 이 목록은 수집된 실행만 보여줍니다. 선택 업무의 서비스별 시작 단계를 최신순으로 조회하며 같은 추적이 여러 행에 나타날 수 있습니다.</p>
+      </section>
       <form className={`${styles.card} sm:flex-row sm:items-end`} aria-label="실행 추적 필터" onSubmit={(event) => {
         event.preventDefault()
         const end = new Date()
@@ -186,6 +195,7 @@ export function TraceDetailPage({ onExpired }: { onExpired: () => void }) {
     <div className={styles.content}>
       <Link to={back} className={styles.quietLink}>← 조회하던 실행 목록으로</Link>
       <p className="text-xs break-all text-ink-muted">추적 ID: {traceId}</p>
+      <p className="m-0 text-sm leading-6 text-ink-muted">이 실행에 연결된 앱 사용량과 아래 처리 단계의 오류를 함께 확인하세요. 전체 사용량·비용은 실사용 모니터링에서 볼 수 있습니다.</p>
       <TraceUsagePanel key={traceId} traceId={traceId} />
       {error ? <ErrorNotice error={error} onRetry={() => setReload((value) => value + 1)} /> : !data ? <p role="status">실행 단계를 불러오고 있습니다.</p> : <>
         <p className="text-sm text-ink-muted">이 페이지 {data.observations.length}개 단계입니다. 모델 호출 단계(GENERATION·EMBEDDING)는 펼쳐 표시하며 모델·기록된 비용·토큰 사용량을 확인할 수 있습니다. 단계별 비용은 중첩될 수 있으므로 합산하지 않습니다.</p>

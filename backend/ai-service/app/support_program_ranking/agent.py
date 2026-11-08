@@ -244,13 +244,13 @@ class SupportProgramRecommendationAgent:
             ]
         prepared = perf_counter()
         try:
-            async with asyncio.timeout(self._run_timeout_seconds):
-                with self._tracing.observation(
-                    "search.ranking.model", as_type="generation", model=self._model_name,
-                    model_parameters={"max_tokens": 10_000, "reasoning_effort": self._reasoning_effort,
-                                      "service_tier": self._service_tier, "max_retries": 0},
-                    metadata={"prompt_sha256": sha256(instructions.encode()).hexdigest(), "usage_reported": False},
-                ) as generation:
+            with self._tracing.observation(
+                "search.ranking.model", as_type="generation", model=self._model_name,
+                model_parameters={"max_tokens": 10_000, "reasoning_effort": self._reasoning_effort,
+                                  "service_tier": self._service_tier, "max_retries": 0},
+                metadata={"prompt_sha256": sha256(instructions.encode()).hexdigest(), "usage_reported": False},
+            ) as generation:
+                async with asyncio.timeout(self._run_timeout_seconds):
                     result = await invoke_support_program_model(
                         self._model, instructions=instructions, payload=payload,
                         output_type=output_type, timeout_seconds=self._model_timeout_seconds,

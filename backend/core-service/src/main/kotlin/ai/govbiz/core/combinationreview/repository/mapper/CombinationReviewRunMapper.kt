@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param
 
 @Mapper
 interface CombinationReviewRunMapper {
+    fun summarize(@Param("from") from: LocalDateTime, @Param("until") until: LocalDateTime): List<ReviewJobSummaryDbRow>
     fun lockActiveAccount(@Param("ownerId") ownerId: Long): Long?
     fun countAccountPending(@Param("ownerId") ownerId: Long): Int
     fun findById(@Param("runId") runId: Long): CombinationReviewRunDbRow?

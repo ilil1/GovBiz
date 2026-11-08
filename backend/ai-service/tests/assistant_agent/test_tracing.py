@@ -295,6 +295,7 @@ async def test_failed_requests_keep_usage_and_sanitized_outcomes(
     generations = model_calls(spans)
     assert len(generations) == 2
     (failed,) = [span for span in generations if span.attributes.get("langfuse.observation.level") == "ERROR"]
+    assert failed.attributes["langfuse.observation.status_message"] == ("failed" if failure == "error" else failure)
     assert attribute(failed, "usage_reported") is False
     assert json.loads(failed.attributes.get("langfuse.observation.usage_details", "{}")) == {}
     assert_private(spans, request_data)

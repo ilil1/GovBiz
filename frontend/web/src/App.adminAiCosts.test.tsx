@@ -96,7 +96,18 @@ describe('관리자 AI 비용', () => {
       byModel: [{ key: 'demo-local-gpt-6-luna', serviceTier: 'default', totals }],
     }))
     renderApp()
-    expect(await screen.findByText('로컬 테스트용 가상 데이터가 기존 앱 기록과 합산됩니다. 가상 데이터는 실제 사용량이나 청구 금액이 아닙니다.')).toBeTruthy()
+    expect(await screen.findByText(/로컬 테스트용 가상 데이터가 앱 기록에 포함되어 있습니다/)).toBeTruthy()
+  })
+
+  it('비용 동기화 설정이 없어도 이전에 수집된 비용은 계속 보여준다', async () => {
+    vi.spyOn(appContainer.resolve('getAdminAiCostSummaryUseCase'), 'execute').mockResolvedValue(summaryOf({
+      actualConfigured: false, comparison: comparisonOf(),
+    }))
+    renderApp()
+    const stats = await screen.findByRole('region', { name: '비용 요약' })
+    expect(within(stats).getByText('$0.020000')).toBeTruthy()
+    expect(screen.getByText(/이전에 가져온 기록이 있다면 아래에서 확인할 수 있습니다/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: '사용량·비용 가져오기' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('이번 달 추정 비용을 기능·모델·날짜·회원별로 보이고, 관리자 키가 없으면 실제 비용 대신 까닭을 보인다', async () => {

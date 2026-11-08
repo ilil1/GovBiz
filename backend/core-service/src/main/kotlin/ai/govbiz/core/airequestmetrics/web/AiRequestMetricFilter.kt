@@ -1,6 +1,6 @@
 package ai.govbiz.core.airequestmetrics.web
 
-import ai.govbiz.core.airequestmetrics.service.AiRequestMetricService
+import ai.govbiz.core.airequestmetrics.service.AiRequestMetricWriter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -13,7 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter
 
 /** 요청 본문·계정·경로 식별자를 저장하지 않고 허용된 공개 HTTP 요청만 센다. */
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
-class AiRequestMetricFilter(private val service: AiRequestMetricService) : OncePerRequestFilter() {
+class AiRequestMetricFilter(private val writer: AiRequestMetricWriter) : OncePerRequestFilter() {
     override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, chain: FilterChain) {
         val feature = featureOf(request.method, request.requestURI.removePrefix(request.contextPath))
         if (feature == null) {
@@ -31,10 +31,10 @@ class AiRequestMetricFilter(private val service: AiRequestMetricService) : OnceP
         } finally {
             val elapsed = (System.nanoTime() - started).coerceAtLeast(0) / 1_000_000
             try {
-                service.record(date, feature, if (thrown) 500 else response.status, elapsed)
+                writer.submit(date, feature, if (thrown) 500 else response.status, elapsed)
             } catch (error: Exception) {
-                // 저장 장애가 사용자 업무 결과를 바꾸지 않으며 경로·본문·예외 원문을 남기지 않는다.
-                log.warn("ai_request_metric_record_failed feature={} error={}", feature, error.javaClass.simpleName)
+                // 제출 장애도 업무 응답을 바꾸지 않으며 본문·예외 원문을 남기지 않는다.
+                log.warn("ai_request_metric_submit_failed feature={} error={}", feature, error.javaClass.simpleName)
             }
         }
     }

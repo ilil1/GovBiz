@@ -1,5 +1,6 @@
 """요청 안의 채팅 모델 호출·관측 토큰만 보존한다. 본문·예외·자격증명은 저장하지 않는다."""
 
+import asyncio
 from uuid import UUID
 
 from langchain_core.callbacks import AsyncCallbackHandler
@@ -13,9 +14,10 @@ class AssistantModelUsage(AsyncCallbackHandler):
     # 요청마다 한 개를 만들며, 병렬 map도 같은 이벤트 루프에서 대기 없이 집계한다.
     run_inline = True
 
-    def __init__(self, tracing: LLMTracing | None = None) -> None:
+    def __init__(self, tracing: LLMTracing | None = None, deadline: asyncio.Timeout | None = None) -> None:
         self._calls: dict[UUID, tuple[int | None, int | None]] = {}
         self._tracing = tracing
+        self._deadline = deadline
         self._generations: dict[UUID, object] = {}
 
     async def on_chat_model_start(self, serialized, messages, *, run_id: UUID, **kwargs) -> None:
@@ -60,7 +62,10 @@ class AssistantModelUsage(AsyncCallbackHandler):
         except (AttributeError, TypeError, ValueError):
             pass
         finally:
-            self._finish_generation(run_id, error_code(error))
+            # asyncio.timeout cancels the running model task before it raises TimeoutError
+            # at the enclosing boundary. Distinguish that deadline from external cancellation.
+            timed_out = isinstance(error, asyncio.CancelledError) and self._deadline is not None and self._deadline.expired()
+            self._finish_generation(run_id, "timeout" if timed_out else error_code(error))
 
     def _finish_generation(self, run_id: UUID, outcome: str) -> None:
         if self._tracing is None:

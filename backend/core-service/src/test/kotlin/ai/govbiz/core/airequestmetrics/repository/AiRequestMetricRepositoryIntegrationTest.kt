@@ -42,4 +42,18 @@ class AiRequestMetricRepositoryIntegrationTest {
         assertEquals(1L, result.accepted)
         assertEquals(null, result.p95UpperMs)
     }
+
+    @Test
+    fun dailyQuerySeparatesDatesFeaturesAndOutcomeBuckets() {
+        val day = LocalDate.of(2001, 2, 1)
+        service.record(day, "DAILY_TEST", 202, 180)
+        service.record(day, "DAILY_TEST", 502, 130_000)
+        service.record(day.plusDays(2), "DAILY_TEST", 400, 90)
+        val result = service.daily(day, day.plusDays(2))
+        assertEquals(listOf(day, day.plusDays(2)), result.keys.toList())
+        assertEquals(1L, result.getValue(day).single().accepted)
+        assertEquals(1L, result.getValue(day).single().serverErrors)
+        assertEquals(null, result.getValue(day).single().p95UpperMs)
+        assertEquals(1L, result.getValue(day.plusDays(2)).single().clientErrors)
+    }
 }

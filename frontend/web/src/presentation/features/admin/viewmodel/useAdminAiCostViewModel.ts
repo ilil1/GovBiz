@@ -272,6 +272,7 @@ export function useAdminAiCostViewModel(useCases: Partial<UseCases> = {}, now: (
     comparisonPeriod: comparison === null ? null : `${comparison.from} ~ ${comparison.to} · UTC`,
     currentDayNote: comparison?.includesCurrentDay ? adminAiCostMessages.currentDay : null,
     applicationTitle: comparison === null ? '앱에서 기록한 사용량 · 서버 집계 기준' : '앱에서 기록한 사용량 · UTC',
+    applicationPeriod: summary === null ? null : `${summary.from} ~ ${summary.to}`,
     form: {
       values: form,
       updateFrom: (value: string) => { setForm((current) => ({ ...current, from: value })); setFormError(null) },

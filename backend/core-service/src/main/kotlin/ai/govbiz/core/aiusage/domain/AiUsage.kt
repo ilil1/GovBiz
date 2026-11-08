@@ -148,6 +148,9 @@ data class AiUsageTotals(
 /** 기능 또는 (모델, 처리 등급)별 합계입니다. 기능이 없는 행은 [key]가 null입니다. */
 data class AiUsageGroup(val key: String?, val serviceTier: String?, val totals: AiUsageTotals)
 
+/** 앱에 기록된 호출 중 추적 ID가 저장된 호출입니다. 추적 서버의 수신 성공은 의미하지 않습니다. */
+data class AiTraceCoverage(val feature: String?, val calls: Long, val linkedCalls: Long)
+
 /** UTC 날짜별 앱 기록입니다. 실제 비용 비교는 [AiCostComparison]을 사용합니다. */
 data class AiCostDay(val date: LocalDate, val estimatedUsd: BigDecimal, val calls: Long, val actualUsd: BigDecimal?)
 

@@ -55,4 +55,18 @@ class AiRequestMetricsControllerTest {
         org.mockito.Mockito.doThrow(IllegalArgumentException("invalid")).`when`(service).summary(day, day)
         mvc.perform(get(path).cookie(Cookie(SessionCookieHelper.COOKIE_NAME, "admin-session"))).andExpect(status().isBadRequest())
     }
+
+    @Test
+    fun dailyRequiresAdminAndReturnsUtcDatesWithoutFillingMissingDays() {
+        doReturn(AccountTestHelper.account(id = 1, email = "admin@govbiz.local", role = AccountRole.ADMIN))
+            .`when`(sessions).requireAccount("admin-session")
+        doReturn(mapOf(day to listOf(AiRequestMetricResult("ASSISTANT", 2, 1, 1, 0, 0, 0, 2, 250, 1000))))
+            .`when`(service).daily(day, day)
+        mvc.perform(get("/api/v1/admin/ai-request-metrics/daily?from=2026-11-08&to=2026-11-08")
+            .cookie(Cookie(SessionCookieHelper.COOKIE_NAME, "admin-session")))
+            .andExpect(status().isOk()).andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+            .andExpect(jsonPath("$.scope").value("core-http-requests"))
+            .andExpect(jsonPath("$.days[0].date").value("2026-11-08"))
+            .andExpect(jsonPath("$.days[0].features[0].accepted").value(1))
+    }
 }

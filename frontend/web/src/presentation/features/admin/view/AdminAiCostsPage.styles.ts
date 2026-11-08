@@ -20,6 +20,12 @@ export const adminAiCostsPageStyles = {
   formActions: 'flex min-h-11 items-center gap-3',
   formError: 'm-0 text-[0.78rem] leading-[1.6] text-danger',
   statNote: 'text-[0.7rem] leading-[1.5] text-ink-muted',
+  monitorStats: 'grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2',
+  monitorComparisonStats: 'grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 xl:grid-cols-4',
+  monitorStat: 'flex min-w-0 flex-col gap-1 bg-surface px-4 py-4',
+  monitorStatLabel: 'text-sm font-semibold leading-5 text-ink-muted',
+  monitorStatValue: 'break-words text-2xl font-bold leading-tight tracking-tight tabular-nums text-ink',
+  monitorStatNote: 'break-words text-xs leading-5 text-ink-muted',
   numberCell: 'whitespace-nowrap text-right tabular-nums',
   detailCell: 'min-w-[10rem] break-keep text-right tabular-nums',
   // 기능명과 숫자를 함께 읽을 수 있는 폭이 있을 때만 두 표를 나란히 배치합니다.

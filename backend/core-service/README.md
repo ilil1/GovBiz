@@ -240,7 +240,7 @@ transaction에서 `WithdrawalMarkService.inherit → PlanUsageService.inherit`�
 
 ### 공개 AI 요청의 HTTP 집계
 
-`AiRequestMetricFilter → AiRequestMetricService → AiRequestMetricRepository → MyBatis → MySQL(V67)`은
+`AiRequestMetricFilter → AiRequestMetricWriter → AiRequestMetricService → AiRequestMetricRepository → MyBatis → MySQL(V67)`은
 검색(`GET/POST /support-programs/search`), 공고 근거 답변·검색 대화·도우미·Gov 에이전트,
 신청서 양식 탐색·문항 해석/초안·문서 작업 접수, 중복 지원 검토 실행의 공개 HTTP 요청을 기록합니다.
 `/search/results`는 저장된 결과만 복원하여 AI를 호출하지 않으므로 제외합니다.
@@ -250,13 +250,27 @@ UTC 시작 날짜·고정 기능명·HTTP 결과 종류·지연 구간별 건수
 `GET /api/v1/admin/ai-request-metrics?from=YYYY-MM-DD&to=YYYY-MM-DD`는 관리자에게 UTC 최대 31일의
 기능별 집계·지연 중앙값과 p95의 **구간 상한 근사값**을 반환합니다. 지연은 100·250·500·1000·2500·5000·10000·30000·60000·120000ms와
 120초 초과로 묶으며 초과 구간의 백분위 상한은 null입니다. 202는 접수로 별도 계수하며 비동기 작업의 최종 성공이 아닙니다.
+`GET /api/v1/admin/ai-request-metrics/daily`는 같은 UTC 기간과 기능별 집계를 날짜별로 구분합니다.
+집계 기록이 없는 날짜는 응답에서 생략하며 수집 누락과 실제 요청 없음을 구분할 수 없어 0건이라고 판단하지 않습니다.
 4xx는 인증·요청 검증·한도 등 클라이언트 응답을 포함하고, 5xx는 HTTP 서버 오류입니다. 성공 응답이 모델 품질을 보장하지 않습니다.
 비동기 작업을 다시 접수해 기존 작업을 반환할 때는 HTTP 200일 수 있어 성공 응답도 최종 작업 성공으로 해석하지 않습니다.
 
 필터가 관측한 HTTP 요청에 한정되며 평가 호출도 해당 경로에 들어오면 포함됩니다. 진입 전 네트워크 장애,
-강제 종료, DB 저장 실패는 누락될 수 있어 전체 요청의 완전한 전수 통계는 아닙니다. 각 요청 종료 후 집계 DB에
-동기 UPSERT를 한 번 실행합니다. 응답 시간은 이 기록 작업을 제외하므로 사용자가 실제로 기다린 시간보다 짧을 수 있고,
-DB 지연·장애 시 기록 작업 때문에 응답이 늦어질 수 있습니다. 저장 실패는 본문 없이 경고를 기록하며 사용자 업무 결과는 바꾸지 않습니다.
+강제 종료, 큐 포화, DB 저장 실패는 누락될 수 있어 전체 요청의 완전한 전수 통계는 아닙니다. 요청 종료 시 프로세스별
+최대 1024건의 큐에 비차단으로 넣고 전용 작업자 한 개가 DB에 UPSERT합니다. 조회는 쓰기 완료 전까지 지연될 수 있습니다.
+큐 포화·종료 후 제출은 버리고 프로세스 시작 후 거절 횟수를 1·2·4·8…번째마다 로그로 남깁니다.
+DB 저장 실패 횟수도 같은 방식으로 제한해 본문 없이 로그로 기록합니다.
+정상 종료는 최대 2초 배출을 기다린 뒤 큐를 중단하며 강제 종료·진행 중인 쓰기의 유실은 정확히 계산할 수 없습니다.
+로그의 거절·저장 실패 횟수는 인스턴스별이며 재시작 시 초기화됩니다. 이 큐는 내구 저장소가 아니며 DB 연결 풀은 업무와 공유합니다.
+
+### 비동기 AI 작업 결과 집계
+
+`GET /api/v1/admin/ai-request-metrics/jobs?from=YYYY-MM-DD&to=YYYY-MM-DD`는 관리자에게 신청 양식 탐색·문서 생성·중복 검토의
+저장된 고유 작업 행을 접수 시각 기준 UTC 최대 31일 동안 조회합니다. `AiJobMetricsController → AiJobMetricsService → 각 기능 Repository → MyBatis → MySQL`로
+각 행의 현재 대기·실행·성공·실패·중단·결과 불명 건수와, 종료 시각이 유효한 작업의 접수부터 종료까지 평균 시간·표본 수를 반환합니다.
+빈 기능도 0건으로 표시하며 표본이 없으면 평균은 null입니다. DB 저장 시각은 서울 기준이므로 UTC 범위를 변환해 조회합니다.
+같은 작업을 재접수해도 하나의 작업 행으로 셉니다. 작업 행이 계정·준비 건 삭제 등으로 삭제되거나 최초 접수 전에 실패하면
+집계에서 빠지므로 전체 요청 이력이나 HTTP 응답 통계와 분모가 다릅니다. 합계에는 작업의 현재 상태가 반영되며 특정 시점의 과거 상태 이력이 아닙니다.
 
 ### 앱 사용량과 조직 비용
 
@@ -297,8 +311,11 @@ DB 지연·장애 시 기록 작업 때문에 응답이 늦어질 수 있습니�
 |---|---|
 | `GET /api/v1/admin/ai-costs?from&to` | UTC 날짜 기간(최대 92일), 앱 기록 `totals`·기능·모델·회원별 합계와 조직 비교 `comparison`. 회원 이메일 접근은 `AI_COST_VIEW` 감사 기록. no-store |
 | `GET /api/v1/admin/ai-costs/traces/{traceId}` | 해당 trace에 연결된 앱 사용량·추정 비용 합계. 관리자 인증·`AI_COST_VIEW` 감사·no-store; 연결된 기록이 없으면 호출 수 0 |
+| `GET /api/v1/admin/ai-costs/trace-coverage?from&to` | UTC 최대 92일의 앱 기록을 기능별로 나누어 전체 기록 호출 수와 추적 ID가 저장된 호출 수를 조회. 관리자 인증·`AI_COST_VIEW` 감사·no-store |
 | `GET /api/v1/admin/ai-costs/prices`, `POST .../prices` | 가격표 조회·시작일별 추가. 캐시 쓰기 `cacheWriteInputUsdPerMillion`과 `cacheWrite12hInputUsdPerMillion`은 nullable |
 | `POST /api/v1/admin/ai-costs/sync` | 같은 UTC 범위의 사용량·비용을 함께 가져옴. 관리자 키 없음 503, 권한 거절·잘못된 응답·조회 장애 502 |
+
+추적 ID가 저장된 호출 수는 Langfuse가 실제로 수신한 호출 수가 아닙니다. 앱 장부에 기록되지 않은 호출도 분모에 포함되지 않으며, 추적이 비활성인 호출과 과거 기록에는 ID가 없을 수 있습니다.
 
 공식 계약: [캐시 토큰·단가](https://developers.openai.com/api/docs/guides/prompt-caching),
 [조직 사용량](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/completions).

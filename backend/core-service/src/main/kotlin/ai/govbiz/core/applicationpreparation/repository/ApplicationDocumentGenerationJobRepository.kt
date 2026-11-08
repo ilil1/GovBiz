@@ -1,5 +1,6 @@
 package ai.govbiz.core.applicationpreparation.repository
 
+import ai.govbiz.core._common.domain.JobStatusSummary
 import ai.govbiz.core.applicationpreparation.domain.ApplicationDocumentGenerationJob
 import ai.govbiz.core.applicationpreparation.domain.ApplicationDocumentGenerationJobStatus
 import ai.govbiz.core.applicationpreparation.domain.ApplicationDocumentGenerationStage
@@ -23,6 +24,8 @@ class ApplicationDocumentGenerationJobRepository(
     private val json: ObjectMapper,
     @param:Qualifier("seoulClock") private val clock: Clock,
 ) {
+    fun summarize(from: LocalDateTime, until: LocalDateTime): List<JobStatusSummary> =
+        mapper.summarize(from, until).map { JobStatusSummary(it.status, it.count, it.durationSamples, it.durationMillis) }
     /** 같은 requestKey는 기존 작업을 돌려주고, 준비 건에 진행 중인 작업이 있으면 409, 계정당 3개를 넘으면 [capacity]가 true다. */
     class Reservation(val job: ApplicationDocumentGenerationJob?, val capacityExceeded: Boolean)
 

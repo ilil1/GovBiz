@@ -563,11 +563,17 @@ V59 `account_plan.ends_at`이 지나면 FREE 기준으로 돌아갑니다. 사�
 AI 비용은 `ai-service OpenAI 응답 → 사용량 헤더(X-GovBiz-OpenAI-Usage) → Core AiUsageRecordingInterceptor → AiUsageService(REQUIRES_NEW)
 → AiUsageRepository → MyBatis → MySQL(V63)` 순서로 요청마다 남고, 계정·기능은 AI를 부른 기능이 `AiUsageContextHelper`로 표시합니다.
 내부 AI 요청에 유효한 sampled `traceparent`가 있으면 사용량 행에도 trace ID를 저장합니다(V66).
+관리자 추적 연결 현황은 저장된 앱 기록 중 추적 ID가 있는 호출을 기능별로 집계하며, Langfuse 수신 여부나 전체 사용자 요청 수를 의미하지 않습니다.
 추적 비활성·미전파·전송 실패 및 사용량 헤더 누락은 연결이 완전하지 않을 수 있습니다.
-공개 AI HTTP 요청은 별도로 `AiRequestMetricFilter → AiRequestMetricService → AiRequestMetricRepository → MyBatis → MySQL(V67)`로
+공개 AI HTTP 요청은 별도로 `AiRequestMetricFilter → AiRequestMetricWriter → AiRequestMetricService → AiRequestMetricRepository → MyBatis → MySQL(V67)`로
 고정 기능·UTC 날짜·상태 종류·지연 구간별 집계합니다. 202는 최종 완료가 아닌 접수이며 필터 밖 실패·DB 기록 실패는 누락됩니다.
-응답 시간은 동기 집계 저장 전까지이며 저장 작업 자체가 DB 지연에 따라 사용자 응답을 늦출 수 있습니다.
+관리자 일별 조회는 기록된 날짜만 반환하며 기록이 없는 날을 요청 0건으로 단정하지 않습니다.
+집계 기록은 프로세스별 제한된 큐에 비차단 제출하고 전용 작업자가 쓰며, 큐 포화·강제 종료·DB 장애로 빠질 수 있습니다.
+저장 전 조회에는 지연이 있고 큐 거절 로그는 재시작 시 초기화됩니다. DB 연결 풀은 업무와 공유합니다.
 [관측 대상·보관·지연 구간](../backend/core-service/README.md#공개-ai-요청의-http-집계)을 참고하세요.
+관리자 비동기 결과 조회는 `AiJobMetricsController → AiJobMetricsService → 각 기능 Repository → MyBatis → MySQL`로
+신청 양식 탐색·문서 생성·중복 검토의 저장된 작업 행을 접수 UTC 기간으로 묶습니다. 현재 상태와 종료된 작업의 평균 소요 시간을 보여 주며,
+중복 접수는 같은 작업 행으로 셉니다. 삭제된 작업과 접수 전 실패는 포함하지 않아 HTTP 요청 집계와 분모가 다릅니다.
 캐시 읽기·30분 쓰기·12시간 쓰기는 입력에서 분리해 각각의 가격으로 계산하며, 미보고 토큰·미등록 쓰기 단가는 미확정으로 남깁니다(V65).
 조직 비용 비교는 `AiCostSyncService → OpenAiUsageClient(completions·embeddings) + OpenAiCostsClient → OpenAI`로 같은 UTC 기간을 모두 읽고,
 `AiUsageRepository → MyBatis → MySQL`의 한 transaction에서 사용량·실제 비용·조회 완료 날짜를 함께 저장합니다.

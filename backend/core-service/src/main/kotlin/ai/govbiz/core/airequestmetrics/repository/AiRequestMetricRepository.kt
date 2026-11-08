@@ -13,4 +13,9 @@ class AiRequestMetricRepository(private val mapper: AiRequestMetricMapper) {
 
     fun list(from: LocalDate, to: LocalDate): List<AiRequestMetric> =
         mapper.list(from, to).map { AiRequestMetric(it.feature, it.outcome, it.latencyBucketMs, it.requestCount) }
+
+    fun listDaily(from: LocalDate, to: LocalDate): Map<LocalDate, List<AiRequestMetric>> =
+        mapper.listDaily(from, to).groupBy { requireNotNull(it.metricDate) }.mapValues { (_, rows) ->
+            rows.map { AiRequestMetric(it.feature, it.outcome, it.latencyBucketMs, it.requestCount) }
+        }
 }

@@ -16,6 +16,8 @@ import ai.govbiz.core.aiusage.domain.NewAiModelPrice
 import ai.govbiz.core.aiusage.domain.AiUsageAccount
 import ai.govbiz.core.aiusage.domain.AiUsageGroup
 import ai.govbiz.core.aiusage.domain.AiUsageTotals
+import ai.govbiz.core.aiusage.domain.AiTraceCoverage
+import ai.govbiz.core.account.service.exception.AuthenticationRequiredException
 import ai.govbiz.core.aiusage.service.AiCostSyncService
 import ai.govbiz.core.aiusage.service.AiUsageService
 import ai.govbiz.core.aiusage.service.exception.AiCostSyncException
@@ -75,6 +77,27 @@ class AdminAiCostControllerTest {
             .andExpect(jsonPath("$.calls").value(2))
             .andExpect(jsonPath("$.estimatedUsd").value("0.004000"))
             .andExpect(jsonPath("$.accountId").doesNotExist())
+    }
+
+    @Test
+    fun traceCoverageIsAdminOnlyAndKeepsFeatureWithoutAttribution() {
+        val day = LocalDate.of(2026, 10, 1)
+        doReturn(listOf(AiTraceCoverage("AI_SEARCH", 5, 2), AiTraceCoverage(null, 1, 0)))
+            .`when`(usage).traceCoverage(actor, day, day)
+        mvc.perform(asAdmin(get("$PATH/trace-coverage?from=2026-10-01&to=2026-10-01")))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+            .andExpect(jsonPath("$.features[0].calls").value(5))
+            .andExpect(jsonPath("$.features[0].linkedCalls").value(2))
+            .andExpect(jsonPath("$.features[1].feature").doesNotExist())
+        doThrow(AuthenticationRequiredException()).`when`(sessions).requireAccount(null)
+        mvc.perform(get("$PATH/trace-coverage?from=2026-10-01&to=2026-10-01"))
+            .andExpect(status().isUnauthorized())
+        doReturn(AccountTestHelper.account(id = 2, email = "member@govbiz.local", role = AccountRole.USER))
+            .`when`(sessions).requireAccount("member-session")
+        mvc.perform(get("$PATH/trace-coverage?from=2026-10-01&to=2026-10-01")
+            .cookie(Cookie(SessionCookieHelper.COOKIE_NAME, "member-session")))
+            .andExpect(status().isForbidden())
     }
 
     @Test

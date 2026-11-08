@@ -104,6 +104,29 @@ async def test_failures_and_insufficient_evidence_remain_distinct(trace_environm
 
 
 @pytest.mark.anyio
+async def test_evidence_run_deadline_records_timeout_not_cancellation(trace_environment):
+    settings, exporter = trace_environment
+    tracing = tracing_module.LLMTracing(settings)
+
+    async def waiting(_):
+        await asyncio.Event().wait()
+
+    stub = ResponsesChatStub([waiting])
+    agent = SupportProgramEvidenceAnswerAgent(
+        model=stub.model, model_timeout_seconds=10, run_timeout_seconds=1, tracing=tracing
+    )
+    try:
+        with pytest.raises(SupportProgramEvidenceError):
+            await agent.answer(answer_request())
+    finally:
+        await tracing.close()
+    model = next(span for span in exporter.get_finished_spans() if span.name == "evidence.model")
+    assert model.attributes["langfuse.observation.status_message"] == "timeout"
+    assert model.attributes["langfuse.observation.metadata.usage_reported"] is False
+    assert not model.events
+
+
+@pytest.mark.anyio
 async def test_telemetry_failure_does_not_repeat_or_fail_model_call(trace_environment, monkeypatch, caplog):
     settings, _ = trace_environment
     service, tracing, stub = make_service(settings)

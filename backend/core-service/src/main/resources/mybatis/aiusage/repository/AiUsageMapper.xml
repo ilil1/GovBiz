@@ -39,6 +39,12 @@
         <result property="calls" column="calls" />
     </resultMap>
 
+    <resultMap id="traceCoverage" type="ai.govbiz.core.aiusage.repository.mapper.AiTraceCoverageDbRow">
+        <result property="feature" column="feature" />
+        <result property="calls" column="calls" />
+        <result property="linkedCalls" column="linked_calls" />
+    </resultMap>
+
     <resultMap id="providerDay" type="ai.govbiz.core.aiusage.repository.mapper.AiCostSyncDayDbRow">
         <id property="usageDate" column="usage_date" />
         <result property="projectScope" column="project_scope" />
@@ -105,6 +111,15 @@
         SELECT <include refid="sums" />
         FROM ai_usage_record u
         WHERE u.trace_id = #{traceId}
+    </select>
+
+    <select id="traceCoverageByFeature" resultMap="traceCoverage">
+        SELECT u.feature, SUM(u.call_count) AS calls,
+               SUM(CASE WHEN u.trace_id IS NOT NULL THEN u.call_count ELSE 0 END) AS linked_calls
+        FROM ai_usage_record u
+        WHERE <include refid="utcPeriod" />
+        GROUP BY u.feature
+        ORDER BY calls DESC, u.feature
     </select>
 
     <select id="sumByFeature" resultMap="totals">

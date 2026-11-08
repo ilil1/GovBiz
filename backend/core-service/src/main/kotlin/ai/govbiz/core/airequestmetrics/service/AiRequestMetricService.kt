@@ -1,6 +1,7 @@
 package ai.govbiz.core.airequestmetrics.service
 
 import ai.govbiz.core.airequestmetrics.repository.AiRequestMetricRepository
+import ai.govbiz.core.airequestmetrics.domain.AiRequestMetric
 import ai.govbiz.core.airequestmetrics.service.dto.AiRequestMetricResult
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -24,8 +25,21 @@ class AiRequestMetricService(private val repository: AiRequestMetricRepository) 
     }
 
     fun summary(from: LocalDate, to: LocalDate): List<AiRequestMetricResult> {
+        validatePeriod(from, to)
+        return aggregate(repository.list(from, to))
+    }
+
+    fun daily(from: LocalDate, to: LocalDate): Map<LocalDate, List<AiRequestMetricResult>> {
+        validatePeriod(from, to)
+        return repository.listDaily(from, to).toSortedMap().mapValues { (_, rows) -> aggregate(rows) }
+    }
+
+    private fun validatePeriod(from: LocalDate, to: LocalDate) {
         require(!to.isBefore(from) && ChronoUnit.DAYS.between(from, to) < 31) { "period must be 1~31 days" }
-        return repository.list(from, to).groupBy { it.feature }.toSortedMap().map { (feature, rows) ->
+    }
+
+    private fun aggregate(metrics: List<AiRequestMetric>): List<AiRequestMetricResult> =
+        metrics.groupBy { it.feature }.toSortedMap().map { (feature, rows) ->
             val total = rows.sumOf { it.count }
             fun count(outcome: String) = rows.filter { it.outcome == outcome }.sumOf { it.count }
             fun percentile(numerator: Long): Int? {
@@ -41,7 +55,6 @@ class AiRequestMetricService(private val repository: AiRequestMetricRepository) 
             AiRequestMetricResult(feature, total, count("SUCCESS"), count("ACCEPTED"), count("CLIENT_ERROR"),
                 count("SERVER_ERROR"), count("OTHER"), total, percentile(50), percentile(95))
         }
-    }
 
     companion object {
         val BUCKETS = listOf(100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000, 60_000, 120_000)

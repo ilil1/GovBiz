@@ -11,6 +11,7 @@ import ai.govbiz.core.aiusage.domain.AiModelPrice
 import ai.govbiz.core.aiusage.domain.AiModelUsage
 import ai.govbiz.core.aiusage.domain.AiUsageAttribution
 import ai.govbiz.core.aiusage.domain.AiUsageTotals
+import ai.govbiz.core.aiusage.domain.AiTraceCoverage
 import ai.govbiz.core.aiusage.domain.NewAiModelPrice
 import ai.govbiz.core.aiusage.repository.AiUsageRepository
 import ai.govbiz.core.aiusage.service.exception.AiModelPriceConflictException
@@ -83,6 +84,14 @@ class AiUsageService(
         val totals = repository.sumByTraceId(traceId)
         accessLog.record(actor, AdminAccessAction.AI_COST_VIEW, requestSummary = accessSummaryOf("traceIdLength" to traceId.length))
         return totals
+    }
+
+    /** 저장된 앱 호출만 집계합니다. ID 유무는 추적의 실제 수신 여부가 아닙니다. */
+    fun traceCoverage(actor: AdminActor, from: LocalDate, to: LocalDate): List<AiTraceCoverage> {
+        require(!to.isBefore(from) && ChronoUnit.DAYS.between(from, to) < MAX_DAYS) { "period must be 1~$MAX_DAYS days" }
+        val result = repository.traceCoverageByFeature(from, to)
+        accessLog.record(actor, AdminAccessAction.AI_COST_VIEW, requestSummary = accessSummaryOf("from" to from, "to" to to, "features" to result.size))
+        return result
     }
 
     /** 관리자 계정 상세의 이번 달(서울) AI 사용 합계입니다. */

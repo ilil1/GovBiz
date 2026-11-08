@@ -64,6 +64,13 @@ data class AiUsageDayDbRow(
     var calls: Long = 0,
 )
 
+/** 저장된 호출 중 추적 ID를 함께 기록한 호출의 기능별 합계입니다. */
+data class AiTraceCoverageDbRow(
+    var feature: String? = null,
+    var calls: Long = 0,
+    var linkedCalls: Long = 0,
+)
+
 data class AiCostDailyDbRow(
     var costDate: LocalDate? = null,
     var projectId: String = "",
@@ -108,6 +115,8 @@ interface AiUsageMapper {
     fun sumTotals(@Param("from") from: LocalDate, @Param("to") to: LocalDate, @Param("accountId") accountId: Long?, @Param("utc") utc: Boolean = false): AiUsageTotalsDbRow
 
     fun sumByTraceId(@Param("traceId") traceId: String): AiUsageTotalsDbRow
+
+    fun traceCoverageByFeature(@Param("from") from: LocalDate, @Param("to") to: LocalDate): List<AiTraceCoverageDbRow>
 
     fun sumByFeature(@Param("from") from: LocalDate, @Param("to") to: LocalDate): List<AiUsageTotalsDbRow>
 

@@ -42,5 +42,24 @@ class AiRequestMetricServiceTest {
     fun rejectsReversedOrTooLongPeriod() {
         assertThrows(IllegalArgumentException::class.java) { service.summary(day, day.minusDays(1)) }
         assertThrows(IllegalArgumentException::class.java) { service.summary(day, day.plusDays(31)) }
+        assertThrows(IllegalArgumentException::class.java) { service.daily(day, day.plusDays(31)) }
+    }
+
+    @Test
+    fun dailySeparatesDatesAndPreservesMissingDatesAndBucketSemantics() {
+        val after = day.plusDays(2)
+        doReturn(mapOf(after to listOf(AiRequestMetric("ASSISTANT", "SERVER_ERROR", 0, 1)),
+            day to listOf(AiRequestMetric("ASSISTANT", "SUCCESS", 100, 19),
+                AiRequestMetric("ASSISTANT", "ACCEPTED", 250, 1), AiRequestMetric("AI_SEARCH", "CLIENT_ERROR", 500, 1))))
+            .`when`(repo).listDaily(day, after)
+        val result = service.daily(day, after)
+        assertEquals(listOf(day, after), result.keys.toList())
+        assertEquals(null, result[day.plusDays(1)])
+        val assistant = result.getValue(day).single { it.feature == "ASSISTANT" }
+        assertEquals(19L, assistant.success)
+        assertEquals(1L, assistant.accepted)
+        assertEquals(100, assistant.p95UpperMs)
+        assertEquals(1L, result.getValue(day).single { it.feature == "AI_SEARCH" }.clientErrors)
+        assertNull(result.getValue(after).single().p95UpperMs)
     }
 }

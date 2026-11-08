@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .model_trace_metrics import read_model_metrics
 from .trace_client import CURSOR_PATTERN, LangfuseUnavailable, read_roots, read_trace, valid_id
 from .trace_metrics import read_metrics
 
@@ -42,6 +43,14 @@ class TraceListSerializer(TraceCursorSerializer):
         return attrs
 
 
+class TraceMetricsSerializer(TraceListSerializer):
+    environment = serializers.ChoiceField(
+        choices=("all", "production", "development", "unknown", "other"),
+        default="all",
+        required=False,
+    )
+
+
 def unavailable():
     return Response(
         {
@@ -56,13 +65,17 @@ def unavailable():
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_trace_metrics(request):
-    query = TraceListSerializer(data=request.query_params)
+    query = TraceMetricsSerializer(data=request.query_params)
     query.is_valid(raise_exception=True)
     params = query.validated_data
     if params["name"] or params["cursor"]:
         raise serializers.ValidationError("집계에는 이름이나 페이지 커서를 지정할 수 없습니다.")
     try:
-        results = read_metrics(from_time=params["from_time"], to_time=params["to_time"])
+        results = read_metrics(
+            from_time=params["from_time"],
+            to_time=params["to_time"],
+            environment=params["environment"],
+        )
     except LangfuseUnavailable:
         return unavailable()
     return Response(
@@ -70,6 +83,35 @@ def api_trace_metrics(request):
             "from_time": params["from_time"].isoformat(),
             "to_time": params["to_time"].isoformat(),
             "scope": "observed-root-traces",
+            "environment": params["environment"],
+            "results": results,
+        }
+    )
+
+
+@never_cache
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_model_trace_metrics(request):
+    query = TraceMetricsSerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    params = query.validated_data
+    if params["name"] or params["cursor"]:
+        raise serializers.ValidationError("집계에는 이름이나 페이지 커서를 지정할 수 없습니다.")
+    try:
+        results = read_model_metrics(
+            from_time=params["from_time"],
+            to_time=params["to_time"],
+            environment=params["environment"],
+        )
+    except LangfuseUnavailable:
+        return unavailable()
+    return Response(
+        {
+            "from_time": params["from_time"].isoformat(),
+            "to_time": params["to_time"].isoformat(),
+            "scope": "observed-model-generations",
+            "environment": params["environment"],
             "results": results,
         }
     )

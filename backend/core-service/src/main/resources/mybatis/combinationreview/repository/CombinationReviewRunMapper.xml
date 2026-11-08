@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="ai.govbiz.core.combinationreview.repository.mapper.CombinationReviewRunMapper">
+    <resultMap id="summary" type="ai.govbiz.core.combinationreview.repository.mapper.ReviewJobSummaryDbRow">
+        <result column="status" property="status" />
+        <result column="job_count" property="count" />
+        <result column="duration_samples" property="durationSamples" />
+        <result column="duration_millis" property="durationMillis" />
+    </resultMap>
+    <select id="summarize" resultMap="summary">
+        SELECT status, COUNT(*) AS job_count,
+            SUM(CASE WHEN finished_at IS NOT NULL AND finished_at &gt;= started_at THEN 1 ELSE 0 END) AS duration_samples,
+            SUM(CASE WHEN finished_at IS NOT NULL AND finished_at &gt;= started_at THEN TIMESTAMPDIFF(MICROSECOND, started_at, finished_at) DIV 1000 ELSE 0 END) AS duration_millis
+        FROM combination_review_run
+        WHERE started_at &gt;= #{from} AND started_at &lt; #{until}
+        GROUP BY status
+    </select>
     <resultMap id="runRow" type="ai.govbiz.core.combinationreview.repository.mapper.CombinationReviewRunDbRow">
         <id column="id" property="id" />
         <result column="review_id" property="reviewId" />

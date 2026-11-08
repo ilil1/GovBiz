@@ -1,5 +1,6 @@
 package ai.govbiz.core.combinationreview.repository
 
+import ai.govbiz.core._common.domain.JobStatusSummary
 import ai.govbiz.core.combinationreview.domain.*
 import ai.govbiz.core.combinationreview.helper.CombinationReviewHashHelper
 import ai.govbiz.core.combinationreview.repository.mapper.CombinationReviewRunDbRow
@@ -28,6 +29,8 @@ class CombinationReviewRunRepository(
     private val json: ObjectMapper, @param:Qualifier("seoulClock") private val clock: Clock,
     @param:Value("\${app.combination-review.unknown-ttl:PT30M}") private val unknownTtl: Duration,
 ) {
+    fun summarize(from: LocalDateTime, until: LocalDateTime): List<JobStatusSummary> =
+        mapper.summarize(from, until).map { JobStatusSummary(it.status, it.count, it.durationSamples, it.durationMillis) }
     init {
         require(unknownTtl >= Duration.ofMinutes(20)) { "app.combination-review.unknown-ttl must be at least PT20M" }
     }

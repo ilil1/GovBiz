@@ -12,9 +12,12 @@ ROOT_NAMES = ("search.total", "evidence.total", "assistant.total")
 MAX_PAGES = 3
 PAGE_SIZE = 1000
 READ_SECONDS = 8
+ENVIRONMENTS = {"all", "production", "development", "unknown", "other"}
 
 
-def read_metrics(*, from_time, to_time):
+def read_metrics(*, from_time, to_time, environment="all"):
+    if environment not in ENVIRONMENTS:
+        raise ValueError("Invalid environment")
     deadline = time.monotonic() + READ_SECONDS
     result = []
     seen = set()
@@ -66,6 +69,18 @@ def read_metrics(*, from_time, to_time):
                     if item["id"] in seen:
                         raise ValueError("Duplicate observation")
                     seen.add(item["id"])
+                    # 원본 응답의 모든 페이지를 검증한 뒤 선택한 환경만 센다.
+                    # 빈 값과 알 수 없는 다른 환경은 운영이나 개발로 추정하지 않는다.
+                    value = item["environment"]
+                    category = (
+                        "unknown"
+                        if value is None or not value.strip()
+                        else value
+                        if value in {"production", "development"}
+                        else "other"
+                    )
+                    if environment != "all" and environment != category:
+                        continue
                     if item["ended_at"] is None:
                         in_progress += 1
                         continue

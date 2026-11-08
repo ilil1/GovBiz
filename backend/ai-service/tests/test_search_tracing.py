@@ -260,3 +260,30 @@ async def test_ranking_failure_never_fabricates_usage_or_leaks_errors(trace_envi
     assert "PRIVATE" not in str([s.to_json() for s in spans])
     assert all(not s.events for s in spans)
     assert len(stub.calls) == 1
+
+
+@pytest.mark.anyio
+async def test_ranking_run_deadline_records_timeout_not_cancellation(trace_environment, monkeypatch):
+    settings, exporter = trace_environment
+    tracing = LLMTracing(settings)
+    entered = asyncio.Event()
+
+    async def waiting(*args, **kwargs):
+        entered.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr("app.support_program_ranking.agent.invoke_support_program_model", waiting)
+    stub = ResponsesChatStub([])
+    agent = SupportProgramRecommendationAgent(
+        model=stub.model, model_timeout_seconds=10, run_timeout_seconds=1, tracing=tracing
+    )
+    try:
+        with pytest.raises(AgentExecutionError):
+            await agent.rank(ranking_request())
+    finally:
+        await tracing.close()
+    model = next(span for span in exporter.get_finished_spans() if span.name == "search.ranking.model")
+    assert model.attributes["langfuse.observation.status_message"] == "timeout"
+    assert model.attributes["langfuse.observation.metadata.usage_reported"] is False
+    assert not model.events
+    assert entered.is_set()
