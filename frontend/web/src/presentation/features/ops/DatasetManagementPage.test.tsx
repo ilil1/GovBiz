@@ -823,6 +823,42 @@ describe('관리자 평가 자료 등록', () => {
     expect(writes(fetch)).toHaveLength(0)
   })
 
+  it('randomUUID가 없는 환경에서도 임시 저장과 동일 요청 재시도를 지원한다', async () => {
+    const getRandomValues = crypto.getRandomValues.bind(crypto)
+    vi.stubGlobal('crypto', { getRandomValues })
+    let attempts = 0
+    const fetch = setup([], async (_url, data) => {
+      if (++attempts === 1) throw new TypeError('network')
+      return json({ ...saved, version: 1, content: data.content })
+    })
+    open()
+    await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '자료 이름 · 필수' }), { target: { value: '다른 기기에서 작성한 자료' } })
+    fireEvent.click(screen.getByRole('button', { name: '임시 저장' }))
+    await screen.findByRole('button', { name: '같은 저장 요청으로 재확인' })
+    fireEvent.click(screen.getByRole('button', { name: '같은 저장 요청으로 재확인' }))
+    await screen.findByText(/초안을 저장했습니다/)
+    expect(writes(fetch)).toHaveLength(2)
+    const first = writes(fetch)[0][1]!.body as string
+    expect(writes(fetch)[1][1]!.body).toBe(first)
+    expect(JSON.parse(first).request_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(JSON.parse(first).content.title).toBe('다른 기기에서 작성한 자료')
+  })
+
+  it('안전한 난수를 만들 수 없다면 입력을 유지하고 저장하지 않으며 원인을 안내한다', async () => {
+    vi.stubGlobal('crypto', {})
+    const fetch = setup(); open()
+    await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '자료 이름 · 필수' }), { target: { value: '보존해야 하는 자료' } })
+    fireEvent.click(screen.getByRole('button', { name: '임시 저장' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('안전한 요청 ID를 만들 수 없습니다. HTTPS 또는 localhost로 접속해 주세요.')
+    expect(screen.getByRole('textbox', { name: '자료 이름 · 필수' })).toHaveProperty('value', '보존해야 하는 자료')
+    expect(screen.getByRole('button', { name: '임시 저장' })).toHaveProperty('disabled', false)
+    expect(writes(fetch)).toHaveLength(0)
+  })
+
   it('저장 응답 유실은 같은 UUID와 본문으로 재확인한다', async () => {
     let attempts = 0
     const fetch = setup([saved], async (_url, data) => { if (++attempts === 1) throw new TypeError('network'); return json({ ...saved, version: 2, content: data.content }) })

@@ -6,6 +6,7 @@ import { defaultProgramSelectionFilters } from '../../shared/support-program/cat
 import { archiveManagedDataset, createManagedDataset, getManagedDatasets, OpsApiError, publishManagedDataset, saveManagedDataset, type ManagedDataset, type ManagedDatasetContent } from '../../../data/ops/opsApi'
 import { WorkspacePageHeader } from '../../shared/workspace/WorkspacePageHeader'
 import { workspacePageStyles as styles, workspaceTagClassName } from '../../shared/workspace/WorkspacePage.styles'
+import { createRequestId } from './requestId'
 
 const field = 'min-h-11 w-full min-w-0 rounded-xl border border-line bg-white px-3 py-2 text-sm font-normal focus:outline-2 focus:outline-brand-primary'
 const freshCase = (id: string, documentId: string): ManagedDatasetContent['cases'][number] => ({ id, document_id: documentId, question: '', expected_status: 'ANSWERED', expected_citation_orders: [], reference_facts: [], forbidden_claims: [], answer: null })
@@ -226,7 +227,13 @@ export function DatasetManagementPage({ owner, onExpired }: { owner: string; onE
     if (kind === 'save' && !pending && !draft.title.trim()) { moveToStep(0); setError('초안을 저장하려면 자료 이름을 입력하세요.'); return }
     const content = structuredClone(draft)
     content.cases.forEach((item) => { item.forbidden_claims = item.forbidden_claims.filter((claim) => claim.trim()) })
-    const operation = pending ?? { kind, request_id: crypto.randomUUID(), expected_version: selected?.version ?? 0, content, archived: !selected?.archived }
+    let operation: Operation
+    try {
+      operation = pending ?? { kind, request_id: createRequestId(), expected_version: selected?.version ?? 0, content, archived: !selected?.archived }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '요청 ID를 만들지 못했습니다.')
+      return
+    }
     submitting.current = true; setBusy(true); setError(''); setNotice(''); setPending(operation)
     try {
       const input = { request_id: operation.request_id, expected_version: operation.expected_version }
