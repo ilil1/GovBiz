@@ -74,32 +74,53 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
     return () => { controller.abort(); clearTimeout(timer) }
   }, [page, refresh, refreshKey])
   const summary = data?.summary
-  return <section id="evaluation-budget" tabIndex={-1} className={styles.card} aria-label="누적 평가 예산">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className={styles.cardTitle}>누적 평가 예산</h2><button type="button" className={styles.cardTextLink} onClick={() => setRefresh((value) => value + 1)}>예산 새로고침</button></div>
+  return <section id="evaluation-budget" tabIndex={-1} className={styles.card} aria-label="평가 예산">
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="sr-only">평가 예산</h2><button type="button" className={styles.cardTextLink} onClick={() => setRefresh((value) => value + 1)}>예산 새로고침</button></div>
     <section aria-label="예산 설정 순서" className="rounded-2xl bg-brand-soft p-4 sm:p-6">
       <div className="flex items-center gap-2">
         <h3 className="text-base font-bold text-ink">AI 평가 사용 한도</h3>
         <details className="relative">
           <summary aria-label="AI 평가 사용 한도 도움말" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-line bg-white text-xs font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand-primary">?</summary>
-          <p className="absolute left-0 top-9 z-10 w-72 max-w-[calc(100vw-4rem)] rounded-xl border border-line bg-white p-4 text-sm leading-6 text-ink-muted shadow-lg">AI 평가에 사용할 요청 횟수와 분량을 정합니다. 모든 평가가 한도를 함께 사용하며, 날짜가 바뀌어도 초기화되지 않습니다. 금액 한도는 아닙니다.</p>
+          <p className="absolute left-0 top-9 z-10 w-72 max-w-[calc(100vw-4rem)] rounded-xl border border-line bg-white p-4 text-sm leading-6 text-ink-muted shadow-lg">전체와 하루 한도를 각각 저장하며, 하루 한도를 사용하면 두 한도를 모두 충족해야 평가할 수 있습니다. 정기 평가에는 전체 입력 한도와 하루 한도가 모두 필요합니다. 금액 한도는 아닙니다. 남은 한도에서는 진행 중인 평가의 예약량을 제외하며, 미완료 예약은 다음 날로 이월될 수 있습니다.</p>
         </details>
       </div>
       {(!operatorId || error || !data || summary?.state === 'inconsistent' || !summary?.limits_revision) && <p className="mt-4 text-sm font-semibold text-brand-primary">{!operatorId ? '관리자에게 설정을 요청하세요.' : error ? '현재 상태를 확인하지 못했습니다. 예산을 새로고침해 주세요.' : !data ? '현재 상태를 확인하고 있습니다.' : summary?.state === 'inconsistent' ? '사용 기록이 맞지 않아 설정을 변경할 수 없습니다.' : '현재 서버에서 설정을 변경할 수 없습니다. 관리자에게 확인해 주세요.'}</p>}
-      {data && summary && <div className="mt-4 space-y-4">
-        {summary.state === 'inconsistent' && <p role="alert" className="text-sm leading-6 text-red-700">저장된 할당량과 상세 장부가 일치하지 않습니다. 잔여 한도를 확정할 수 없어 표시하지 않습니다.</p>}
-        {summary.state === 'unconfigured' && <p role="status" className="text-sm font-semibold text-ink">아직 사용 한도를 설정하지 않았습니다.</p>}
-        {summary.state !== 'unconfigured' && summary.input_state === 'enforced' && <p className="text-sm font-medium text-brand-primary">입력 한도 적용 중</p>}
-        {summary.state !== 'unconfigured' && summary.input_state === 'unconfigured' && <p className="text-sm leading-6 text-amber-800">입력 한도가 설정되지 않았습니다. 검색·RAG 평가를 하려면 입력 한도도 설정해야 합니다.</p>}
-        {summary.limits && summary.state === 'consistent' && summary.remaining && <section aria-label="남은 사용량" className="space-y-3 rounded-xl bg-white/80 p-4">
-          <h3 className="text-sm font-bold text-ink">남은 한도</h3>
-          <dl className="grid gap-2 sm:grid-cols-3">
-            <div className="min-w-0 rounded-lg bg-white px-3 py-2.5"><dt className="text-xs text-ink-muted">AI 요청</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.calls)}회</dd></div>
-            <div className="min-w-0 rounded-lg bg-white px-3 py-2.5"><dt className="text-xs text-ink-muted">AI에 보내는 내용</dt><dd className="mt-1 break-words text-base font-bold text-ink">{summary.limits.input_tokens == null ? '설정되지 않음' : summary.remaining.input_tokens == null ? '확인할 수 없음' : inputCount(summary.remaining.input_tokens)}</dd></div>
-            <div className="min-w-0 rounded-lg bg-white px-3 py-2.5"><dt className="text-xs text-ink-muted">AI 답변</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.output_tokens)}토큰</dd></div>
-          </dl>
-          <p className="text-xs leading-5 text-ink-muted">이미 진행 중인 평가에 확보한 양을 제외한 수치입니다.{summary.legacy_live_run_count > 0 && ' 확인되지 않은 이전 평가 사용량은 포함되지 않았습니다.'}</p>
-        </section>}
-        {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
+      {data && summary && <div className="mt-4 grid gap-4">
+        <section className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5" aria-label="전체 사용 한도">
+          <div><h3 className="text-base font-bold text-ink">전체 사용 한도</h3><p className="mt-1 text-sm text-ink-muted">날짜가 바뀌어도 유지</p></div>
+          {summary.state === 'inconsistent' && <p role="alert" className="text-sm leading-6 text-red-700">저장된 할당량과 상세 장부가 일치하지 않습니다. 잔여 한도를 확정할 수 없어 표시하지 않습니다.</p>}
+          {summary.state === 'unconfigured' && <p role="status" className="text-sm font-semibold text-ink">아직 사용 한도를 설정하지 않았습니다.</p>}
+          {summary.state !== 'unconfigured' && summary.input_state === 'unconfigured' && <p className="text-sm leading-6 text-amber-800">입력 한도가 설정되지 않았습니다. 검색·RAG 평가를 하려면 입력 한도도 설정해야 합니다.</p>}
+          {summary.limits && summary.state === 'consistent' && summary.remaining && <section aria-label="남은 사용량" className="space-y-3">
+            <h4 className="text-sm font-bold text-ink">남은 한도</h4>
+            <dl className="grid gap-2 sm:grid-cols-3">
+              <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI 요청</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.calls)}회</dd><dd className="mt-1 text-xs text-ink-muted">한도 {count(summary.limits.calls)}회</dd></div>
+              <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI에 보내는 내용</dt><dd className="mt-1 break-words text-base font-bold text-ink">{summary.limits.input_tokens == null ? '설정되지 않음' : summary.remaining.input_tokens == null ? '확인할 수 없음' : inputCount(summary.remaining.input_tokens)}</dd><dd className="mt-1 text-xs text-ink-muted">한도 {summary.limits.input_tokens == null ? '미설정' : inputCount(summary.limits.input_tokens)}</dd></div>
+              <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI 답변</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.output_tokens)}토큰</dd><dd className="mt-1 text-xs text-ink-muted">한도 {count(summary.limits.output_tokens)}토큰</dd></div>
+            </dl>
+            {summary.legacy_live_run_count > 0 && <p className="text-xs text-amber-800">확인되지 않은 이전 평가 사용량은 포함되지 않았습니다.</p>}
+          </section>}
+          {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
+        </section>
+        <section aria-label="하루 예산 요약" className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5">
+          <div><h3 className="text-base font-bold text-ink">하루 평가 한도</h3><p className="mt-1 text-sm text-ink-muted">매일 서울 시간 자정 기준</p></div>
+          {!summary.daily ? <p className="text-sm">일별 예산 정보를 확인할 수 없습니다.</p>
+            : summary.daily.state === 'disabled' ? <p className="text-sm">하루 한도 미설정 · 정기 평가에 필요</p>
+            : summary.daily.state === 'unknown' ? <p role="alert" className="text-sm text-red-700">일별 사용량 미확인 · 신규 예약이 차단됩니다.</p>
+            : summary.daily.state === 'exceeded' ? <p role="alert" className="text-sm text-red-700">일별 한도 초과 · 신규 예약이 차단됩니다.</p>
+            : <p className="text-sm text-ink-muted">평가하려면 전체와 하루 한도가 모두 남아 있어야 합니다.</p>}
+          {summary.daily?.state !== 'disabled' && summary.daily?.limits && <section aria-label="하루 남은 사용량" className="space-y-3">
+            <h4 className="text-sm font-bold text-ink">남은 한도</h4>
+            <dl className="grid gap-2 sm:grid-cols-3">{([
+              ['AI 요청', summary.daily.state === 'enforced' ? summary.daily.remaining?.calls : null, summary.daily.limits.calls, '회'],
+              ['AI에 보내는 내용', summary.daily.state === 'enforced' ? summary.daily.remaining?.input_tokens : null, summary.daily.limits.input_tokens, '토큰'],
+              ['AI 답변', summary.daily.state === 'enforced' ? summary.daily.remaining?.output_tokens : null, summary.daily.limits.output_tokens, '토큰'],
+            ] as const).map(([label, remaining, limit, unit]) => <div key={label} className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 break-words text-base font-bold text-ink">{remaining == null ? '확인할 수 없음' : `${count(remaining)}${unit}`}</dd><dd className="mt-1 text-xs text-ink-muted">한도 {count(limit)}{unit}</dd></div>)}</dl>
+          </section>}
+          {operatorId && !summary.limits && <p className="text-sm text-ink-muted">하루 한도를 설정하려면 먼저 전체 한도를 설정해 주세요.</p>}
+          {operatorId && summary.limits && <DailyBudgetLimitsForm daily={summary.daily} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('일별 정책 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
+          <details><summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">일별 예산 상세 보기</summary><DailyBudgetPanel value={summary.daily} /></details>
+        </section>
       </div>}
     </section>
     {error && <p role="alert" className="text-sm text-red-700">{error} 표시된 값이 있으면 마지막 조회 기록입니다.</p>}
@@ -116,30 +137,6 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
         {showUnaccounted && <UnaccountedRunsPanel onExpired={onExpired} refreshKey={refreshKey + refresh} operatorId={operatorId} onApplied={() => { setSaved('검토한 과거 사용량을 장부에 반영했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
       </section>}
 
-      {(summary.daily?.state === 'unknown' || summary.daily?.state === 'exceeded') && <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{summary.daily.state === 'unknown' ? '일별 사용량을 확인할 수 없어' : '일별 한도를 초과해'} 새 평가를 예약할 수 없습니다. 아래 ‘하루 평가 한도’에서 확인하세요.</p>}
-      <details className="rounded-xl bg-surface-muted px-4 text-sm">
-        <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">하루 평가 한도</summary>
-        <div className="pb-4">
-      <section aria-label="하루 예산 요약" className="grid gap-3 rounded-xl bg-[#f3f7f5] p-4 text-sm">
-        <h3 className="font-semibold">하루 예산 · 서울 시간</h3>
-        <p className="leading-6 text-ink-muted">수동 평가에는 하루 한도가 필수는 아닙니다. 정기 평가에는 누적 입력 한도와 하루 한도가 모두 필요합니다.</p>
-        {!summary.daily ? <p>일별 예산 정보를 확인할 수 없습니다.</p>
-          : summary.daily.state === 'disabled' ? <p>일별 한도 미적용 · 누적 한도는 별도로 확인합니다. 정기 실행에는 일별 한도가 필요합니다.</p>
-          : summary.daily.state === 'unknown' ? <p role="alert" className="text-red-700">일별 사용량 미확인 · 신규 예약이 차단됩니다.</p>
-          : summary.daily.state === 'exceeded' ? <p role="alert" className="text-red-700">일별 한도 초과 · 신규 예약이 차단됩니다.</p>
-          : <p className="text-brand-primary">일별 한도 적용 중 · 누적 한도도 함께 확인합니다.</p>}
-        {summary.daily?.state !== 'disabled' && summary.daily?.limits && <dl className="grid gap-2 sm:grid-cols-2">{[
-          ['일별 한도', summary.daily.limits], ['일별 잔여', summary.daily.state === 'enforced' ? summary.daily.remaining : null],
-        ].map(([label, amount]) => {
-          const value = amount as NonNullable<typeof summary.daily>['limits']
-          return <div key={String(label)} className="min-w-0 rounded-lg bg-white p-3"><dt className="text-ink-muted">{String(label)}</dt><dd className="mt-1 break-words font-semibold leading-6">{value ? `${count(value.calls)}회 · 입력 ${count(value.input_tokens)}토큰 · 출력 ${count(value.output_tokens)}토큰` : '확인 불가'}</dd></div>
-        })}</dl>}
-        {operatorId && !summary.limits && <p className="text-ink-muted">하루 한도를 설정하려면 먼저 위에서 AI 평가 사용량을 설정해 주세요.</p>}
-        {operatorId && summary.limits && <DailyBudgetLimitsForm daily={summary.daily} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('일별 정책 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
-        <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">일별 예산 상세 보기</summary><DailyBudgetPanel value={summary.daily} /></details>
-      </section>
-        </div>
-      </details>
       <details className="rounded-xl bg-surface-muted px-4 text-sm">
       <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">평가 사용·변경 기록</summary>
       <div className="grid gap-4 pb-4">

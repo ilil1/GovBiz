@@ -74,6 +74,9 @@ describe('관리자 예산 장부', () => {
     expect(remaining.getByText('남은 한도')).toBeTruthy()
     expect(remaining.getByText('AI 요청')).toBeTruthy()
     expect(remaining.getByText('6회')).toBeTruthy()
+    expect(remaining.getByText('한도 12회')).toBeTruthy()
+    expect(remaining.getByText('한도 24,000토큰')).toBeTruthy()
+    expect(remaining.getByText('한도 미설정')).toBeTruthy()
     expect(remaining.getByText('AI에 보내는 내용')).toBeTruthy()
     expect(remaining.getByText('설정되지 않음')).toBeTruthy()
     expect(remaining.getByText('AI 답변')).toBeTruthy()
@@ -83,12 +86,11 @@ describe('관리자 예산 장부', () => {
     fireEvent.click(help)
     expect(help.closest('details')).toHaveProperty('open', true)
     expect(screen.getByText(/금액 한도는 아닙니다/)).toBeTruthy()
-    const daily = screen.getByText('하루 평가 한도')
+    expect(screen.getByRole('heading', { name: '전체 사용 한도' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '하루 평가 한도' })).toBeTruthy()
     const records = screen.getByText('평가 사용·변경 기록')
-    expect(daily.closest('details')).toHaveProperty('open', false)
     expect(records.closest('details')).toHaveProperty('open', false)
-    fireEvent.click(daily)
-    expect(within(screen.getByRole('region', { name: '하루 예산 요약' })).getByText(/정기 평가에는 누적 입력 한도와 하루 한도가 모두 필요합니다/)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: '하루 예산 요약' })).getByText(/일별 예산 정보를 확인할 수 없습니다/)).toBeTruthy()
     expect(records.closest('details')).toHaveProperty('open', false)
     fireEvent.click(records)
     expect(screen.getByText('전체 한도와 사용량 보기').closest('details')).toHaveProperty('open', false)
@@ -101,6 +103,36 @@ describe('관리자 예산 장부', () => {
     expect(details.closest('details')).toHaveProperty('open', false)
     expect(within(screen.getByRole('region', { name: '남은 사용량' })).getByText('남은 한도')).toBeTruthy()
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['enforced', 'unknown', 'exceeded'] as const)('하루 한도 %s 상태를 전체 한도와 같은 기준으로 표시한다', async (state) => {
+    const limits = { calls: 10, input_tokens: 1000, output_tokens: 100 }
+    const used = state === 'exceeded' ? { calls: 11, input_tokens: 200, output_tokens: 20 } : { calls: 2, input_tokens: 200, output_tokens: 20 }
+    const zero = { calls: 0, input_tokens: 0, output_tokens: 0 }
+    const daily = {
+      state, timezone: 'Asia/Seoul', period_start: '2026-09-29T00:00:00+09:00', period_end: '2026-09-30T00:00:00+09:00',
+      limits, current_day: state === 'unknown' ? null : used, carried: state === 'unknown' ? null : zero,
+      allocated: state === 'unknown' ? null : used,
+      remaining: state === 'enforced' ? { calls: 8, input_tokens: 800, output_tokens: 80 } : null,
+      recent_changes: [],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, daily } })))
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    const dailySummary = within(await screen.findByRole('region', { name: '하루 남은 사용량' }))
+    expect(dailySummary.getByText('AI 요청')).toBeTruthy()
+    expect(dailySummary.getByText('AI에 보내는 내용')).toBeTruthy()
+    expect(dailySummary.getByText('AI 답변')).toBeTruthy()
+    expect(dailySummary.getByText('한도 10회')).toBeTruthy()
+    expect(dailySummary.getByText('한도 1,000토큰')).toBeTruthy()
+    expect(dailySummary.getByText('한도 100토큰')).toBeTruthy()
+    if (state === 'enforced') {
+      expect(dailySummary.getByText('8회')).toBeTruthy()
+      expect(dailySummary.getByText('800토큰')).toBeTruthy()
+      expect(dailySummary.getByText('80토큰')).toBeTruthy()
+    } else {
+      expect(dailySummary.getAllByText('확인할 수 없음')).toHaveLength(3)
+      expect(screen.getAllByRole('alert').some((alert) => alert.textContent?.includes('신규 예약이 차단됩니다'))).toBe(true)
+    }
   })
 
   it('입력 한도가 있어도 남은 양을 확인할 수 없으면 미설정으로 표시하지 않는다', async () => {
@@ -128,14 +160,14 @@ describe('관리자 예산 장부', () => {
     expect(help.closest('details')).toHaveProperty('open', false)
     fireEvent.click(help)
     expect(help.closest('details')).toHaveProperty('open', true)
-    expect(guide.getByText(/AI 평가에 사용할 요청 횟수와 분량을 정합니다/)).toBeTruthy()
+    expect(guide.getByText(/전체와 하루 한도를 각각 저장하며/)).toBeTruthy()
     expect(guide.getByText(/금액 한도는 아닙니다/)).toBeTruthy()
     expect(screen.getByText('아직 사용 한도를 설정하지 않았습니다.')).toBeTruthy()
     expect(screen.getByText('이전 평가의 사용량을 확인해 주세요')).toBeTruthy()
     expect(screen.getByText(/검색·RAG 평가와 정기 평가에 필요한 입력 한도를 설정할 수 없습니다/)).toBeTruthy()
     expect(screen.getByText(/필요한 정보가 없으면 자동으로 반영할 수 없습니다/)).toBeTruthy()
     expect(guide.getByText('아직 사용 한도를 설정하지 않았습니다.')).toBeTruthy()
-    const setLimits = guide.getByRole('button', { name: 'AI 평가 사용량 설정하기' })
+    const setLimits = guide.getByRole('button', { name: '전체 한도 설정하기' })
     const unaccounted = screen.getByRole('button', { name: '이전 평가 기록 확인하기' })
     expect(setLimits.compareDocumentPosition(unaccounted) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(unaccounted.id).toBe('budget-unaccounted')
@@ -174,7 +206,7 @@ describe('관리자 예산 장부', () => {
     await screen.findByRole('alert')
     const guide = within(screen.getByRole('region', { name: '예산 설정 순서' }))
     expect(guide.getByText('사용 기록이 맞지 않아 설정을 변경할 수 없습니다.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'AI 평가 사용량 변경하기' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: '전체 한도 변경하기' })).toHaveProperty('disabled', true)
     expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
   })
 
@@ -182,7 +214,7 @@ describe('관리자 예산 장부', () => {
     const fetch = vi.fn(async (url: string, _options?: RequestInit) => json(url.includes('/evaluation-catalog') ? { datasets: [] } : { ...page, summary: { ...page.summary, limits_revision: 'a'.repeat(64) } }))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} operatorId="core:81" /></MemoryRouter>)
-    fireEvent.click(await screen.findByRole('button', { name: 'AI 평가 사용량 변경하기' }))
+    fireEvent.click(await screen.findByRole('button', { name: '전체 한도 변경하기' }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
     const calls = screen.getByRole('textbox', { name: 'AI 요청 허용 횟수' })
     fireEvent.change(calls, { target: { value: '20' } })
@@ -492,7 +524,7 @@ it.each(['enforced', 'legacy_unknown', 'unconfigured'] as const)('누적 입력 
       unknown_input_tokens: 32768, unapproved_input_tokens: 131072, pending_release_input_tokens: 32668, allocated_input_tokens: 196608 },
   } })))
   render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
-  expect(await screen.findByText(input_state === 'enforced' ? '입력 한도 적용 중'
+  expect(await screen.findByText(input_state === 'enforced' ? '103,392토큰'
     : input_state === 'legacy_unknown' ? '이전 평가의 사용량을 확인해 주세요' : /입력 한도가 설정되지 않았습니다/)).toBeTruthy()
   fireEvent.click(screen.getByText('누적 예산 상세 내역'))
   const row = screen.getByRole('row', { name: /^현재 할당량 합계/ })

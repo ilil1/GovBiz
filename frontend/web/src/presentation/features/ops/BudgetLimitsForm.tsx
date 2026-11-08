@@ -94,7 +94,7 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
   }
   if (!summary.limits_revision) return null
   return <section aria-label="누적 한도 설정" className="space-y-5">
-    {!opened && <button type="button" className={`${styles.primaryButton} max-sm:w-full`} disabled={busy || summary.state === 'inconsistent'} onClick={open}>{summary.limits ? 'AI 평가 사용량 변경하기' : 'AI 평가 사용량 설정하기'}</button>}
+    {!opened && <button type="button" className={`${styles.primaryButton} max-sm:w-full`} disabled={busy || summary.state === 'inconsistent'} onClick={open}>{summary.limits ? '전체 한도 변경하기' : '전체 한도 설정하기'}</button>}
     {opened && <>
       <nav aria-label="예산 설정 단계" className="grid grid-cols-3 gap-1 rounded-xl bg-surface-muted p-1 text-center text-xs sm:text-sm">
         {['필요량 확인', '사용량 입력', '확인 및 저장'].map((label, index) => {
@@ -119,7 +119,7 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
       <details className="rounded-lg bg-surface-muted p-3 text-sm sm:col-span-2">
         <summary className="cursor-pointer font-semibold">한도 입력 도움말</summary>
         <div className="mt-2 space-y-2 leading-6 text-ink-muted">
-          <p>호출은 모델 API를 사용하는 횟수입니다. 입력 토큰은 모델에 보내는 분량, 출력 토큰은 모델이 생성하는 분량입니다.</p>
+          <p>AI 요청 횟수는 평가 횟수와 다르며, 한 질문에서 여러 번 요청할 수 있습니다. 입력 토큰은 AI에 보내는 양이고 출력 토큰은 AI가 만드는 답변의 양입니다.</p>
           <p>입력 한도를 처음 설정하지 않으려면 빈칸으로 두세요. 한번 설정하면 해제할 수 없으며, 0은 미설정이 아니라 한도 0입니다.</p>
           <p>예: 현재 20회 할당 + 추가 6회 예약 = 호출 한도 26회.</p>
           <p>변경 사유를 적지 않으면 자동 생성된 내용이 이력에 저장됩니다.</p>
@@ -127,11 +127,11 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
       </details>
         <div className="space-y-1">
           <label className="grid gap-2 font-semibold text-ink">AI 요청 허용 횟수<input className="min-h-11 rounded-lg border border-line px-3 py-2 focus:outline-2 focus:outline-brand-primary" inputMode="numeric" value={calls} onChange={(event) => { setCalls(event.target.value); setFillNotice('') }} aria-describedby={`${helpId}-calls`} required /></label>
-          {checkedNeeds && <p className="text-sm font-semibold text-brand-primary">선택한 평가 최대 {checkedNeeds.calls.toLocaleString('ko-KR')}회</p>}<p className="text-xs leading-5 text-ink-muted">AI에 요청할 수 있는 전체 횟수입니다. 질문 한 개에 여러 번 요청할 수도 있습니다.</p><p id={`${helpId}-calls`} className="sr-only">답변 생성·임베딩 등에 사용하는 API 호출의 총횟수입니다. 평가 횟수나 질문 수를 뜻하지 않습니다. RAG 평가는 문서·질문 임베딩과 답변 호출을 합합니다.</p>
+          {checkedNeeds && <p className="text-sm font-semibold text-brand-primary">선택한 평가 최대 {checkedNeeds.calls.toLocaleString('ko-KR')}회</p>}<p id={`${helpId}-calls`} className="sr-only">답변 생성·임베딩 등에 사용하는 API 호출의 총횟수입니다. 평가 횟수나 질문 수를 뜻하지 않습니다. RAG 평가는 문서·질문 임베딩과 답변 호출을 합합니다.</p>
         </div>
         <div className="space-y-1">
           <label className="grid gap-2 font-semibold text-ink">AI 답변 허용량 (출력 토큰)<input className="min-h-11 rounded-lg border border-line px-3 py-2 focus:outline-2 focus:outline-brand-primary" inputMode="numeric" value={output} onChange={(event) => { setOutput(event.target.value); setFillNotice('') }} aria-describedby={`${helpId}-output`} required /></label>
-          {checkedNeeds && <p className="text-sm font-semibold text-brand-primary">선택한 평가 최대 {checkedNeeds.output_tokens.toLocaleString('ko-KR')}토큰</p>}<p className="text-xs leading-5 text-ink-muted">AI가 생성할 답변의 전체 분량입니다. 토큰은 글자 수와 다른 AI 사용량 단위입니다.</p><p id={`${helpId}-output`} className="sr-only">모델이 생성하는 답변 등 출력 분량의 총상한입니다. 평가별 최대 출력량을 합산해 정합니다.</p>
+          {checkedNeeds && <p className="text-sm font-semibold text-brand-primary">선택한 평가 최대 {checkedNeeds.output_tokens.toLocaleString('ko-KR')}토큰</p>}<p id={`${helpId}-output`} className="sr-only">모델이 생성하는 답변 등 출력 분량의 총상한입니다. 평가별 최대 출력량을 합산해 정합니다.</p>
         </div>
         <div className="space-y-2 sm:col-span-2">
           <div className="flex flex-wrap items-center gap-2"><span className="font-semibold text-ink">AI에 보내는 내용 허용량 (입력 토큰)</span><details className="relative"><summary aria-label="입력 한도 도움말" className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-line text-xs font-bold">?</summary><p className="mt-2 rounded-lg bg-surface-muted p-3 text-xs leading-5 text-ink-muted">질문과 공고 등 AI에 보내는 내용의 양입니다. 처음에는 비워 둘 수 있습니다. 설정 후에는 해제할 수 없으며, 0을 입력하면 사용할 수 없습니다.</p></details></div>
@@ -152,11 +152,11 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
       </form>
       </div>
       {proposal && <div className="space-y-3 rounded-xl bg-[#f3f7f5] p-4 text-sm">
-        <h3 ref={reviewHeading} tabIndex={-1} className="text-base font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand-primary">3. 입력 내용 확인 후 저장</h3><p>아래 내용은 아직 저장되지 않았습니다. 확인한 뒤 저장해 주세요. 한도를 저장해도 평가는 실행되지 않습니다.</p><p>호출: {amount(previous?.calls, '회')} → {amount(proposal.calls, '회')}</p>
+        <h3 ref={reviewHeading} tabIndex={-1} className="text-base font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand-primary">3. 입력 내용 확인 후 저장</h3><p>한도를 저장해도 평가는 실행되지 않습니다.</p><p>호출: {amount(previous?.calls, '회')} → {amount(proposal.calls, '회')}</p>
         <p>입력: {amount(previous?.input_tokens, '토큰')} → {amount(proposal.input_tokens, '토큰')}</p>
         <p>출력: {amount(previous?.output_tokens, '토큰')} → {amount(proposal.output_tokens, '토큰')}</p>
         <p>사유: {proposal.reason}</p>
-        <p>로그인한 관리자 계정으로 변경 이력이 저장됩니다. 다른 운영자의 변경과 이미 할당된 사용량은 저장 시 다시 확인합니다.</p>
+        <p className="sr-only">로그인한 관리자 계정으로 변경 이력이 저장됩니다. 다른 운영자의 변경과 이미 할당된 사용량은 저장 시 다시 확인합니다.</p>
         <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => setOpened(false)}>닫기</button><button type="button" className={styles.secondaryButton} disabled={busy || attempted} onClick={() => { setProposal(null); setError('') }}>입력 수정</button></div>
           <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => void save()}>{busy ? '저장 중…' : '확인한 한도 저장'}</button>

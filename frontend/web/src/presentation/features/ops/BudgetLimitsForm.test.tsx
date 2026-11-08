@@ -22,7 +22,7 @@ const mount = (onSaved = vi.fn(), onExpired = vi.fn(), data = summary) => {
   return { onSaved, onExpired }
 }
 const fill = () => {
-  fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+  fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
   fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
   expect(screen.getByText(/필요한 양은 이전 단계에서 확인/)).toBeTruthy()
   fireEvent.change(screen.getByLabelText('AI 요청 허용 횟수'), { target: { value: '7' } })
@@ -54,7 +54,7 @@ const setupPlanning = () => {
   return fetch
 }
 const inspectNeeds = async () => {
-  fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+  fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
   expect(screen.getByText('1. 어떤 평가를 할지 고르세요')).toBeTruthy()
   expect(screen.queryByRole('button', { name: '필요한 양 계산하기' })).toBeNull()
   const dataset = await screen.findByRole('combobox', { name: '평가 자료 선택' })
@@ -67,9 +67,9 @@ const inspectNeeds = async () => {
 describe('관리자 누적 한도 변경', () => {
   it('처음 설정과 기존 설정 변경을 구분해 안내한다', () => {
     const view = render(<BudgetLimitsForm summary={summary} owner={owner} onSaved={vi.fn()} onExpired={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '전체 한도 설정하기' })).toBeTruthy()
     view.rerender(<BudgetLimitsForm summary={{ ...summary, state: 'consistent', limits: { calls: 10, input_tokens: null, output_tokens: 100 } }} owner={owner} onSaved={vi.fn()} onExpired={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'AI 평가 사용량 변경하기' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '전체 한도 변경하기' })).toBeTruthy()
   })
   it('필요량을 확인하면 입력 단계로 이동하고 이전 단계로 돌아가도 입력을 보존한다', async () => {
     setupPlanning()
@@ -93,7 +93,7 @@ describe('관리자 누적 한도 변경', () => {
   it('평가 횟수를 선택하면 최대 필요량을 배수로 입력하고 저장하지 않는다', async () => {
     const fetch = setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
-    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.click(screen.getByRole('button', { name: '전체 한도 설정하기' }))
     fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
     fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
@@ -106,7 +106,7 @@ describe('관리자 누적 한도 변경', () => {
   it.each(['0', '-1', '1.5', '1001'])('잘못된 평가 횟수 %s는 확인할 수 없다', async (value) => {
     const fetch = setupPlanning()
     mount()
-    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.click(screen.getByRole('button', { name: '전체 한도 설정하기' }))
     fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
     fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value } })
     expect(screen.getByRole('button', { name: '필요량 확인' })).toHaveProperty('disabled', true)
@@ -120,7 +120,7 @@ describe('관리자 누적 한도 변경', () => {
     const fetch = vi.fn(async (url: string) => url.includes('/evaluation-catalog') ? json(catalog) : pending)
     vi.stubGlobal('fetch', fetch)
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
-    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.click(screen.getByRole('button', { name: '전체 한도 설정하기' }))
     fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
     fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value: '2' } })
@@ -134,7 +134,7 @@ describe('관리자 누적 한도 변경', () => {
     const fetch = vi.fn(async (url: string, options?: RequestInit) => json(url.endsWith('/evaluation-catalog') ? catalog : url.endsWith('/session') ? session : success(JSON.parse(options!.body as string))))
     vi.stubGlobal('fetch', fetch)
     const { onSaved } = mount()
-    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 설정하기' }))
+    fireEvent.click(screen.getByRole('button', { name: '전체 한도 설정하기' }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
     fireEvent.change(screen.getByLabelText('AI 요청 허용 횟수'), { target: { value: '7' } })
     fireEvent.change(screen.getByLabelText('AI 답변 허용량 (출력 토큰)'), { target: { value: '776' } })
@@ -152,7 +152,7 @@ describe('관리자 누적 한도 변경', () => {
     const fetch = vi.fn(async () => json({ datasets: [] }))
     vi.stubGlobal('fetch', fetch)
     mount()
-    fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
     expect((await screen.findByRole('link', { name: '평가 자료 등록하러 가기' })).getAttribute('href')).toBe('/ops/datasets')
     expect(fetch.mock.calls).toHaveLength(1)
   })
@@ -160,7 +160,7 @@ describe('관리자 누적 한도 변경', () => {
   it('과거 입력 사용량을 모르면 기록을 확인하도록 안내하고 입력을 막는다', () => {
     setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
-    fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
     expect(screen.getByRole('link', { name: '이전 평가 기록 확인하기' }).getAttribute('href')).toBe('#budget-unaccounted')
     expect(screen.getByText(/이전 평가의 사용량을 확인하기 전에는 입력 한도를 설정할 수 없습니다/)).toBeTruthy()
@@ -173,7 +173,7 @@ describe('관리자 누적 한도 변경', () => {
   it('확인할 기록이 없으면 이동할 수 없는 링크 대신 관리자 확인을 안내한다', () => {
     setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown', legacy_live_run_count: 0 })
-    fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
     expect(screen.queryByRole('link', { name: '이전 평가 기록 확인하기' })).toBeNull()
     expect(screen.getByText(/관리자에게 사용 기록 확인을 요청해 주세요/)).toBeTruthy()
@@ -275,7 +275,7 @@ describe('관리자 누적 한도 변경', () => {
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
     }
     const view = render(<BudgetLimitsForm summary={data} owner={owner} onSaved={onSaved} onExpired={onExpired} />)
-    fireEvent.click(screen.getByRole('button', { name: 'AI 평가 사용량 변경하기' }))
+    fireEvent.click(screen.getByRole('button', { name: '전체 한도 변경하기' }))
     fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
     view.rerender(<BudgetLimitsForm summary={{ ...data, limits_revision: 'd'.repeat(64) }} owner={owner} onSaved={onSaved} onExpired={onExpired} />)
@@ -297,7 +297,7 @@ describe('관리자 누적 한도 변경', () => {
       allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
     })
-    fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
     const select = await screen.findByRole('combobox', { name: '평가 자료 선택' })
     fireEvent.change(select, { target: { value: 'fixed' } })
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
@@ -331,7 +331,7 @@ describe('관리자 누적 한도 변경', () => {
   it('설명은 각 입력에 연결하고 설정 화면을 열거나 값을 입력해도 한도를 저장하지 않는다', () => {
     const fetch = vi.fn(async (_url: string, _options?: RequestInit) => json(catalog)); vi.stubGlobal('fetch', fetch)
     const { onSaved } = mount()
-    fireEvent.click(screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }))
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
     expect(screen.getByText(/현재 20회 할당 \+ 추가 6회 예약 = 호출 한도 26회/)).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'AI 요청 허용 횟수', description: /API 호출의 총횟수/ })).toHaveProperty('value', '')
@@ -348,7 +348,7 @@ describe('관리자 누적 한도 변경', () => {
     const fetch = vi.fn(async (_url: string, _options?: RequestInit) => json(catalog)); vi.stubGlobal('fetch', fetch)
     const { onSaved } = mount()
     fill()
-    expect(screen.queryByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /전체 한도 (설정|변경)하기/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
     expect(screen.getByText('호출: 미설정 → 7회')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '입력 수정' }))
@@ -432,7 +432,7 @@ describe('관리자 누적 한도 변경', () => {
     const { unmount } = render(<BudgetLimitsForm summary={{ ...summary, limits_revision: undefined }} owner={owner} onSaved={vi.fn()} onExpired={vi.fn()} />)
     expect(screen.queryByRole('button')).toBeNull()
     unmount(); mount(vi.fn(), vi.fn(), { ...summary, state: 'inconsistent' })
-    expect((screen.getByRole('button', { name: /AI 평가 사용량 (설정|변경)하기/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /전체 한도 (설정|변경)하기/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it.each([{ source: 'CLI' }, { actor: 'core:82' }, { request_id: '20000000-0000-4000-8000-000000000002' }, { limits: { calls: 999, output_tokens: 776, input_tokens: null } }])('다른 요청이나 인증되지 않은 이력을 저장 성공으로 표시하지 않는다: %j', async (changes) => {
