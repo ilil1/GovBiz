@@ -23,13 +23,14 @@ describe('실행 설정·예산 점검', () => {
     render(<form onSubmit={submit}><LiveReadinessPanel datasetId="fixed" executionProfile={profile} onExpired={vi.fn()} /></form>, { wrapper: MemoryRouter })
     expect(fetch).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '실행 설정·예산 점검' }))
-    expect(await screen.findByRole('status')).toHaveProperty('textContent', '조회 시점의 설정·예산에서 차단 사유가 없습니다.')
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', '현재 점검에서 차단된 항목은 없어요.')
     expect(submit).not.toHaveBeenCalled()
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(fetch).toHaveBeenCalledWith(`/api/v1/ops/evaluations/live-readiness?dataset_id=fixed&execution_profile=${profile}`, expect.objectContaining({ cache: 'no-store', credentials: 'same-origin' }))
+    fireEvent.click(screen.getByText('점검 상세 보기'))
     const row = screen.getByRole('row', { name: '입력 토큰 196,608 400,000' })
     expect(within(row).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['196,608', '400,000'])
-    expect(screen.getByText(/이 결과는 실행 승인이 아니며/)).toBeTruthy()
+    expect(screen.getByText(/접수할 때 현재 한도를 다시 확인합니다/)).toBeTruthy()
   })
 
   it('미설정·미확인 사용량을 0으로 표시하지 않고 차단과 주의 사항을 구분한다', async () => {
@@ -38,11 +39,12 @@ describe('실행 설정·예산 점검', () => {
       warnings: [{ code: 'INPUT_BUDGET_UNKNOWN', message: '미확인 과거 입력 사용량을 먼저 검토하세요.' }],
     })))
     mount(); fireEvent.click(screen.getByRole('button'))
-    await screen.findByText('누적 예산 한도를 설정하세요.')
+    await screen.findByText('전체 사용 한도를 먼저 설정해 주세요.')
+    fireEvent.click(screen.getByText('점검 상세 보기'))
     expect(screen.getAllByText('확인 불가·미설정')).toHaveLength(3)
-    expect(screen.getByRole('list', { name: '점검 주의 사항' }).textContent).toContain('미확인 과거 입력')
-    expect(screen.getByRole('link', { name: '누적 예산 관리로 이동' }).getAttribute('href')).toBe('/ops/budget')
-    expect(screen.queryByText('조회 시점의 설정·예산에서 차단 사유가 없습니다.')).toBeNull()
+    expect(screen.getByText('이전 평가의 사용량을 먼저 확인해 주세요.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '예산 관리로 이동' }).getAttribute('href')).toBe('/ops/budget')
+    expect(screen.queryByText('현재 점검에서 차단된 항목은 없어요.')).toBeNull()
   })
 
   it('선택 모델을 점검 요청에 담고 다른 모델의 결과는 거절한다', async () => {
@@ -72,6 +74,8 @@ describe('실행 설정·예산 점검', () => {
   it('재점검 중 이전 성공을 지우고 오류를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(checked)).mockResolvedValueOnce(json({ detail: '실행 설정이 변경됐습니다.' }, 409)))
     mount(); fireEvent.click(screen.getByRole('button'))
+    await screen.findByRole('status')
+    fireEvent.click(screen.getByText('점검 상세 보기'))
     await screen.findByRole('table')
     fireEvent.click(screen.getByRole('button'))
     expect(screen.queryByRole('table')).toBeNull()
@@ -115,16 +119,51 @@ describe('실행 설정·예산 점검', () => {
   it('고정 근거의 입력 한도 미설정은 경고와 함께 허용한다', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ ...checked, remaining: { ...checked.remaining, input_tokens: null }, warnings: [{ code: 'INPUT_BUDGET_UNCONFIGURED', message: '입력 한도 미설정' }] })))
     mount(); fireEvent.click(screen.getByRole('button'))
-    expect(await screen.findByText('입력 한도 미설정')).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toContain('차단 사유가 없습니다')
+    expect(await screen.findByText('AI에 보내는 내용의 전체 한도가 설정되지 않았어요.')).toBeTruthy()
+    fireEvent.click(screen.getByText('점검 상세 보기'))
+    expect(screen.getByRole('status').textContent).toContain('현재 점검에서 차단된 항목은 없어요')
     expect(screen.getByText('확인 불가·미설정')).toBeTruthy()
-    expect(screen.getByRole('link', { name: '누적 예산 관리로 이동' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '예산 관리로 이동' })).toBeTruthy()
+  })
+
+  it('전체와 하루 한도의 부족 항목을 필요한 양과 남은 양으로 구분한다', async () => {
+    const daily = {
+      state: 'enforced', timezone: 'Asia/Seoul', period_start: '2026-10-04T00:00:00+09:00', period_end: '2026-10-05T00:00:00+09:00',
+      limits: { calls: 12, input_tokens: 400000, output_tokens: 24000 },
+      current_day: { calls: 6, input_tokens: 196608, output_tokens: 12000 },
+      carried: { calls: 1, input_tokens: 32768, output_tokens: 2000 },
+      allocated: { calls: 7, input_tokens: 229376, output_tokens: 14000 },
+      remaining: { calls: 5, input_tokens: 170624, output_tokens: 10000 }, recent_changes: [],
+    }
+    const blockers = ['CALLS', 'INPUT_TOKENS', 'OUTPUT_TOKENS'].flatMap((item) => [
+      { code: `INSUFFICIENT_${item}`, message: '전체 한도 부족' },
+      { code: `DAILY_INSUFFICIENT_${item}`, message: '하루 한도 부족' },
+    ])
+    const fetch = vi.fn(async (_url: string, _options?: RequestInit) => json({ ...checked, state: 'blocked', remaining: { calls: 1, input_tokens: 1000, output_tokens: 100 }, daily, blockers }))
+    vi.stubGlobal('fetch', fetch)
+    mount(); fireEvent.click(screen.getByRole('button'))
+    expect(await screen.findByText('사용 한도를 확인해 주세요')).toBeTruthy()
+    const overall = within(screen.getByText('전체 한도에서 부족한 항목').parentElement!)
+    expect(overall.getByText('필요 6회')).toBeTruthy()
+    expect(overall.getByText('남음 1회')).toBeTruthy()
+    expect(overall.getByText('필요 196,608토큰')).toBeTruthy()
+    expect(overall.getByText('남음 1,000토큰')).toBeTruthy()
+    expect(overall.getByText('필요 12,000토큰')).toBeTruthy()
+    expect(overall.getByText('남음 100토큰')).toBeTruthy()
+    const today = within(screen.getByText('하루 한도에서 부족한 항목').parentElement!)
+    expect(today.getByText('남음 5회')).toBeTruthy()
+    expect(today.getByText('남음 170,624토큰')).toBeTruthy()
+    expect(today.getByText('남음 10,000토큰')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '예산 관리로 이동' }).getAttribute('href')).toBe('/ops/budget')
+    expect(screen.getByText('점검 상세 보기').closest('details')).toHaveProperty('open', false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch.mock.calls[0][1]?.method ?? 'GET').toBe('GET')
   })
 
   it('모델 비활성화만 있으면 예산 설정으로 해결할 수 있다고 안내하지 않는다', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ ...checked, state: 'blocked', blockers: [{ code: 'LIVE_DISABLED', message: '모델 평가 비활성화' }] })))
     mount(); fireEvent.click(screen.getByRole('button'))
     await screen.findByText('모델 평가 비활성화')
-    expect(screen.queryByRole('link', { name: '누적 예산 관리로 이동' })).toBeNull()
+    expect(screen.queryByRole('link', { name: '예산 관리로 이동' })).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setBudgetLimits, type BudgetLimitsInput, type BudgetSummary } from '../../../data/ops/opsApi'
 import { BudgetLimitsForm } from './BudgetLimitsForm'
@@ -44,10 +44,11 @@ const readiness = { as_of: at, dataset_id: 'fixed', execution_profile: profile,
   evaluation_scope: 'fixed-answer-context-only', model: 'test-model', state: 'blocked',
   required, remaining: null, blockers: [{ code: 'BUDGET_UNCONFIGURED', message: '누적 한도를 설정하세요.' }], warnings: [],
 }
-const setupPlanning = () => {
+const setupPlanning = (budget: BudgetSummary = summary) => {
   const fetch = vi.fn(async (url: string, _options?: RequestInit) => {
     if (url.includes('/evaluation-catalog')) return json(catalog)
     if (url.includes('/evaluations/live-readiness?')) return json(readiness)
+    if (url.endsWith('/budget')) return json({ ...budget, as_of: at })
     return json({ detail: '예상하지 못한 요청' }, 500)
   })
   vi.stubGlobal('fetch', fetch)
@@ -64,6 +65,16 @@ const inspectNeeds = async () => {
   await screen.findByText('이번 평가에 필요한 최대 양')
 }
 
+const expectChange = (name: string, before: string, remaining: string, after: string, afterRemaining: string, message: string) => {
+  const section = within(screen.getByRole('region', { name: `${name} 한도 변화` }))
+  for (const [label, expected] of [
+    ['현재 전체 한도', before], ['현재 남은 한도', remaining],
+    ['저장 시 전체 한도', after], ['저장 시 남은 한도', afterRemaining],
+  ]) expect(section.getByText(label).nextElementSibling?.textContent).toBe(expected)
+  expect(section.getByText(message)).toBeTruthy()
+  return section
+}
+
 describe('관리자 누적 한도 변경', () => {
   it('처음 설정과 기존 설정 변경을 구분해 안내한다', () => {
     const view = render(<BudgetLimitsForm summary={summary} owner={owner} onSaved={vi.fn()} onExpired={vi.fn()} />)
@@ -76,18 +87,315 @@ describe('관리자 누적 한도 변경', () => {
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
     await inspectNeeds()
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: '2. 얼마나 사용할지 정하기' }))
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '6')
-    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '50')
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '50')
+    expectChange('AI 요청', '미설정', '미설정', '6회', '6회', '저장 시 전체 한도를 새로 설정합니다.')
+    expectChange('AI 답변', '미설정', '미설정', '50토큰', '50토큰', '저장 시 전체 한도를 새로 설정합니다.')
+    expect(screen.queryByRole('region', { name: 'AI에 보내는 내용 한도 변화' })).toBeNull()
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('disabled', true)
-    expect(screen.getByText(/확인되지 않은 이전 평가 사용량은 포함하지 않았습니다/)).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('AI 요청 허용 횟수'), { target: { value: '9' } })
+    expect(screen.getByText(/입력 사용량은 확인할 수 없어 전체 한도를 자동 계산하지 않았습니다/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('AI 요청 확보 횟수'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     expect(screen.getByRole('combobox', { name: '평가 자료 선택' })).toHaveProperty('value', 'fixed')
     expect(screen.getByText('이번 평가에 필요한 최대 양')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '9')
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '9')
     expect(screen.queryByRole('button', { name: '확인한 한도 저장' })).toBeNull()
+  })
+
+  it('이번 평가의 확보량만 입력하고 검토 후 누적 전체 한도를 저장한다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 19, input_tokens: 123447, output_tokens: 7128 },
+      allocated: { calls: 18, input_tokens: 28305, output_tokens: 1273 },
+      remaining: { calls: 1, input_tokens: 95142, output_tokens: 5855 },
+    }
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/evaluation-catalog')) return json(catalog)
+      if (url.includes('/evaluations/live-readiness?')) return json({ ...readiness, required: { calls: 3, input_tokens: 98304, output_tokens: 6000 } })
+      if (url.endsWith('/budget')) return json({ ...data, as_of: at })
+      if (url.endsWith('/session')) return json(session)
+      return json(success(JSON.parse(options!.body as string)))
+    })
+    vi.stubGlobal('fetch', fetch)
+    const { onSaved } = mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '3')
+    expect(screen.getByLabelText('AI에 보내는 내용 확보량 (입력 토큰)')).toHaveProperty('value', '98304')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '6000')
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    expect(await screen.findByText('호출: 19회 → 21회')).toBeTruthy()
+    expect(screen.getByText('입력: 123,447토큰 → 126,609토큰')).toBeTruthy()
+    expect(screen.getByText('출력: 7,128토큰 → 7,273토큰')).toBeTruthy()
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    const [, options] = fetch.mock.calls.find(([url]) => url.endsWith('/budget/limits'))!
+    expect(JSON.parse(options!.body as string)).toMatchObject({ calls: 21, input_tokens: 126609, output_tokens: 7273, expected_revision: data.limits_revision })
+  })
+
+  it('기존 한도가 크면 이번 평가 확보량으로 낮추지 않고 기존 총한도를 유지해 저장한다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 100, input_tokens: 1000, output_tokens: 200 },
+      allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
+      remaining: { calls: 80, input_tokens: 800, output_tokens: 100 },
+    }
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/evaluation-catalog')) return json(catalog)
+      if (url.includes('/evaluations/live-readiness?')) return json(readiness)
+      if (url.endsWith('/budget')) return json({ ...data, as_of: at })
+      if (url.endsWith('/session')) return json(session)
+      return json(success(JSON.parse(options!.body as string)))
+    })
+    vi.stubGlobal('fetch', fetch)
+    const { onSaved } = mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI에 보내는 내용 확보량 (입력 토큰)')).toHaveProperty('value', '100')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '50')
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    expect(await screen.findByText('호출: 100회 → 100회')).toBeTruthy()
+    expect(screen.getByText('입력: 1,000토큰 → 1,000토큰')).toBeTruthy()
+    expect(screen.getByText('출력: 200토큰 → 200토큰')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    const [, options] = fetch.mock.calls.find(([url]) => url.endsWith('/budget/limits'))!
+    expect(JSON.parse(options!.body as string)).toMatchObject({ calls: 100, input_tokens: 1000, output_tokens: 200 })
+  })
+
+  it.each(['검토 전', '저장 전'])('필요량 확인 후 %s에 다른 평가가 사용하면 오래된 총한도 저장을 막는다', async (when) => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 21, input_tokens: 1000, output_tokens: 120 },
+      allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
+      remaining: { calls: 1, input_tokens: 800, output_tokens: 20 },
+    }
+    let checks = 0
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/evaluation-catalog')) return json(catalog)
+      if (url.includes('/evaluations/live-readiness?')) return json(readiness)
+      if (url.endsWith('/budget')) {
+        checks += 1
+        const changed = when === '검토 전' || checks > 1
+        return json({ ...data, allocated: changed ? { calls: 21, input_tokens: 201, output_tokens: 101 } : data.allocated, as_of: at })
+      }
+      if (url.endsWith('/session')) return json(session)
+      return json(success(JSON.parse(options!.body as string)))
+    })
+    vi.stubGlobal('fetch', fetch)
+    const { onSaved } = mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    if (when === '저장 전') {
+      fireEvent.click(await screen.findByRole('button', { name: '확인한 한도 저장' }))
+    }
+    expect((await screen.findByRole('alert')).textContent).toContain('예산 사용량이나 한도가 바뀌었습니다')
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(fetch.mock.calls.some(([url, options]) => url.endsWith('/budget/limits') && options?.method === 'POST')).toBe(false)
+  })
+
+  it('확보량에 기존 사용량을 더해 안전한 정수 범위를 벗어나면 저장하지 않는다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 21, input_tokens: 1000, output_tokens: 120 },
+      allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
+      remaining: { calls: 1, input_tokens: 800, output_tokens: 20 },
+    }
+    const fetch = setupPlanning(data)
+    mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    fireEvent.change(screen.getByLabelText('AI 요청 확보 횟수'), { target: { value: String(Number.MAX_SAFE_INTEGER) } })
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('안전한 숫자 범위')
+    expect(screen.queryByRole('button', { name: '확인한 한도 저장' })).toBeNull()
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+  it('자동 계산 후 저장 응답 유실은 확인된 동일 요청으로 재시도한다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 21, input_tokens: 1000, output_tokens: 120 },
+      allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
+      remaining: { calls: 1, input_tokens: 800, output_tokens: 20 },
+    }
+    const writes: BudgetLimitsInput[] = []
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/evaluation-catalog')) return json(catalog)
+      if (url.includes('/evaluations/live-readiness?')) return json(readiness)
+      if (url.endsWith('/budget')) return json({ ...data, as_of: at })
+      if (url.endsWith('/session')) return json(session)
+      const body = JSON.parse(options!.body as string) as BudgetLimitsInput
+      writes.push(body)
+      if (writes.length === 1) throw new TypeError('응답 유실')
+      return json(success(body))
+    })
+    vi.stubGlobal('fetch', fetch)
+    const { onSaved } = mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    fireEvent.click(await screen.findByRole('button', { name: '확인한 한도 저장' }))
+    await screen.findByRole('alert')
+    expect(onSaved).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(writes).toHaveLength(2)
+    expect(writes[1]).toEqual(writes[0])
+    expect(writes[0]).toMatchObject({ calls: 26, input_tokens: 1000, output_tokens: 150 })
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('/budget'))).toHaveLength(2)
+  })
+
+  it('입력 사용량 미확인 시 입력 한도는 null로 보존하고 호출·답변만 합산한다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'legacy_unknown',
+      limits: { calls: 21, input_tokens: null, output_tokens: 120 },
+      allocated: { calls: 20, input_tokens: null, output_tokens: 100 },
+      remaining: { calls: 1, input_tokens: null, output_tokens: 20 },
+    }
+    const fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith('/evaluation-catalog')) return json(catalog)
+      if (url.includes('/evaluations/live-readiness?')) return json(readiness)
+      if (url.endsWith('/budget')) return json({ ...data, as_of: at })
+      if (url.endsWith('/session')) return json(session)
+      return json(success(JSON.parse(options!.body as string)))
+    })
+    vi.stubGlobal('fetch', fetch)
+    const { onSaved } = mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
+    expect(await screen.findByText('입력: 미설정 → 미설정')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    const [, options] = fetch.mock.calls.find(([url]) => url.endsWith('/budget/limits'))!
+    expect(JSON.parse(options!.body as string)).toMatchObject({ calls: 26, input_tokens: null, output_tokens: 150 })
+  })
+
+  it('계산을 지우면 선택과 제안을 없애고 실제 저장된 한도는 유지한다', async () => {
+    const fetch = setupPlanning()
+    const { onSaved } = mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'enforced',
+      limits: { calls: 21, input_tokens: 1000, output_tokens: 120 },
+      allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
+      remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
+    })
+    await inspectNeeds()
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '6')
+    fireEvent.click(screen.getByRole('button', { name: '계산 지우기' }))
+    const dataset = await screen.findByRole('combobox', { name: '평가 자료 선택' })
+    expect(dataset).toHaveProperty('value', '')
+    expect(screen.queryByText('이번 평가에 필요한 최대 양')).toBeNull()
+    expect(screen.queryByText(/선택한 평가 최대/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
+    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '21')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '1000')
+    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '120')
+    expect(onSaved).not.toHaveBeenCalled()
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+  it('기존 사용량과 새 평가 최대량으로 계산한 전체 한도를 항목별로 설명하고 지운다', async () => {
+    const fetch = vi.fn(async (url: string, _options?: RequestInit) => url.includes('/evaluation-catalog') ? json(catalog)
+      : json({ ...readiness, required: { calls: 3, input_tokens: 98304, output_tokens: 6000 } }))
+    vi.stubGlobal('fetch', fetch)
+    mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 19, input_tokens: 123447, output_tokens: 7128 },
+      allocated: { calls: 18, input_tokens: 28305, output_tokens: 1273 },
+      remaining: { calls: 1, input_tokens: 95142, output_tokens: 5855 },
+      breakdown: { settled_calls: 12, legacy_calls: 6, confirmed_input_tokens: 17757, legacy_input_tokens: 10548,
+        confirmed_output_tokens: 761, legacy_output_tokens: 512, unknown_calls: 0, unknown_input_tokens: 0, unknown_output_tokens: 0,
+        unapproved_calls: 0, unapproved_input_tokens: 0, unapproved_output_tokens: 0, pending_release_input_tokens: 0,
+        pending_release_output_tokens: 0, unbounded_input_calls: 0, unbounded_input_reservations: 0,
+        allocated_calls: 18, allocated_input_tokens: 28305, allocated_output_tokens: 1273 },
+    })
+    await inspectNeeds()
+    const calls = expectChange('AI 요청', '19회', '1회', '21회', '3회', '저장 시 전체 한도 2회 증가')
+    const output = expectChange('AI 답변', '7,128토큰', '5,855토큰', '7,273토큰', '6,000토큰', '저장 시 전체 한도 145토큰 증가')
+    const input = expectChange('AI에 보내는 내용', '123,447토큰', '95,142토큰', '126,609토큰', '98,304토큰', '저장 시 전체 한도 3,162토큰 증가')
+    for (const section of [calls, output, input]) fireEvent.click(section.getByText('현재 사용량 상세'))
+    expect(calls.getByText(/확인된 사용 18회 · 미확인 0회 · 예약·반환 대기 0회/)).toBeTruthy()
+    expect(output.getByText(/확인된 사용 1,273토큰 · 미확인 0토큰 · 예약·반환 대기 0토큰/)).toBeTruthy()
+    expect(input.getByText(/확인된 사용 28,305토큰 · 미확인 0토큰 · 예약·반환 대기 0토큰/)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('AI 요청 확보 횟수'), { target: { value: '5' } })
+    expectChange('AI 요청', '19회', '1회', '23회', '5회', '저장 시 전체 한도 4회 증가')
+    fireEvent.change(screen.getByLabelText('AI 요청 확보 횟수'), { target: { value: '3' } })
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '3')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '6000')
+    expect(screen.getByLabelText('AI에 보내는 내용 확보량 (입력 토큰)')).toHaveProperty('value', '98304')
+    fireEvent.click(screen.getByRole('button', { name: '계산 지우기' }))
+    expect(screen.queryByRole('region', { name: 'AI 요청 한도 변화' })).toBeNull()
+    expect((await screen.findByRole('combobox', { name: '평가 자료 선택' }))).toHaveProperty('value', '')
+    fireEvent.click(screen.getByRole('button', { name: '필요량 확인 없이 직접 입력' }))
+    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '19')
+    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '7128')
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '123447')
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+
+  it('미확인 호출과 열린 예약 및 반환 대기를 확정 사용량과 구분한다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 50, input_tokens: 2000, output_tokens: 2000 },
+      allocated: { calls: 21, input_tokens: 445, output_tokens: 580 },
+      remaining: { calls: 29, input_tokens: 1555, output_tokens: 1420 },
+      breakdown: { settled_calls: 10, legacy_calls: 6, confirmed_input_tokens: 120, legacy_input_tokens: 20,
+        confirmed_output_tokens: 50, legacy_output_tokens: 20, unknown_calls: 2, unknown_input_tokens: 100, unknown_output_tokens: 200,
+        unapproved_calls: 3, unapproved_input_tokens: 200, unapproved_output_tokens: 300, pending_release_input_tokens: 5,
+        pending_release_output_tokens: 10, unbounded_input_calls: 0, unbounded_input_reservations: 0,
+        allocated_calls: 21, allocated_input_tokens: 445, allocated_output_tokens: 580 },
+    }
+    const fetch = setupPlanning(data)
+    mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    const calls = expectChange('AI 요청', '50회', '29회', '50회', '29회', '저장 시 전체 한도 유지')
+    const input = expectChange('AI에 보내는 내용', '2,000토큰', '1,555토큰', '2,000토큰', '1,555토큰', '저장 시 전체 한도 유지')
+    const output = expectChange('AI 답변', '2,000토큰', '1,420토큰', '2,000토큰', '1,420토큰', '저장 시 전체 한도 유지')
+    for (const section of [calls, input, output]) fireEvent.click(section.getByText('현재 사용량 상세'))
+    expect(calls.getByText(/확인된 사용 16회 · 미확인 2회 · 예약·반환 대기 3회/)).toBeTruthy()
+    expect(input.getByText(/확인된 사용 140토큰 · 미확인 100토큰 · 예약·반환 대기 205토큰/)).toBeTruthy()
+    expect(output.getByText(/확인된 사용 70토큰 · 미확인 200토큰 · 예약·반환 대기 310토큰/)).toBeTruthy()
+    expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
+  })
+
+  it('분리 내역이 없거나 합계와 일치하지 않으면 예약을 0으로 추정하지 않는다', async () => {
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 50, input_tokens: 2000, output_tokens: 2000 },
+      allocated: { calls: 21, input_tokens: 445, output_tokens: 580 },
+      remaining: { calls: 29, input_tokens: 1555, output_tokens: 1420 },
+      breakdown: { settled_calls: 10, confirmed_input_tokens: 140, confirmed_output_tokens: 70,
+        unknown_calls: 2, unknown_input_tokens: 100, unknown_output_tokens: 200,
+        unapproved_calls: 3, unapproved_input_tokens: 200, unapproved_output_tokens: 300,
+        pending_release_input_tokens: 5, pending_release_output_tokens: 10, unbounded_input_calls: 1, unbounded_input_reservations: 0,
+        allocated_calls: 21, allocated_input_tokens: 445, allocated_output_tokens: 580 },
+    }
+    setupPlanning(data)
+    mount(vi.fn(), vi.fn(), data)
+    await inspectNeeds()
+    expect(screen.getByText(/사용·예약 합계 21회 · 상세 내역 확인 불가/)).toBeTruthy()
+    expect(screen.getByText(/사용·예약 합계 445토큰 · 상세 내역 확인 불가/)).toBeTruthy()
+    expect(screen.queryByText(/예약·반환 대기 0회/)).toBeNull()
+    expect(screen.queryByText(/예약·반환 대기 0토큰/)).toBeNull()
+  })
+
+  it('기존 한도가 필요한 총량보다 크면 합계와 실제 제안값을 구분한다', async () => {
+    setupPlanning()
+    mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'enforced', legacy_live_run_count: 0,
+      limits: { calls: 100, input_tokens: 1000, output_tokens: 200 },
+      allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
+      remaining: { calls: 80, input_tokens: 800, output_tokens: 100 },
+    })
+    await inspectNeeds()
+    expectChange('AI 요청', '100회', '80회', '100회', '80회', '저장 시 전체 한도 유지')
+    expectChange('AI에 보내는 내용', '1,000토큰', '800토큰', '1,000토큰', '800토큰', '저장 시 전체 한도 유지')
+    expectChange('AI 답변', '200토큰', '100토큰', '200토큰', '100토큰', '저장 시 전체 한도 유지')
+  })
+
+  it('입력 사용량을 알 수 없으면 0으로 간주한 계산식을 표시하지 않는다', async () => {
+    setupPlanning()
+    mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'legacy_unknown',
+      limits: { calls: 21, input_tokens: null, output_tokens: 120 },
+      allocated: { calls: 20, input_tokens: null, output_tokens: 100 },
+      remaining: { calls: 1, input_tokens: null, output_tokens: 20 },
+    })
+    await inspectNeeds()
+    expect(screen.getByText(/이번 평가 최대 100토큰 · 기존 사용량을 확인할 수 없어 전체 한도를 자동 계산하지 않았습니다/)).toBeTruthy()
+    expect(screen.queryByText(/반영된 사용·예약 0토큰 \+ 이번 평가 최대 100토큰/)).toBeNull()
+    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
   })
 
   it('평가 횟수를 선택하면 최대 필요량을 배수로 입력하고 저장하지 않는다', async () => {
@@ -97,8 +405,8 @@ describe('관리자 누적 한도 변경', () => {
     fireEvent.change(await screen.findByRole('combobox', { name: '평가 자료 선택' }), { target: { value: 'fixed' } })
     fireEvent.change(screen.getByLabelText('평가할 횟수'), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: '필요량 확인' }))
-    expect(await screen.findByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '18')
-    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '150')
+    expect(await screen.findByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '18')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '150')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
     expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
   })
@@ -140,7 +448,7 @@ describe('관리자 누적 한도 변경', () => {
     fireEvent.change(screen.getByLabelText('AI 답변 허용량 (출력 토큰)'), { target: { value: '776' } })
     fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
     expect(screen.getByText('사유: 자동 생성: AI 평가 사용량 한도 설정')).toBeTruthy()
-    expect(screen.getByText(/한도를 저장해도 평가는 실행되지 않습니다/)).toBeTruthy()
+    expect(screen.getByText(/저장해도 평가가 실행되지는 않으며/)).toBeTruthy()
     expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: '확인한 한도 저장' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
@@ -183,10 +491,10 @@ describe('관리자 누적 한도 변경', () => {
     const fetch = setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, input_state: 'legacy_unknown' })
     await inspectNeeds()
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '6')
-    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '50')
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '50')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
-    expect(screen.getByText(/확인되지 않은 이전 평가 사용량은 포함하지 않았습니다/)).toBeTruthy()
+    expect(screen.getByText(/입력 사용량은 확인할 수 없어 전체 한도를 자동 계산하지 않았습니다/)).toBeTruthy()
     expect(fetch.mock.calls).toHaveLength(2)
     expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
     expect(screen.queryByRole('button', { name: '확인한 한도 저장' })).toBeNull()
@@ -200,37 +508,38 @@ describe('관리자 누적 한도 변경', () => {
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
     })
     await inspectNeeds()
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '26')
-    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '1000')
-    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '150')
-    expect(screen.getByRole('status').textContent).toContain('확인 후 저장해 주세요')
-    fireEvent.change(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)'), { target: { value: '1400' } })
-    expect(screen.queryByText(/확인한 필요량을 바탕으로 한도를 입력했습니다/)).toBeNull()
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI에 보내는 내용 확보량 (입력 토큰)')).toHaveProperty('value', '100')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '50')
+    expect(screen.getByRole('status').textContent).toContain('저장 전 전체 한도')
+    fireEvent.change(screen.getByLabelText('AI에 보내는 내용 확보량 (입력 토큰)'), { target: { value: '1400' } })
+    expect(screen.queryByText(/이번 평가에 확보할 최대량입니다/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))
-    expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '1400')
+    expect(screen.getByLabelText('AI에 보내는 내용 확보량 (입력 토큰)')).toHaveProperty('value', '1400')
     expect(fetch.mock.calls).toHaveLength(2)
     expect(screen.queryByRole('button', { name: '확인한 한도 저장' })).toBeNull()
   })
 
   it('변경 확인 후 입력 수정으로 돌아가도 자료와 무료 점검 결과가 유지된다', async () => {
-    const fetch = setupPlanning()
-    const { onSaved } = mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'enforced',
+    const data: BudgetSummary = { ...summary, state: 'consistent', input_state: 'enforced',
       limits: { calls: 21, input_tokens: 1000, output_tokens: 120 },
       allocated: { calls: 20, input_tokens: 200, output_tokens: 100 },
       remaining: { calls: 1, input_tokens: 800, output_tokens: 20 }, legacy_live_run_count: 0,
-    })
+    }
+    const fetch = setupPlanning(data)
+    const { onSaved } = mount(vi.fn(), vi.fn(), data)
     await inspectNeeds()
     fireEvent.change(screen.getByLabelText('한도 변경 사유'), { target: { value: '평가 준비' } })
     fireEvent.click(screen.getByRole('button', { name: '입력 내용 확인' }))
-    expect(screen.getByRole('button', { name: '확인한 한도 저장' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: '확인한 한도 저장' })).toBeTruthy()
     expect(onSaved).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '입력 수정' }))
     fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     expect(screen.getByRole('combobox', { name: '평가 자료 선택' })).toHaveProperty('value', 'fixed')
     expect(screen.getByRole('combobox', { name: '평가 모델 선택' })).toHaveProperty('value', 'test-model')
     expect(screen.getByText('이번 평가에 필요한 최대 양')).toBeTruthy()
-    expect(fetch.mock.calls).toHaveLength(2)
+    expect(fetch.mock.calls).toHaveLength(3)
     expect(fetch.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
   })
 
@@ -256,8 +565,8 @@ describe('관리자 누적 한도 변경', () => {
       remaining: { calls: 1, input_tokens: null, output_tokens: 20 },
     })
     await inspectNeeds()
-    expect(screen.getByLabelText('AI 요청 허용 횟수')).toHaveProperty('value', '26')
-    expect(screen.getByLabelText('AI 답변 허용량 (출력 토큰)')).toHaveProperty('value', '150')
+    expect(screen.getByLabelText('AI 요청 확보 횟수')).toHaveProperty('value', '6')
+    expect(screen.getByLabelText('AI 답변 확보량 (출력 토큰)')).toHaveProperty('value', '50')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('value', '')
     expect(screen.getByLabelText('AI에 보내는 내용 허용량 (입력 토큰)')).toHaveProperty('disabled', true)
     expect(fetch.mock.calls).toHaveLength(2)
@@ -309,7 +618,7 @@ describe('관리자 누적 한도 변경', () => {
   })
 
   it.each([
-    ['AI 요청 허용 횟수', '-1'], ['AI에 보내는 내용 허용량 (입력 토큰)', '1.5'], ['AI 답변 허용량 (출력 토큰)', '9007199254740992'],
+    ['AI 요청 확보 횟수', '-1'], ['AI에 보내는 내용 확보량 (입력 토큰)', '1.5'], ['AI 답변 확보량 (출력 토큰)', '9007199254740992'],
   ])('%s에 잘못 입력한 값 %s가 있으면 어떤 항목도 자동 변경하지 않는다', async (label, invalid) => {
     const fetch = setupPlanning()
     mount(vi.fn(), vi.fn(), { ...summary, state: 'consistent', input_state: 'enforced',
@@ -319,7 +628,7 @@ describe('관리자 누적 한도 변경', () => {
     })
     await inspectNeeds()
     fireEvent.change(screen.getByLabelText(label), { target: { value: invalid } })
-    const labels = ['AI 요청 허용 횟수', 'AI에 보내는 내용 허용량 (입력 토큰)', 'AI 답변 허용량 (출력 토큰)']
+    const labels = ['AI 요청 확보 횟수', 'AI에 보내는 내용 확보량 (입력 토큰)', 'AI 답변 확보량 (출력 토큰)']
     const before = labels.map((name) => (screen.getByLabelText(name) as HTMLInputElement).value)
     fireEvent.click(screen.getByRole('button', { name: '이전: 필요한 양 확인' }))
     fireEvent.click(screen.getByRole('button', { name: '계산한 값으로 입력하고 계속' }))

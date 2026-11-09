@@ -341,7 +341,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   }, [step])
   const [mode, setMode] = useState<'replay' | 'live'>(restored.pending ? restored.pending.live_config ? 'live' : 'replay' : draft?.mode ?? 'replay')
   const [approved, setApproved] = useState(!!restored.pending?.live_config)
-  const [dataset, setDataset] = useState(restored.pending?.dataset_id ?? draft?.dataset ?? datasets[0]?.id ?? '')
+  const [dataset, setDataset] = useState(restored.pending?.dataset_id ?? draft?.dataset ?? '')
   const selected = datasets.find((item) => item.id === dataset)
   const options = liveOptions(selected)
   const [model, setModel] = useState(restored.pending?.live_config?.model ?? draft?.model ?? options[0]?.live_config.model ?? '')
@@ -351,9 +351,10 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   const supported = selected?.evaluation_scope === 'fixed-answer-context-only' || selected?.evaluation_scope === 'source-chunks-retrieval-answer'
   const ragLive = selected?.evaluation_scope === 'source-chunks-retrieval-answer' && mode === 'live'
   const liveEnabled = allLiveEnabled && (!ragLive || ragLiveEnabled)
+  const [confirmDiscardPending, setConfirmDiscardPending] = useState(false)
   const canGenerate = supported && options.length > 0
-  const [reference, setReference] = useState(restored.pending?.reference_capture_id ?? draft?.reference ?? datasets[0]?.baseline?.id ?? datasets[0]?.captures[0]?.id ?? '')
-  const [candidate, setCandidate] = useState(restored.pending?.candidate_capture_id ?? draft?.candidate ?? datasets[0]?.captures.at(-1)?.id ?? '')
+  const [reference, setReference] = useState(restored.pending?.reference_capture_id ?? draft?.reference ?? '')
+  const [candidate, setCandidate] = useState(restored.pending?.candidate_capture_id ?? draft?.candidate ?? '')
   const changeDataset = (id: string) => {
     const value = datasets.find((item) => item.id === id)
     if (!liveOptions(value).length) setMode('replay')
@@ -378,6 +379,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
     if (!restored.pending) return
     const controller = new AbortController()
     setBusy(true)
+    if (!model) setModel(liveOptions(value)[0]?.live_config.model ?? '')
     getEvaluation(restored.pending.request_id, controller.signal).then((value) => {
       if (!controller.signal.aborted) finish(value, restored.pending!)
     }).catch((reason) => {
@@ -434,22 +436,51 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
     <div className={styles.content}>
       <section id="new-evaluation" className={`${styles.card} scroll-mt-28`} aria-label="평가 실행">
         <h2 className="text-xl font-bold leading-snug text-ink sm:text-2xl">평가 준비하기</h2>
-        {pending && <div className="rounded-xl bg-amber-50 p-3 text-sm" role="status"><p>보관한 요청: {pending.request_id}</p><p>{pending.dataset_id} · 기준 {pending.reference_capture_id}{pending.baseline_version ? ` · 기준 버전 ${pending.baseline_version}` : ''} · {pending.live_config ? `${pending.live_config.model} · 최대 ${pending.live_config.max_model_calls}회 · 출력 ${pending.live_config.max_output_tokens}토큰/회 · 입력 ${pending.live_config.max_input_tokens ?? '기록 없음'}토큰/회` : '저장 응답 재평가'}</p><p>새로고침·재로그인 뒤에도 이 탭에서 같은 요청을 확인합니다. 탭을 닫기 전 실행 이력에서 접수 여부를 확인하세요.</p></div>}
+        {pending && <div className="space-y-3 rounded-xl bg-amber-50 p-4 text-sm leading-6" role="status">
+          <p className="font-semibold">이전에 보낸 평가 요청을 확인하고 있어요</p>
+          <p>요청이 접수됐는지 확인할 수 없다면 평가 이력에서 먼저 살펴봐 주세요.</p>
+          <div className="flex flex-wrap gap-2"><Link className={styles.secondaryButton} to={listPath}>평가 이력 보기</Link>
+            {!confirmDiscardPending && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => setConfirmDiscardPending(true)}>요청 보관 종료</button>}
+          </div>
+          {confirmDiscardPending && <div className="space-y-3 rounded-lg bg-white p-3">
+            <p className="font-semibold">이 탭에 보관된 요청 기록을 지울까요?</p>
+            <p>서버에 이미 접수된 평가는 취소되지 않습니다. 아직 확인되지 않은 요청이 나중에 접수될 수도 있으니 평가 이력을 확인해 주세요.</p>
+            <div className="flex flex-wrap gap-2"><button type="button" className={styles.primaryButton} disabled={busy} onClick={discardPending}>보관 기록 지우기</button><button type="button" className={styles.secondaryButton} onClick={() => setConfirmDiscardPending(false)}>돌아가기</button></div>
+          </div>}
+          <details><summary className="cursor-pointer font-medium">보관된 요청 정보</summary><p className="mt-2 break-all">요청 번호: {pending.request_id}</p><p>{pending.dataset_id} · 기준 {pending.reference_capture_id}{pending.baseline_version ? ` · 기준 버전 ${pending.baseline_version}` : ''} · {pending.live_config ? `${pending.live_config.model} · 최대 ${pending.live_config.max_model_calls}회 · 출력 ${pending.live_config.max_output_tokens}토큰/회 · 입력 ${pending.live_config.max_input_tokens ?? '기록 없음'}토큰/회` : '저장 응답 재평가'}</p></details>
+        </div>}
         {storageError && <p role="alert" className="text-sm text-red-700">{storageError}</p>}
-        {submitError && <div role="alert" className="space-y-2 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-700"><p>{submitError}</p>{budgetRejected && <>
-          <p>누적·일별 잔여 한도와 예약·미확인 사용량을 확인하세요. 설정을 확인한 뒤 이 화면으로 돌아오면 같은 요청으로 재시도할 수 있습니다.</p>
-          <Link className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary" to="/ops/budget">예산 관리에서 확인</Link>
-          <p>조건을 바꾸려면 아래 버튼을 누르고, 다시 실행하기 전에 ‘실행 설정·예산 점검’으로 차단 사유를 확인하세요.</p>
-        </>}</div>}
+        {submitError && <div role="alert" className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800">
+          {budgetRejected ? <>
+            <p className="text-base font-bold">평가를 시작할 수 없어요</p>
+            <p>사용 한도가 부족하거나 예산 상태를 확인해야 해요. 이번 평가는 접수되지 않았어요.</p>
+            <p>예산 관리에서 전체·하루 한도를 확인한 뒤, 이 화면으로 돌아와 다시 실행해 주세요.</p>
+            <Link className="inline-flex min-h-11 items-center rounded-lg bg-white px-4 font-semibold text-red-800 ring-1 ring-red-200 focus-visible:outline-2 focus-visible:outline-brand-primary" to="/ops/budget">예산 관리로 이동</Link>
+          </> : <p>{submitError}</p>}
+        </div>}
         {rejected && <button className={styles.secondaryButton} onClick={reselect}>접수되지 않은 조건 다시 선택</button>}
         <ol aria-label="평가 준비 단계" className="grid list-none gap-2 p-0 text-sm sm:grid-cols-3">
           {(['평가 자료', '답변 확인 방법', '비교 및 실행'] as const).map((label, index) => <li key={label} aria-current={step === index + 1 ? 'step' : undefined} className={`rounded-lg px-3 py-2 ${step === index + 1 ? 'bg-brand-primary font-bold text-white' : 'bg-surface-muted text-ink-muted'}`}><span className="mr-2">{index + 1}</span>{label}{step === index + 1 && <span className="sr-only"> · 현재 단계</span>}</li>)}
         </ol>
+  const discardPending = () => {
+    if (!pending || busy || submitting.current) return
+    try {
+      const stored = readPendingEvaluation(owner)
+      if (stored && stored.request_id !== pending.request_id) throw new Error('다른 요청이 보관되어 있습니다.')
+      clearPendingEvaluation(owner, pending.request_id)
+      requestId.current = null
+      setPending(null); setConfirmDiscardPending(false); setSubmitError(''); setStorageError('')
+      setRejected(false); setBudgetRejected(false); setApproved(false); setStep(1)
+      setMode('replay'); setDataset(''); setModel(''); setReference(''); setCandidate('')
+    } catch {
+      setStorageError('보관 기록을 지우지 못했습니다. 평가 이력을 확인한 뒤 다시 시도해 주세요.')
+    }
+  }
         <form className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (step === 3) void submit() }}>
           {step === 1 && <>
           <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-lg font-bold leading-snug sm:text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">1. 평가 자료 선택</h3>
           <EvaluationDatasetPicker datasets={datasets} value={dataset} disabled={busy || requestId.current !== null} onChange={changeDataset} />
-          {!supported && <p className="text-sm text-amber-800 md:col-span-2">이 자료는 평가 범위를 확인할 수 없어 실행할 수 없습니다. 다른 자료를 선택해 주세요.</p>}
+          {dataset && !supported && <p className="text-sm text-amber-800 md:col-span-2">이 자료는 평가 범위를 확인할 수 없어 실행할 수 없습니다. 다른 자료를 선택해 주세요.</p>}
           <button type="button" className={`${styles.primaryButton} justify-self-start md:col-span-2`} disabled={!dataset || !supported || busy} onClick={() => setStep(2)}>다음: 답변 확인 방법</button>
           </>}
           {step === 2 && <>

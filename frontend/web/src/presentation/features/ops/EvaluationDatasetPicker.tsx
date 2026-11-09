@@ -53,6 +53,7 @@ export function EvaluationDatasetPicker({ datasets, value, disabled, onChange }:
     </EvaluationHelp>
     <select id={id} aria-describedby={`${id}-help`} className="min-h-11 w-full min-w-0 rounded-xl border border-line bg-white px-3 text-base focus:outline-2 focus:outline-brand-primary"
       value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+      <option value="" disabled>평가 자료를 선택하세요</option>
       {groups.filter((group) => group.datasets.length > 0).map((group) => <optgroup key={group.id} label={group.label}>{group.datasets.map(option)}</optgroup>)}
       {unclassified.length > 0 && <optgroup label="분류 확인 필요">{unclassified.map(option)}</optgroup>}
     </select>

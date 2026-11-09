@@ -108,25 +108,35 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
         <h3 className="text-base font-bold text-ink">AI 평가 사용 한도</h3>
         <details className="relative">
           <summary aria-label="AI 평가 사용 한도 도움말" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-line bg-white text-xs font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand-primary">?</summary>
-          <p className="absolute left-0 top-9 z-10 w-72 max-w-[calc(100vw-4rem)] rounded-xl border border-line bg-white p-4 text-sm leading-6 text-ink-muted shadow-lg">전체와 하루 한도를 각각 저장하며, 하루 한도를 사용하면 두 한도를 모두 충족해야 평가할 수 있습니다. 정기 평가에는 전체 입력 한도와 하루 한도가 모두 필요합니다. 금액 한도는 아닙니다. 남은 한도에서는 진행 중인 평가의 예약량을 제외하며, 미완료 예약은 다음 날로 이월될 수 있습니다.</p>
+          <p className="absolute left-0 top-9 z-10 w-72 max-w-[calc(100vw-4rem)] rounded-xl border border-line bg-white p-4 text-sm leading-6 text-ink-muted shadow-lg">전체 한도는 날짜가 바뀌어도 유지됩니다. 하루 한도를 사용하면 전체와 하루 한도를 모두 충족해야 평가할 수 있습니다. 정기 평가에는 전체 입력 한도와 하루 한도가 모두 필요합니다. 금액 한도는 아닙니다. 남은 한도에서는 진행 중인 평가의 예약량을 제외하며, 미완료 예약은 다음 날로 이월될 수 있습니다.</p>
         </details>
       </div>
       {(!operatorId || error || !data || summary?.state === 'inconsistent' || !summary?.limits_revision) && <p className="mt-4 text-sm font-semibold text-brand-primary">{!operatorId ? '관리자에게 설정을 요청하세요.' : error ? '현재 상태를 확인하지 못했습니다. 예산을 새로고침해 주세요.' : !data ? '현재 상태를 확인하고 있습니다.' : summary?.state === 'inconsistent' ? '사용 기록이 맞지 않아 설정을 변경할 수 없습니다.' : '현재 서버에서 설정을 변경할 수 없습니다. 관리자에게 확인해 주세요.'}</p>}
       {data && summary && <div className="mt-4 grid gap-4">
         <section className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5" aria-label="전체 사용 한도">
-          <div><h3 className="text-base font-bold text-ink">전체 사용 한도</h3><p className="mt-1 text-sm text-ink-muted">날짜가 바뀌어도 유지</p></div>
+          <h3 className="text-base font-bold text-ink">전체 사용 한도</h3>
           {summary.state === 'inconsistent' && <p role="alert" className="text-sm leading-6 text-red-700">저장된 할당량과 상세 장부가 일치하지 않습니다. 잔여 한도를 확정할 수 없어 표시하지 않습니다.</p>}
           {summary.state === 'unconfigured' && <p role="status" className="text-sm font-semibold text-ink">아직 사용 한도를 설정하지 않았습니다.</p>}
           {summary.state !== 'unconfigured' && summary.input_state === 'unconfigured' && <p className="text-sm leading-6 text-amber-800">입력 한도가 설정되지 않았습니다. 검색·RAG 평가를 하려면 입력 한도도 설정해야 합니다.</p>}
-          {summary.limits && summary.state === 'consistent' && summary.remaining && <section aria-label="남은 사용량" className="space-y-3">
-            <h4 className="text-sm font-bold text-ink">남은 한도</h4>
-            <dl className="grid gap-2 sm:grid-cols-3">
-              <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI 요청</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.calls)}회</dd><dd className="mt-1 text-xs text-ink-muted">한도 {count(summary.limits.calls)}회</dd></div>
-              <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI에 보내는 내용</dt><dd className="mt-1 break-words text-base font-bold text-ink">{summary.limits.input_tokens == null ? '설정되지 않음' : summary.remaining.input_tokens == null ? '확인할 수 없음' : inputCount(summary.remaining.input_tokens)}</dd><dd className="mt-1 text-xs text-ink-muted">한도 {summary.limits.input_tokens == null ? '미설정' : inputCount(summary.limits.input_tokens)}</dd></div>
-              <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI 답변</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.output_tokens)}토큰</dd><dd className="mt-1 text-xs text-ink-muted">한도 {count(summary.limits.output_tokens)}토큰</dd></div>
-            </dl>
-            {summary.legacy_live_run_count > 0 && <p className="text-xs text-amber-800">확인되지 않은 이전 평가 사용량은 포함되지 않았습니다.</p>}
-          </section>}
+          {summary.limits && summary.state === 'consistent' && summary.remaining && <>
+            <section aria-label="남은 사용량" className="space-y-3">
+              <h4 className="text-sm font-bold text-ink">지금 남은 한도</h4>
+              <dl className="grid gap-2 sm:grid-cols-3">
+                <div className="min-w-0 rounded-lg bg-brand-soft px-3 py-3"><dt className="text-xs text-ink-muted">AI 요청</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.calls)}회</dd></div>
+                <div className="min-w-0 rounded-lg bg-brand-soft px-3 py-3"><dt className="text-xs text-ink-muted">AI에 보내는 내용</dt><dd className="mt-1 break-words text-base font-bold text-ink">{summary.limits.input_tokens == null ? '설정되지 않음' : summary.remaining.input_tokens == null ? '확인할 수 없음' : inputCount(summary.remaining.input_tokens)}</dd></div>
+                <div className="min-w-0 rounded-lg bg-brand-soft px-3 py-3"><dt className="text-xs text-ink-muted">AI 답변</dt><dd className="mt-1 break-words text-base font-bold text-ink">{count(summary.remaining.output_tokens)}토큰</dd></div>
+              </dl>
+              {summary.legacy_live_run_count > 0 && <p className="text-xs text-amber-800">확인되지 않은 이전 평가 사용량은 포함되지 않았습니다.</p>}
+            </section>
+            <section aria-label="설정된 전체 한도" className="space-y-3">
+              <h4 className="text-sm font-semibold text-ink">설정된 전체 한도</h4>
+              <dl className="grid gap-2 sm:grid-cols-3">
+                <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI 요청</dt><dd className="mt-1 break-words text-sm font-semibold text-ink">{count(summary.limits.calls)}회</dd></div>
+                <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI에 보내는 내용</dt><dd className="mt-1 break-words text-sm font-semibold text-ink">{summary.limits.input_tokens == null ? '미설정' : inputCount(summary.limits.input_tokens)}</dd></div>
+                <div className="min-w-0 rounded-lg bg-surface-muted px-3 py-3"><dt className="text-xs text-ink-muted">AI 답변</dt><dd className="mt-1 break-words text-sm font-semibold text-ink">{count(summary.limits.output_tokens)}토큰</dd></div>
+              </dl>
+            </section>
+          </>}
           {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
         </section>
         <section aria-label="하루 예산 요약" className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5">
