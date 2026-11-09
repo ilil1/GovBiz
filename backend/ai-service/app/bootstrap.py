@@ -156,6 +156,7 @@ def build_application_container(
         timeout=settings.llm_combination_review_model_timeout_seconds,
     )
     combination_agent = CombinationReviewAgent(
+        tracing=llm_tracing,
         model=ChatOpenAI(
             model=settings.openai_model, api_key=settings.openai_api_key,
             use_responses_api=True, store=False, reasoning={"effort": "none"},

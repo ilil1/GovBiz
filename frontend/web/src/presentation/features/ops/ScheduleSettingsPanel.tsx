@@ -1,3 +1,4 @@
+import { createRequestId } from './requestId'
 import { useEffect, useId, useRef, useState } from 'react'
 import { getScheduleSettings, OpsApiError, setScheduleSettings, type ScheduleSettings, type ScheduleSettingsInput } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles, workspaceTagClassName } from '../../shared/workspace/WorkspacePage.styles'
@@ -45,7 +46,7 @@ function ScheduleSettingsForm({ owner, onExpired, onSaved, refreshKey }: Props) 
   const review = () => {
     if (!settings || loading || selected === settings.enabled || !reason.trim() || reason.trim().length > 500) return
     setError(''); setNotice(''); setUncertain(false)
-    setProposal({ request_id: crypto.randomUUID(), expected_revision: settings.revision, enabled: selected, reason: reason.trim() })
+    setProposal({ request_id: createRequestId(), expected_revision: settings.revision, enabled: selected, reason: reason.trim() })
   }
   const save = async () => {
     if (!proposal || !settings || submitting.current || loading) return

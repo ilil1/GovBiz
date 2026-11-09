@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
-import { EvaluationHelp } from './EvaluationHelp'
+import { MonitoringHelp } from './MonitoringHelp'
 import { useMonitoringDemo } from './MonitoringDemoContext'
 import { createMonitoringRequest, MonitoringResponseError, monitoringFailureMessage, requireMonitoringResponse } from './monitoringRequest'
 
@@ -12,13 +12,13 @@ const metricsSchema = z.object({
   scope: z.literal('observed-root-traces'),
   environment: z.enum(['all', 'production', 'development', 'unknown', 'other']),
   results: z.array(z.object({
-    name: z.enum(['search.total', 'evidence.total', 'assistant.total']),
+    name: z.enum(['search.total', 'evidence.total', 'assistant.total', 'combination.total']),
     observed: count, completed: count, in_progress: count, errors: count, warnings: count,
     latency_samples: count, missing_latency: count, p50_seconds: seconds, p95_seconds: seconds,
   })),
 })
 type Metrics = z.infer<typeof metricsSchema>
-const labels: Record<string, string> = { 'search.total': '공고 검색', 'evidence.total': '공고 근거 답변', 'assistant.total': 'AI 도우미' }
+const labels: Record<string, string> = { 'search.total': '공고 검색', 'evidence.total': '공고 근거 답변', 'assistant.total': 'AI 도우미', 'combination.total': '중복 지원 검토' }
 const environments: Record<string, string> = { production: '운영', development: '개발', unknown: '환경 미기록', other: '그 외 환경', all: '전체 환경' }
 const duration = (value: number | null) => value === null ? '기록 없음' : `${value.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}초`
 const seoulTime = (value: string) => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value))
@@ -51,9 +51,9 @@ export function TraceMetricsPanel({ onExpired }: { onExpired: () => void }) {
     return request.cancel
   }, [range, selectedEnvironment, revision, monitoringFetch])
   return <section className={styles.card} aria-label="추적된 실행 집계">
-    <EvaluationHelp label="기록된 실행" title={<h2 className={styles.cardTitle}>기록된 실행 살펴보기</h2>}>
-      검색·근거 답변·도우미의 시작 단계를 집계합니다. 환경이 기록되지 않은 실행은 전체 환경 또는 환경 미기록을 선택하면 볼 수 있습니다. 오류·주의는 종료된 실행의 기록 수준 기준이며 시간은 측정된 실행만 사용합니다.
-    </EvaluationHelp>
+    <MonitoringHelp label="기록된 실행" title={<h2 className={styles.cardTitle}>기록된 실행 살펴보기</h2>}>
+      검색·근거 답변·도우미·중복 지원 검토의 시작 단계를 집계합니다. 환경이 기록되지 않은 실행은 전체 환경 또는 환경 미기록을 선택하면 볼 수 있습니다. 오류·주의는 종료된 실행의 기록 수준 기준이며 시간은 측정된 실행만 사용합니다.
+    </MonitoringHelp>
     {isExample && <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-950">예시 데이터 · 실제 실행 기록이 아닙니다.</p>}
     <p className="m-0 text-sm leading-6 text-ink-muted">수집된 실행만 포함하므로 전체 사용자 요청의 실패율이 아닙니다.</p>
     <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); setRange(days); setSelectedEnvironment(environment); setRevision((value) => value + 1) }}>

@@ -5,6 +5,7 @@ import ai.govbiz.core.combinationreview.config.CombinationReviewProperties
 import ai.govbiz.core.combinationreview.facade.AiCombinationReviewFacade
 import ai.govbiz.core.combinationreview.facade.exception.AiCombinationReviewFacadeException
 import ai.govbiz.core.combinationreview.helper.CombinationReviewHashHelper
+import ai.govbiz.core.combinationreview.helper.CombinationReviewTracingHelper
 import ai.govbiz.core.combinationreview.domain.*
 import ai.govbiz.core.combinationreview.domain.exception.CombinationReviewNotFoundException
 import ai.govbiz.core.combinationreview.domain.exception.CombinationReviewCapacityException
@@ -52,6 +53,7 @@ class CombinationReviewRunService(
     @param:Value("\${app.combination-review.queue.enabled:false}") private val queueEnabled: Boolean,
     private val properties: CombinationReviewProperties,
     private val productionQuality: ProductionQualityClient,
+    private val tracing: CombinationReviewTracingHelper = CombinationReviewTracingHelper(),
 ) {
     private val runnerInstanceId = UUID.randomUUID().toString()
     private val transactions = TransactionTemplate(transactionManager)
@@ -92,71 +94,73 @@ class CombinationReviewRunService(
         val run = runs.claim(runId, runnerInstanceId) ?: return
         var analysisStarted = false
         try {
-            if (run.input.programs.size != 2) {
-                throw CombinationReviewRunException(ReviewRunFailureCode.INPUT_PROGRAM_COUNT_UNSUPPORTED, run.id)
-            }
-            val documents = mutableListOf<ReviewSourceDocument>()
-            val blocks = mutableListOf<ReviewEvidenceBlock>()
-            val raw = mutableListOf<ByteArray>()
-            val warnings = mutableListOf<String>()
-            run.input.programs.forEachIndexed { index, program ->
-                if (program.identity.subProgramId != null) {
-                    throw SupportProgramDocumentException(SupportProgramDocumentException.Reason.UNSUPPORTED)
+            tracing.observe {
+                if (run.input.programs.size != 2) {
+                    throw CombinationReviewRunException(ReviewRunFailureCode.INPUT_PROGRAM_COUNT_UNSUPPORTED, run.id)
                 }
-                val fetched = collectAttachments(program.identity)
-                if (documents.size + fetched.files.size > MAX_REVIEW_SOURCE_DOCUMENTS) {
-                    throw SupportProgramDocumentException(SupportProgramDocumentException.Reason.TOO_LARGE)
-                }
-                warnings.addAll(fetched.warnings.map { "사업 ${index + 1}: $it" })
-                var parsedDocumentCount = 0
-                var rejectedReason: SupportProgramDocumentException.Reason? = null
-                fetched.files.forEach { file ->
-                    val parsed = try {
-                        documentParser.parseEvidence(file.bytes, file.format)
-                    } catch (error: SupportProgramDocumentException) {
-                        if (error.reason !in setOf(
-                                SupportProgramDocumentException.Reason.UNSUPPORTED,
-                                SupportProgramDocumentException.Reason.TOO_LARGE,
-                            )
-                        ) throw error
-                        rejectedReason = error.reason
-                        warnings.add("사업 ${index + 1}: 자동 분석 제외 첨부(${error.reason.excludedLabel}): ${file.fileName.take(250)}. 원본 대조가 필요합니다.")
-                        return@forEach
+                val documents = mutableListOf<ReviewSourceDocument>()
+                val blocks = mutableListOf<ReviewEvidenceBlock>()
+                val raw = mutableListOf<ByteArray>()
+                val warnings = mutableListOf<String>()
+                run.input.programs.forEachIndexed { index, program ->
+                    if (program.identity.subProgramId != null) {
+                        throw SupportProgramDocumentException(SupportProgramDocumentException.Reason.UNSUPPORTED)
                     }
-                    val document = ReviewSourceDocument(
-                        index,
-                        file.sourceUrl,
-                        file.fileName,
-                        file.format,
-                        CombinationReviewHashHelper.sha256(file.bytes),
-                        CombinationReviewHashHelper.sha256(parsed.joinToString("\n") { it.text }),
-                        SupportProgramDocumentParser.EVIDENCE_VERSION,
-                        LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS),
-                        fetched.sourcePageUrl,
-                    )
-                    documents.add(document)
-                    parsed.forEach { block -> blocks.add(ReviewEvidenceBlock("E${blocks.size}", index, document.rawHash, block.locator, block.text)) }
-                    raw.add(file.bytes)
-                    parsedDocumentCount++
+                    val fetched = collectAttachments(program.identity)
+                    if (documents.size + fetched.files.size > MAX_REVIEW_SOURCE_DOCUMENTS) {
+                        throw SupportProgramDocumentException(SupportProgramDocumentException.Reason.TOO_LARGE)
+                    }
+                    warnings.addAll(fetched.warnings.map { "사업 ${index + 1}: $it" })
+                    var parsedDocumentCount = 0
+                    var rejectedReason: SupportProgramDocumentException.Reason? = null
+                    fetched.files.forEach { file ->
+                        val parsed = try {
+                            documentParser.parseEvidence(file.bytes, file.format)
+                        } catch (error: SupportProgramDocumentException) {
+                            if (error.reason !in setOf(
+                                    SupportProgramDocumentException.Reason.UNSUPPORTED,
+                                    SupportProgramDocumentException.Reason.TOO_LARGE,
+                                )
+                            ) throw error
+                            rejectedReason = error.reason
+                            warnings.add("사업 ${index + 1}: 자동 분석 제외 첨부(${error.reason.excludedLabel}): ${file.fileName.take(250)}. 원본 대조가 필요합니다.")
+                            return@forEach
+                        }
+                        val document = ReviewSourceDocument(
+                            index,
+                            file.sourceUrl,
+                            file.fileName,
+                            file.format,
+                            CombinationReviewHashHelper.sha256(file.bytes),
+                            CombinationReviewHashHelper.sha256(parsed.joinToString("\n") { it.text }),
+                            SupportProgramDocumentParser.EVIDENCE_VERSION,
+                            LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS),
+                            fetched.sourcePageUrl,
+                        )
+                        documents.add(document)
+                        parsed.forEach { block -> blocks.add(ReviewEvidenceBlock("E${blocks.size}", index, document.rawHash, block.locator, block.text)) }
+                        raw.add(file.bytes)
+                        parsedDocumentCount++
+                    }
+                    if (parsedDocumentCount == 0) {
+                        throw SupportProgramDocumentException(
+                            rejectedReason ?: SupportProgramDocumentException.Reason.UNSUPPORTED,
+                        )
+                    }
                 }
-                if (parsedDocumentCount == 0) {
-                    throw SupportProgramDocumentException(
-                        rejectedReason ?: SupportProgramDocumentException.Reason.UNSUPPORTED,
-                    )
+                if (blocks.size > 512 || blocks.sumOf { it.text.length } > 120_000) throw CombinationReviewRunException(ReviewRunFailureCode.SOURCE_TOO_LARGE)
+                val evidence = ReviewEvidenceSnapshot(documents, blocks, warnings.distinct())
+                runs.saveEvidence(run.id, evidence, raw)
+                // 계약 버전은 접수 시점이 아니라 실제 실행 시점의 설정을 따른다. 지난 실행은 저장된 설정으로 읽는다.
+                val configuration = ai.configuration(properties.reviewContractVersion)
+                runs.saveConfiguration(run.id, configuration)
+                analysisStarted = true
+                val analysis = AiUsageContextHelper.attribute(runs.findOwnerId(run.id), AiUsageFeature.COMBINATION_REVIEW) {
+                    ai.analyze(run.input, evidence, configuration)
                 }
+                runs.succeed(run.id, analysis)
+                recordReviewQuality(run.input, evidence, analysis)
             }
-            if (blocks.size > 512 || blocks.sumOf { it.text.length } > 120_000) throw CombinationReviewRunException(ReviewRunFailureCode.SOURCE_TOO_LARGE)
-            val evidence = ReviewEvidenceSnapshot(documents, blocks, warnings.distinct())
-            runs.saveEvidence(run.id, evidence, raw)
-            // 계약 버전은 접수 시점이 아니라 실제 실행 시점의 설정을 따른다. 지난 실행은 저장된 설정으로 읽는다.
-            val configuration = ai.configuration(properties.reviewContractVersion)
-            runs.saveConfiguration(run.id, configuration)
-            analysisStarted = true
-            val analysis = AiUsageContextHelper.attribute(runs.findOwnerId(run.id), AiUsageFeature.COMBINATION_REVIEW) {
-                ai.analyze(run.input, evidence, configuration)
-            }
-            runs.succeed(run.id, analysis)
-            recordReviewQuality(run.input, evidence, analysis)
         } catch (error: Exception) {
             val code = failureCode(error)
             // 검증 실패는 확정 실패다. 호출/결과 저장 중 단절은 과금 여부를 알 수 없어 자동 재호출하지 않는다.
@@ -209,6 +213,7 @@ class CombinationReviewRunService(
             }
             productionQuality.recordOperation(
                 scope = "combination-review",
+                traceId = CombinationReviewTracingHelper.currentTraceId(),
                 question = "선택한 두 공고의 중복 신청·동시 수행·동일 과제와 비용의 중복 지원 가능성을 검토해 주세요.",
                 contexts = contexts,
                 output = buildString {

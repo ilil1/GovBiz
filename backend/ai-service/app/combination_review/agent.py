@@ -5,6 +5,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langsmith import tracing_context
 from openai import APITimeoutError
+from app.config import LangfuseSettings
+from app.tracing import LLMTracing
 from app.combination_review.models import (
     AnalysisSelection, AnalysisSelectionV3, AnalyzeRequest, AnalyzeRequestV3, CONTRACT_VERSION_V3,
     build_citation_options,
@@ -24,8 +26,10 @@ def _responses_schema(selection: type[AnalysisSelection | AnalysisSelectionV3], 
 
 class CombinationReviewAgent:
     """Single structured call per request (v2 six stages or v3 three questions), no tools, handoffs, retries or rule fallback."""
-    def __init__(self, *, model: ChatOpenAI, run_timeout_seconds: float):
+    def __init__(self, *, model: ChatOpenAI, run_timeout_seconds: float, tracing: LLMTracing | None = None):
         self._run_timeout_seconds = run_timeout_seconds
+        self._tracing = tracing or LLMTracing(LangfuseSettings())
+        self._model_name = model.model_name
         self._structured_model = model.with_structured_output(
             _responses_schema(AnalysisSelection, "PairSelection", "stages"),
             method="json_schema", strict=True, include_raw=True,
@@ -52,12 +56,23 @@ class CombinationReviewAgent:
             for index, option in enumerate(build_citation_options(request))
         ]
         try:
-            async with asyncio.timeout(self._run_timeout_seconds):
-                with tracing_context(enabled=False):
-                    result = await structured_model.ainvoke([
-                        SystemMessage(content=instructions),
-                        HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
-                    ])
+            with self._tracing.observation(
+                "combination.model", as_type="generation", model=self._model_name,
+                metadata={"usage_reported": False},
+            ) as generation:
+                async with asyncio.timeout(self._run_timeout_seconds):
+                    with tracing_context(enabled=False):
+                        result = await structured_model.ainvoke([
+                            SystemMessage(content=instructions),
+                            HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
+                        ])
+                    usage = result["raw"].usage_metadata
+                    self._tracing.update(generation, usage_details={
+                        key: value for key, value in (
+                            ("input", (usage or {}).get("input_tokens")),
+                            ("output", (usage or {}).get("output_tokens")),
+                        ) if value is not None
+                    }, metadata={"usage_reported": usage is not None})
         except (APITimeoutError, TimeoutError) as error:
             raise TimeoutError("Combination review agent timed out") from error
         if (result["parsing_error"] is not None

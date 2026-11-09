@@ -16,6 +16,14 @@ function setup(results: unknown[], status = 200) {
   return fetch
 }
 
+it('중복 지원 검토 모델 실행을 기능별 집계에 표시한다', async () => {
+  setup([{ ...row, feature: 'combination.model' }])
+  render(<ModelTraceMetricsPanel onExpired={vi.fn()} />)
+  fireEvent.click(await screen.findByText('기능과 모델별 자세히 보기'))
+  expect(await screen.findByText('중복 지원 검토')).toBeTruthy()
+  expect(screen.getByText('example-model')).toBeTruthy()
+})
+
 it('수집된 모델 실행의 오류와 표본 시간만 기능·모델별로 보여준다', async () => {
   vi.stubEnv('DEV', true); vi.stubEnv('MODE', 'development')
   const fetch = setup([row])
@@ -40,7 +48,7 @@ it('수집된 모델 실행의 오류와 표본 시간만 기능·모델별로 �
   expect(help.getAttribute('aria-expanded')).toBe('false')
   fireEvent.click(help)
   expect(help.getAttribute('aria-expanded')).toBe('true')
-  expect(within(panel).getByText(/시간 초과는 오류에 포함됩니다/)).toBeTruthy()
+  expect(screen.getByText(/시간 초과는 오류에 포함됩니다/)).toBeTruthy()
   expect(new URL(fetch.mock.calls[0][0], 'https://govbiz.test').searchParams.get('environment')).toBe('development')
   fireEvent.click(within(panel).getByText('기간과 실행 환경 바꾸기'))
   fireEvent.change(within(panel).getByLabelText('모델 실행 환경'), { target: { value: 'all' } })

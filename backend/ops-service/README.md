@@ -53,7 +53,7 @@ WSGI 시작 시 URL 설정과 view 모듈도 읽어 첫 관리자 요청이 모�
 
 ## LLMOps 운영 화면
 
-실행 추적 집계는 Langfuse에서 수집된 `search.total`, `evidence.total`, `assistant.total`만 대상으로
+실행 추적 집계는 Langfuse에서 수집된 `search.total`, `evidence.total`, `assistant.total`, `combination.total`만 대상으로
 완료·진행 중·오류·주의와 소요 시간 중앙값·p95를 보여 줍니다. 지연 기록이 없는 완료 건수는 별도로 표시합니다.
 추적 비활성·샘플링·전송 실패로 빠진 요청이 있어 전체 사용자 요청의 실패율이나 지연 분포가 아닙니다.
 화면에서 운영·개발·환경 미기록·그 외·전체를 선택할 수 있습니다. 배포 화면의 기본은 운영이며,
@@ -64,7 +64,7 @@ WSGI 시작 시 URL 설정과 view 모듈도 읽어 첫 관리자 요청이 모�
 기간 내 모든 페이지를 확인하지 못하면 부분 결과 대신 오류를 반환합니다.
 
 `GET /api/v1/ops/model-trace-metrics`는 Core 관리자 세션을 매 요청 확인하고,
-최대 30일의 선택한 환경에 수집된 `search.ranking.model`, `evidence.model`, `assistant.model` 중
+최대 30일의 선택한 환경에 수집된 `search.ranking.model`, `evidence.model`, `assistant.model`, `combination.model` 중
 `GENERATION` 관측만 기능·모델별로 집계합니다. 종료에는 오류 종료도 포함되며 시간 초과는 오류의
 부분집합입니다. 시간 초과 여부를 판별할 수 없는 오류는 별도 건수로 반환합니다. 시간 표본이 없으면
 p50·p95는 `null`입니다. 추적이 꺼지거나 샘플링·전송·저장 실패로 빠진 호출은 포함하지 않아
@@ -1490,7 +1490,7 @@ Prefect 등록 상태를 표시합니다. 정상 진단 응답의 `503 / FAIL`�
 | `POST /api/v1/ops/datasets/{UUID}/publish` | 초안의 불변 버전 게시(`200`) | 누락된 답변·채점 조건·보관 자료 `400`, 버전·요청 충돌 `409`; 모델 호출 없음 |
 | `POST /api/v1/ops/datasets/{UUID}/archive` | `archived: true` 보관, `false` 복원(`200`) | 입력 오류 `400`, 없음 `404`, 버전·요청 충돌 `409`; 기존 이력 유지 |
 | `GET /api/v1/ops/traces` | Langfuse의 실행 시작 단계 목록; `name`, `from_time`, `to_time`, `cursor` 조회 조건 | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·설정 누락 `503` |
-| `GET /api/v1/ops/trace-metrics` | 수집된 세 기능의 실행 건수·오류·지연 집계; `from_time`, `to_time`, 최대 30일, `environment=all/production/development/unknown/other` (생략 시 all) | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·페이지 또는 시간 제한 초과 `503` |
+| `GET /api/v1/ops/trace-metrics` | 수집된 네 기능의 실행 건수·오류·지연 집계; `from_time`, `to_time`, 최대 30일, `environment=all/production/development/unknown/other` (생략 시 all) | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·페이지 또는 시간 제한 초과 `503` |
 | `GET /api/v1/ops/traces/{trace_id}` | 같은 trace ID의 단계·입출력·사용량; `cursor`로 다음 페이지 조회 | 인증·권한 오류 `401/403`, 없음 `404`, 추적 서버 장애 `503` |
 | `GET /api/v1/ops/evaluations/{UUID}/report` | `200`, CSP sandbox가 적용된 HTML | 미인증 `401`, 비관리자 `403`, Core 장애 `503`, 없거나 훼손된 보고서 `404` |
 | `POST /api/v1/ops/evaluations` | 최초 `202`, 재전송 `200`; 실행 메타데이터 | 자료/UUID 오류 `400`, 미인증 `401`, 권한·CSRF `403`, 요청 충돌 `409`, 인증 서버 장애·접수 미확인 `503` |
@@ -1648,8 +1648,8 @@ Core·Ops API에서 공유하고, Ops CSRF 쿠키는 `govbiz_ops_csrf`로 구별
 
 목록은 기본 최근 7일, 최대 30일 기간의 **실행 시작 단계(logical root observation)**를 50개씩 읽습니다.
 같은 trace에 서비스별 시작 단계가 여러 개일 수 있으므로 목록 건수를 고유 실행 수로 해석하지 않습니다.
-화면의 `name` 값 `support-program-search`·`assistant-agent`·`support-program-evidence`는 각각
-실제 단계 이름의 `search.`·`assistant.`·`evidence.` 접두사로 조회합니다. Core 전체 흐름뿐 아니라
+화면의 `name` 값 `support-program-search`·`assistant-agent`·`support-program-evidence`·`combination-review`는 각각
+실제 단계 이름의 `search.`·`assistant.`·`evidence.`·`combination.` 접두사로 조회합니다. Core 전체 흐름뿐 아니라
 AI 서비스가 기록한 별도 시작 단계도 포함합니다. 그 외 `name`은 단계 이름의 정확한 일치 필터입니다.
 Langfuse의 고급 필터에는 접두사와 함께 조회 시작·종료 시각 및 logical root 조건을 넣어,
 단순 query 조건보다 우선하는 필터가 조회 범위를 넓히지 않도록 합니다. 결과는 API의 최신순을 유지합니다.

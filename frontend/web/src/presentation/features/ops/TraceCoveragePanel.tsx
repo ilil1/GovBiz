@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
-import { EvaluationHelp } from './EvaluationHelp'
+import { MonitoringHelp } from './MonitoringHelp'
 import { useMonitoringDemo } from './MonitoringDemoContext'
 import { createMonitoringRequest, MonitoringResponseError, monitoringFailureMessage, requireMonitoringResponse } from './monitoringRequest'
 
@@ -51,7 +51,7 @@ export function TraceCoveragePanel({ onExpired }: { onExpired: () => void }) {
 
   return <section className={`${styles.card} min-w-0`} aria-label="추적 연결 현황">
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <EvaluationHelp label="추적 번호 저장 현황" title={<h3 className="m-0 text-base font-bold text-ink">추적 번호 저장 현황</h3>}>앱에 기록된 AI 호출 중 추적 번호가 저장된 건수와 기록되지 않은 건수를 비교합니다. 번호가 없는 이유는 이 화면에서 구분할 수 없습니다.</EvaluationHelp>
+      <MonitoringHelp label="추적 번호 저장 현황" title={<h3 className="m-0 text-base font-bold text-ink">추적 번호 저장 현황</h3>}>앱에 기록된 AI 호출 중 추적 번호가 저장된 건수와 기록되지 않은 건수를 비교합니다. 번호가 없는 이유는 이 화면에서 구분할 수 없습니다.</MonitoringHelp>
       <label className="grid gap-1 text-xs font-semibold text-ink-muted">연결 현황 기간 (UTC)<select value={days} onChange={(event) => setDays(event.target.value)} className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-brand-primary"><option value="1">오늘</option><option value="7">최근 7일</option><option value="30">최근 30일</option></select></label>
     </div>
     {isExample && <p role="status" className="m-0 rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-950">예시 데이터 · 실제 추적 연결 현황이 아닙니다.</p>}

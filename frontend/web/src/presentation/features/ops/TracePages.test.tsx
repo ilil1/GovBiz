@@ -55,15 +55,18 @@ describe('관리자 AI 실행 추적', () => {
   it.each([
     ['support-program-search', '공고 검색', 'search.total'],
     ['assistant-agent', 'AI 도우미 에이전트', 'assistant.agent'],
+    ['combination-review', '중복 지원 검토', 'combination.review'],
     ['support-program-evidence', '공고 근거 답변', 'evidence.answer'],
   ])('%s 업무·기간을 조회하면 페이지를 초기화하고 해당 업무 결과를 표시한다', async (name, label, observationName) => {
     const results = [
       listRoot,
       { ...listRoot, id: 'agent-01', name: 'assistant.agent' },
       { ...listRoot, id: 'answer-1', name: 'evidence.answer' },
+      { ...listRoot, id: 'review-1', name: 'combination.review' },
     ]
     const filterNames: Record<string, string> = {
       'support-program-search': 'search.total', 'assistant-agent': 'assistant.agent', 'support-program-evidence': 'evidence.answer',
+      'combination-review': 'combination.review',
     }
     const fetch = vi.fn(async (url: string) => {
       const selected = new URL(url, 'https://govbiz.test').searchParams.get('name')
@@ -72,7 +75,7 @@ describe('관리자 AI 실행 추적', () => {
     vi.stubGlobal('fetch', fetch)
     mount(`/ops/traces?${new URLSearchParams({ from_time: from, to_time: to, cursor: 'old-cursor' })}`)
     await screen.findByRole('link', { name: '공고 검색 · root-001' })
-    expect(screen.getAllByRole('article')).toHaveLength(3)
+    expect(screen.getAllByRole('article')).toHaveLength(4)
     fireEvent.change(screen.getByLabelText('실행 이름'), { target: { value: name } })
     fireEvent.change(screen.getByLabelText('조회 기간'), { target: { value: '30' } })
     fireEvent.click(screen.getByRole('button', { name: /^조회$/ }))

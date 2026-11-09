@@ -565,6 +565,9 @@ AI 비용은 `ai-service OpenAI 응답 → 사용량 헤더(X-GovBiz-OpenAI-Usag
 내부 AI 요청에 유효한 sampled `traceparent`가 있으면 사용량 행에도 trace ID를 저장합니다(V66).
 관리자 추적 연결 현황은 저장된 앱 기록 중 추적 ID가 있는 호출을 기능별로 집계하며, Langfuse 수신 여부나 전체 사용자 요청 수를 의미하지 않습니다.
 추적 비활성·미전파·전송 실패 및 사용량 헤더 누락은 연결이 완전하지 않을 수 있습니다.
+중복 지원 검토는 큐 소비 시 Core `combination.total`에서 시작해 내부 HTTP의 `traceparent`로 AI의
+`combination.review`·`combination.model`을 연결합니다. 사용량 장부와 성공 표본에 같은 추적 ID를
+전달하며, 입력·첨부·답변·예외 본문은 추적에 저장하지 않습니다.
 공개 AI HTTP 요청은 별도로 `AiRequestMetricFilter → AiRequestMetricWriter → AiRequestMetricService → AiRequestMetricRepository → MyBatis → MySQL(V67)`로
 고정 기능·UTC 날짜·상태 종류·지연 구간별 집계합니다. 202는 최종 완료가 아닌 접수이며 필터 밖 실패·DB 기록 실패는 누락됩니다.
 관리자 일별 조회는 기록된 날짜만 반환하며 기록이 없는 날을 요청 0건으로 단정하지 않습니다.

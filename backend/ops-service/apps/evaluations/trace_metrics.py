@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_datetime
 
 from .trace_client import LangfuseUnavailable, observation, read_page
 
-ROOT_NAMES = ("search.total", "evidence.total", "assistant.total")
+ROOT_NAMES = ("search.total", "evidence.total", "assistant.total", "combination.total")
 MAX_PAGES = 3
 PAGE_SIZE = 1000
 READ_SECONDS = 8
@@ -64,7 +64,13 @@ def read_metrics(*, from_time, to_time, environment="all"):
                         raise ValueError("Unexpected non-root observation")
                     item = observation(row)
                     started = parse_datetime(item["started_at"])
-                    if item["name"] != name or not from_time <= started < to_time:
+                    ended = parse_datetime(item["ended_at"]) if item["ended_at"] else None
+                    if (
+                        item["name"] != name
+                        or row.get("level") not in {"DEBUG", "DEFAULT", "WARNING", "ERROR"}
+                        or not from_time <= started < to_time
+                        or (ended is not None and ended < started)
+                    ):
                         raise ValueError("Unexpected observation")
                     if item["id"] in seen:
                         raise ValueError("Duplicate observation")

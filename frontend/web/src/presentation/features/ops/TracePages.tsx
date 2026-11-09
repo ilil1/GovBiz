@@ -9,6 +9,7 @@ import { TraceUsagePanel } from './TraceUsagePanel'
 const path = '/ops/traces'
 const names = [
   ['support-program-search', '공고 검색'], ['assistant-agent', 'AI 도우미'], ['support-program-evidence', '공고 근거 답변'],
+  ['combination-review', '중복 지원 검토'],
 ] as const
 const field = 'min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm focus:outline-2 focus:outline-brand-primary'
 const date = (value: string | null) => value ? new Date(value).toLocaleString('ko-KR') : '기록 없음'
@@ -17,6 +18,7 @@ const stageNames: Record<string, string> = {
   'search.semantic.request': '공고 의미 검색 요청',
   'assistant.total': 'AI 도우미', 'assistant.agent': 'AI 도우미 에이전트', 'assistant.model': 'AI 도우미 모델 호출',
   'evidence.total': '공고 근거 답변', 'evidence.answer': '공고 근거 답변', 'evidence.model': '공고 근거 답변 모델 호출',
+  'combination.total': '중복 지원 검토', 'combination.review': '중복 지원 검토', 'combination.model': '중복 지원 검토 모델 호출',
   'evidence.index': '공고 문서 색인', 'evidence.search': '공고 근거 검색', 'evidence.embedding.request': '공고 문서 임베딩 호출',
 }
 const nameLabel = (value: string) => stageNames[value] ?? names.find(([name]) => name === value)?.[1] ?? (value || '이름 없는 실행')
@@ -196,7 +198,7 @@ export function TraceDetailPage({ onExpired }: { onExpired: () => void }) {
       <Link to={back} className={styles.quietLink}>← 조회하던 실행 목록으로</Link>
       <p className="text-xs break-all text-ink-muted">추적 ID: {traceId}</p>
       <p className="m-0 text-sm leading-6 text-ink-muted">이 실행에 연결된 앱 사용량과 아래 처리 단계의 오류를 함께 확인하세요. 전체 사용량·비용은 실사용 모니터링에서 볼 수 있습니다.</p>
-      <TraceUsagePanel key={traceId} traceId={traceId} />
+      <TraceUsagePanel key={traceId} traceId={traceId} onExpired={onExpired} />
       {error ? <ErrorNotice error={error} onRetry={() => setReload((value) => value + 1)} /> : !data ? <p role="status">실행 단계를 불러오고 있습니다.</p> : <>
         <p className="text-sm text-ink-muted">이 페이지 {data.observations.length}개 단계입니다. 모델 호출 단계(GENERATION·EMBEDDING)는 펼쳐 표시하며 모델·기록된 비용·토큰 사용량을 확인할 수 있습니다. 단계별 비용은 중첩될 수 있으므로 합산하지 않습니다.</p>
         <section aria-label="실행 단계" className="flex min-w-0 flex-col gap-3">

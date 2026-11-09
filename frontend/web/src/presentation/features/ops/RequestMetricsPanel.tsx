@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
-import { EvaluationHelp } from './EvaluationHelp'
+import { MonitoringHelp } from './MonitoringHelp'
 import { useMonitoringDemo } from './MonitoringDemoContext'
 import { createMonitoringRequest, MonitoringResponseError, monitoringFailureMessage, requireMonitoringResponse } from './monitoringRequest'
 
@@ -95,9 +95,9 @@ export function RequestMetricsPanel({ onExpired, onSummaryChange, detailPage = f
   return <section className={`${styles.card} min-w-0`} aria-label="AI 기능 HTTP 요청 집계">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-2xl">
-        <EvaluationHelp label="요청 현황" title={<h2 className="m-0 text-lg font-bold tracking-tight text-ink">요청 현황</h2>}>
+        <MonitoringHelp label="요청 현황" title={<h2 className="m-0 text-lg font-bold tracking-tight text-ink">요청 현황</h2>}>
           Core에서 기록한 HTTP 응답을 UTC 날짜로 집계합니다. 저장 실패·프로세스 종료나 Core 도착 전의 실패는 빠질 수 있으며 평가 요청이 포함될 수 있습니다. 최근 요청은 잠시 후 반영될 수 있습니다. 요청 오류는 입력·로그인 오류 등을, 서버 오류는 서비스 처리 실패를 포함합니다. 기록이 AI 모델 호출을 뜻하지는 않습니다.
-        </EvaluationHelp>
+        </MonitoringHelp>
         {isExample && <p className="mt-2 mb-0 text-xs font-bold text-warning">예시 데이터 · 실제 기록 아님</p>}
       </div>
       <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); setRange(days); setAsOf(new Date()) }}>

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { appContainer } from '../../../app/appContainer'
 import { defaultAdminAiCostPeriod, formatAiCostUsd, type AdminAiCostSummary } from '../../../domain/entities/AdminAiCost'
 import { adminAccessFailure } from '../admin/viewmodel/adminAccountAccess'
-import { EvaluationHelp } from './EvaluationHelp'
+import { MonitoringHelp } from './MonitoringHelp'
 import { exampleCostUseCases, useMonitoringDemo } from './MonitoringDemoContext'
 import { createMonitoringRequest, requireMonitoringResponse } from './monitoringRequest'
 
@@ -26,7 +26,7 @@ const jobRow = z.object({ feature: z.enum(['APPLICATION_DISCOVERY', 'APPLICATION
 }).refine((row) => row.total === row.queued + row.running + row.succeeded + row.failed + row.interrupted + row.unknown)
 const jobSchema = z.object({ from: z.iso.date(), to: z.iso.date(), scope: z.literal('stored-ai-jobs'), features: z.array(jobRow) })
   .refine((value) => new Set(value.features.map((row) => row.feature)).size === value.features.length)
-const modelRow = z.object({ feature: z.enum(['search.ranking.model', 'evidence.model', 'assistant.model']), model: z.string().nullable(),
+const modelRow = z.object({ feature: z.enum(['search.ranking.model', 'evidence.model', 'assistant.model', 'combination.model']), model: z.string().nullable(),
   observed: count, completed: count, errors: count, warnings: count, timeouts: count, timeout_unknown: count, in_progress: count,
 }).refine((row) => row.observed === row.completed + row.in_progress && row.errors + row.warnings <= row.completed
   && row.timeouts + row.timeout_unknown <= row.errors)
@@ -180,7 +180,7 @@ export function MonitoringOverview({ onExpired }: { onExpired: () => void }) {
   return <>
     <section aria-label="오늘의 요청 현황" className="rounded-xl border border-brand-primary/20 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0"><EvaluationHelp label="오늘의 요청" title={<h2 className="m-0 text-xl font-bold text-ink">오늘의 요청과 서버 오류</h2>}><p className="m-0">Core에 기록된 HTTP 응답을 UTC 날짜 기준으로 집계합니다. 서버 오류는 5xx 응답이며 기록되지 않은 요청은 포함되지 않습니다.</p></EvaluationHelp><p className="mt-1 mb-0 text-sm text-ink-muted">{today} · UTC · 기록된 HTTP 응답</p></div>
+        <div className="min-w-0"><MonitoringHelp label="오늘의 요청" title={<h2 className="m-0 text-xl font-bold text-ink">오늘의 요청과 서버 오류</h2>}><p className="m-0">Core에 기록된 HTTP 응답을 UTC 날짜 기준으로 집계합니다. 서버 오류는 5xx 응답이며 기록되지 않은 요청은 포함되지 않습니다.</p></MonitoringHelp><p className="mt-1 mb-0 text-sm text-ink-muted">{today} · UTC · 기록된 HTTP 응답</p></div>
         <Link to={detail('requests')} className="min-h-11 content-center text-sm font-semibold text-brand-primary underline underline-offset-4">요청 상세 보기</Link>
       </div>
       {daily.status === 'loading' ? <p role="status" className="mt-5 text-sm text-ink-muted">오늘 기록을 불러오는 중…</p>
@@ -192,7 +192,7 @@ export function MonitoringOverview({ onExpired }: { onExpired: () => void }) {
     </section>
     <section aria-label="주요 모니터링 수치">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0"><EvaluationHelp label="주요 현황" title={<h2 className="m-0 text-xl font-bold tracking-tight text-ink">기간별 주요 현황</h2>}><p className="m-0">표시된 기간과 집계 기준은 지표마다 다릅니다. 기록되지 않은 요청은 집계되지 않으며, 모델 실행 오류가 반드시 제공자 장애를 뜻하지는 않습니다. 정상 종료가 답변 품질을 보장하지는 않습니다. 비용은 앱에 기록된 사용량을 바탕으로 계산한 추정치입니다.</p></EvaluationHelp><p className="mt-1 mb-0 text-xs leading-5 text-ink-muted">화면 표시 중 자동 조회 · 요청·작업·모델 1분 · 비용 5분</p></div>
+        <div className="min-w-0"><MonitoringHelp label="주요 현황" title={<h2 className="m-0 text-xl font-bold tracking-tight text-ink">기간별 주요 현황</h2>}><p className="m-0">표시된 기간과 집계 기준은 지표마다 다릅니다. 기록되지 않은 요청은 집계되지 않으며, 모델 실행 오류가 반드시 제공자 장애를 뜻하지는 않습니다. 정상 종료가 답변 품질을 보장하지는 않습니다. 비용은 앱에 기록된 사용량을 바탕으로 계산한 추정치입니다.</p></MonitoringHelp><p className="mt-1 mb-0 text-xs leading-5 text-ink-muted">화면 표시 중 자동 조회 · 요청·작업·모델 1분 · 비용 5분</p></div>
         <button type="button" onClick={() => { setRevision((value) => value + 1); setCostRevision((value) => value + 1) }} className="min-h-11 rounded-lg border border-line bg-white px-4 text-sm font-semibold text-ink hover:border-brand-primary focus-visible:outline-2 focus-visible:outline-brand-primary">현황 새로고침</button>
       </div>
       {isExample && <p role="status" className="mb-4 rounded-lg bg-amber-50 p-3 text-sm font-bold text-amber-950">예시 데이터 · 실제 운영 현황이 아닙니다.</p>}
@@ -205,7 +205,7 @@ export function MonitoringOverview({ onExpired }: { onExpired: () => void }) {
     </section>
 
     <section aria-label="날짜별 요청 추세" className="rounded-xl border border-line bg-white p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><EvaluationHelp label="요청 추세" title={<h2 className="m-0 text-lg font-bold text-ink">최근 요청 추세</h2>}><p className="m-0">막대는 기록된 요청 수와 그중 서버 오류를 보여줍니다. 최신 날짜부터 정렬하며, 기록이 없는 날짜를 0건으로 계산하지 않습니다.</p></EvaluationHelp><p className="mt-1 mb-0 text-sm leading-6 text-ink-muted">최근 7일 · UTC</p></div><Link to={detail('requests')} className="min-h-11 content-center text-sm font-semibold text-brand-primary underline underline-offset-4">요청 상세 보기</Link></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><MonitoringHelp label="요청 추세" title={<h2 className="m-0 text-lg font-bold text-ink">최근 요청 추세</h2>}><p className="m-0">막대는 기록된 요청 수와 그중 서버 오류를 보여줍니다. 최신 날짜부터 정렬하며, 기록이 없는 날짜를 0건으로 계산하지 않습니다.</p></MonitoringHelp><p className="mt-1 mb-0 text-sm leading-6 text-ink-muted">최근 7일 · UTC</p></div><Link to={detail('requests')} className="min-h-11 content-center text-sm font-semibold text-brand-primary underline underline-offset-4">요청 상세 보기</Link></div>
       {daily.status === 'loading' ? <p role="status" className="mt-4 text-sm text-ink-muted">날짜별 기록을 불러오는 중…</p>
         : daily.status === 'error' ? <p role="alert" className="mt-4 text-sm text-danger">날짜별 기록을 불러오지 못했습니다. <button type="button" onClick={() => setRevision((value) => value + 1)} className="font-bold underline">다시 조회</button></p>
           : <DailyTrend data={daily.data} />}

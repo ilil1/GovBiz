@@ -42,6 +42,7 @@ class TraceMetricsTests(SimpleTestCase):
             ),
             ([], None),
             ([], None),
+            ([], None),
         ]
         results = read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
         self.assertEqual(
@@ -80,6 +81,16 @@ class TraceMetricsTests(SimpleTestCase):
             read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
 
     @patch("apps.evaluations.trace_metrics.read_page")
+    def test_rejects_unknown_level_or_end_before_start(self, read_page):
+        invalid_level = row("search.total", "1", level="UNKNOWN")
+        invalid_time = {**row("search.total", "2"), "endTime": "2026-10-14T00:59:59Z"}
+        for invalid in (invalid_level, invalid_time):
+            with self.subTest(observation=invalid):
+                read_page.return_value = ([invalid], None)
+                with self.assertRaises(LangfuseUnavailable):
+                    read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
+
+    @patch("apps.evaluations.trace_metrics.read_page")
     def test_environment_filters_without_guessing_missing_values(self, read_page):
         rows = [
             row("search.total", "1", environment="production"),
@@ -95,11 +106,37 @@ class TraceMetricsTests(SimpleTestCase):
             ("other", 1),
         ):
             with self.subTest(environment=env):
-                read_page.side_effect = [(rows, None), ([], None), ([], None)]
+                read_page.side_effect = [(rows, None), ([], None), ([], None), ([], None)]
                 result = read_metrics(
                     from_time=NOW - timedelta(days=1), to_time=NOW, environment=env
                 )
                 self.assertEqual(result[0]["observed"], expected)
+
+    @patch("apps.evaluations.trace_metrics.read_page")
+    def test_combination_review_root_is_counted(self, read_page):
+        read_page.side_effect = [
+            ([], None),
+            ([], None),
+            ([], None),
+            ([row("combination.total", "combination1", level="ERROR", latency=2)], None),
+        ]
+        result = read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
+        self.assertEqual(result[3]["name"], "combination.total")
+        self.assertEqual(result[3]["observed"], 1)
+        self.assertEqual(result[3]["errors"], 1)
+        self.assertEqual(result[3]["p95_seconds"], 2)
+
+    @patch("apps.evaluations.trace_metrics.read_page")
+    def test_combination_review_invalid_or_incomplete_page_fails_entire_summary(self, read_page):
+        invalid = row("combination.total", "combination1", level="UNKNOWN")
+        for pages in (
+            [([invalid], None)],
+            [([], "cursor1"), ([], "cursor2"), ([], "cursor3")],
+        ):
+            with self.subTest(pages=pages):
+                read_page.side_effect = [([], None)] * 3 + pages
+                with self.assertRaises(LangfuseUnavailable):
+                    read_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
 
     @patch("apps.evaluations.trace_metrics.read_page")
     def test_excluded_environment_does_not_hide_incomplete_or_duplicate_pages(self, read_page):

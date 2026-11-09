@@ -9,7 +9,7 @@ from django.utils.dateparse import parse_datetime
 
 from .trace_client import LangfuseUnavailable, observation, read_page
 
-MODEL_NAMES = ("search.ranking.model", "evidence.model", "assistant.model")
+MODEL_NAMES = ("search.ranking.model", "evidence.model", "assistant.model", "combination.model")
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,99}\Z")
 ENVIRONMENTS = {"all", "production", "development", "unknown", "other"}
 MAX_PAGES = 3

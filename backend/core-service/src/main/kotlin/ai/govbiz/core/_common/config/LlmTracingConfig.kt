@@ -1,6 +1,7 @@
 package ai.govbiz.core._common.config
 
 import ai.govbiz.core.assistant.helper.AssistantTracingHelper
+import ai.govbiz.core.combinationreview.helper.CombinationReviewTracingHelper
 import ai.govbiz.core.supportprogram.helper.SupportProgramSearchTracingHelper
 import ai.govbiz.core.supportprogram.helper.SupportProgramEvidenceTracingHelper
 import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter
@@ -16,6 +17,15 @@ import org.springframework.core.env.Environment
 
 @Configuration(proxyBeanMethods = false)
 class LlmTracingConfig {
+    @Bean
+    fun combinationReviewTracingHelper(llmTracerProvider: SdkTracerProvider, environment: Environment): CombinationReviewTracingHelper {
+        val deployment = environment.getProperty("LANGFUSE_ENVIRONMENT", "development")
+        val release = environment.getProperty("GIT_SHA", "")
+        require(deployment.matches(Regex("[a-z0-9][a-z0-9_-]{0,39}"))) { "Invalid LANGFUSE_ENVIRONMENT" }
+        require(release.isEmpty() || release.matches(Regex("[0-9a-f]{7,40}"))) { "Invalid GIT_SHA" }
+        return CombinationReviewTracingHelper(llmTracerProvider.get("govbiz-combination"), deployment, release)
+    }
+
     @Bean(destroyMethod = "close")
     fun llmTracerProvider(environment: Environment): SdkTracerProvider {
         val enabled = environment.getProperty("LANGFUSE_ENABLED", "false")

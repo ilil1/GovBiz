@@ -9,6 +9,7 @@ import ai.govbiz.core.combinationreview.client.dto.AiCombinationReviewV3Request
 import ai.govbiz.core.combinationreview.client.dto.AiReviewConfigurationPayload
 import ai.govbiz.core.combinationreview.client.exception.AiCombinationReviewClientException
 import ai.govbiz.core.combinationreview.client.exception.AiCombinationReviewClientException.Reason
+import ai.govbiz.core.combinationreview.helper.CombinationReviewTracingHelper
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.MediaType
 import org.springframework.http.client.ClientHttpResponse
@@ -35,6 +36,7 @@ class AiCombinationReviewClient(@param:Qualifier("aiCombinationReviewRestClient"
     /** v2·v3는 같은 분석 경로와 오류 계약을 쓰며 요청·응답 본문만 다르다. */
     private fun <T : Any> post(request: Any, type: Class<T>): T = executeAiServiceCall {
         client.post().uri("/internal/v1/combination-reviews/analyze").contentType(MediaType.APPLICATION_JSON)
+            .headers { headers -> CombinationReviewTracingHelper.currentTraceParent()?.let { headers.set("traceparent", it) } }
             .body(request).retrieve()
             .onStatus({ it.value() == 422 }, { _, response ->
                 val tooLarge = readErrorCode(response) == "CONTEXT_TOO_LARGE"

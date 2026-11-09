@@ -44,6 +44,7 @@ class ModelTraceMetricsTests(SimpleTestCase):
             ),
             ([], None),
             ([], None),
+            ([], None),
         ]
         result = read_model_metrics(
             from_time=NOW - timedelta(days=1), to_time=NOW, environment="development"
@@ -76,12 +77,36 @@ class ModelTraceMetricsTests(SimpleTestCase):
             ([row("1", model=None, environment=None)], None),
             ([], None),
             ([], None),
+            ([], None),
         ]
         result = read_model_metrics(
             from_time=NOW - timedelta(days=1), to_time=NOW, environment="unknown"
         )
         self.assertIsNone(result[0]["model"])
         self.assertEqual(result[0]["observed"], 1)
+
+    @patch("apps.evaluations.model_trace_metrics.read_page")
+    def test_combination_model_is_included_in_the_observed_generations(self, read_page):
+        read_page.side_effect = [
+            ([], None),
+            ([], None),
+            ([], None),
+            (
+                [
+                    row(
+                        "combination-1",
+                        name="combination.model",
+                        level="ERROR",
+                        metadata={"outcome": "timeout"},
+                    )
+                ],
+                None,
+            ),
+        ]
+        result = read_model_metrics(from_time=NOW - timedelta(days=1), to_time=NOW)
+        self.assertEqual(result[0]["feature"], "combination.model")
+        self.assertEqual(result[0]["errors"], 1)
+        self.assertEqual(result[0]["timeouts"], 1)
 
     @patch("apps.evaluations.model_trace_metrics.read_page")
     def test_rejects_incomplete_or_duplicate_pages_including_excluded_environment(self, read_page):

@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from app.combination_review.models import AnalyzeRequest, AnalyzeRequestV3, CONTRACT_VERSION
 from app.combination_review.service import CombinationReviewError, CombinationReviewService
+from app.combination_review.prompt import PROMPT_VERSION, PROMPT_VERSION_V3
+from app.tracing import remote_parent
 
 router = APIRouter(prefix="/internal/v1/combination-reviews", tags=["internal"])
 logger = logging.getLogger(__name__)
@@ -36,13 +38,19 @@ async def configuration(
 
 @router.post("/analyze")
 async def analyze(
+    request: Request,
     # v2 and v3 share the endpoint; contractVersion selects the request contract and its response.
     payload: Annotated[AnalyzeRequest | AnalyzeRequestV3, Body(discriminator="contractVersion")],
     service: Annotated[CombinationReviewService, Depends(get_service)],
 ):
     started = perf_counter()
     try:
-        return await service.analyze(payload)
+        with request.app.state.container.llm_tracing.observation(
+            "combination.review", **remote_parent(request.headers.get("traceparent")),
+            metadata={"contract_version": payload.contractVersion, "program_count": len(payload.programs),
+                      "prompt_version": PROMPT_VERSION_V3 if payload.contractVersion == "combination-review-v3" else PROMPT_VERSION},
+        ):
+            return await service.analyze(payload)
     except CombinationReviewError as error:
         code = str(error)
         timed_out = code == "COMBINATION_REVIEW_TIMEOUT"

@@ -29,6 +29,7 @@ EXECUTION_PREFIXES = {
     "support-program-search": "search.",
     "assistant-agent": "assistant.",
     "support-program-evidence": "evidence.",
+    "combination-review": "combination.",
 }
 logger = logging.getLogger(__name__)
 

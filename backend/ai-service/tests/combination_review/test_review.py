@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 import httpx2
@@ -58,7 +59,7 @@ def selection_data():
 
 
 def make_service(data=None, *, status="completed", content=None, http_status=200, delay=0, run_timeout=3,
-                 transport_timeout=False):
+                 transport_timeout=False, usage=None):
     calls = []
 
     async def handle(request):
@@ -80,6 +81,8 @@ def make_service(data=None, *, status="completed", content=None, http_status=200
                             "annotations": [],
                         }]}],
         }
+        if usage is not None:
+            body["usage"] = usage
         return httpx2.Response(200, json=body)
 
     model = ChatOpenAI(
@@ -308,6 +311,78 @@ def test_fastapi_contract_and_generic_failure_response():
         assert failure.status_code == 503
         assert failure.json() == {"detail":{"code":"COMBINATION_REVIEW_FAILED"}}
         assert "secret-detail" not in failure.text
+
+
+def test_combination_trace_links_parent_model_and_usage_without_sensitive_content(monkeypatch):
+    from langfuse import Langfuse
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from app import tracing as tracing_module
+    from app.config import LangfuseSettings
+
+    monkeypatch.setattr("app.combination_review.service.tiktoken.get_encoding", lambda _: SimpleNamespace(encode=lambda *args, **kwargs: []))
+
+    exporter = InMemorySpanExporter()
+    monkeypatch.setattr(tracing_module, "Langfuse", lambda **kwargs: Langfuse(**kwargs, span_exporter=exporter))
+    tracing = tracing_module.LLMTracing(LangfuseSettings(
+        enabled=True, base_url="http://localhost:13000", public_key="pk-lf-combination-test", secret_key="private-test-key",
+    ))
+    service, calls = make_service(usage={"input_tokens": 50, "output_tokens": 20, "total_tokens": 70})
+    service.agent._tracing = tracing
+    app = service_app(service)
+    app.state.container.llm_tracing = tracing
+    with TestClient(app) as client:
+        response = client.post("/internal/v1/combination-reviews/analyze", json=request_data(), headers={
+            "traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01",
+        })
+        assert response.status_code == 200
+    spans = exporter.get_finished_spans()
+    root = next(span for span in spans if span.name == "combination.review")
+    model = next(span for span in spans if span.name == "combination.model")
+    assert f"{root.context.trace_id:032x}" == "a" * 32
+    assert f"{root.parent.span_id:016x}" == "b" * 16
+    assert model.parent.span_id == root.context.span_id
+    assert json.loads(model.attributes["langfuse.observation.usage_details"]) == {"input": 50, "output": 20}
+    assert model.attributes["langfuse.observation.metadata.usage_reported"] is True
+    assert len(calls) == 1
+    exported = str([span.to_json() for span in spans])
+    assert request_data()["evidence"][0]["text"] not in exported
+    assert "private-test-key" not in exported
+    assert all(not span.events for span in spans)
+
+
+@pytest.mark.parametrize("failure,expected_status", [("parsing", 503), ("timeout", 504)])
+def test_combination_trace_marks_failures_without_inventing_usage(monkeypatch, failure, expected_status):
+    from langfuse import Langfuse
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from app import tracing as tracing_module
+    from app.config import LangfuseSettings
+
+    monkeypatch.setattr("app.combination_review.service.tiktoken.get_encoding", lambda _: SimpleNamespace(encode=lambda *args, **kwargs: []))
+
+    exporter = InMemorySpanExporter()
+    monkeypatch.setattr(tracing_module, "Langfuse", lambda **kwargs: Langfuse(**kwargs, span_exporter=exporter))
+    tracing = tracing_module.LLMTracing(LangfuseSettings(
+        enabled=True, base_url="http://localhost:13000", public_key="pk-lf-" + uuid4().hex, secret_key="private-test-key",
+    ))
+    service, calls = make_service(
+        content=[{"type": "output_text", "text": "not valid json", "annotations": []}] if failure == "parsing" else None,
+        transport_timeout=failure == "timeout",
+    )
+    service.agent._tracing = tracing
+    app = service_app(service)
+    app.state.container.llm_tracing = tracing
+    with TestClient(app) as client:
+        response = client.post("/internal/v1/combination-reviews/analyze", json=request_data())
+        assert response.status_code == expected_status
+    spans = exporter.get_finished_spans()
+    root = next(span for span in spans if span.name == "combination.review")
+    model = next(span for span in spans if span.name == "combination.model")
+    assert root.attributes["langfuse.observation.level"] == "ERROR"
+    assert root.attributes["langfuse.observation.status_message"] == ("timeout" if failure == "timeout" else "failed")
+    assert model.attributes["langfuse.observation.metadata.usage_reported"] is False
+    assert "langfuse.observation.usage_details" not in model.attributes or json.loads(model.attributes["langfuse.observation.usage_details"]) == {}
+    assert len(calls) == 1
+    assert "private timeout detail" not in str([span.to_json() for span in spans])
 
 
 def test_fastapi_timeout_response_and_safe_diagnostic_log(caplog):

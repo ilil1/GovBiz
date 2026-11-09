@@ -786,6 +786,10 @@ SDK의 JSON 출력 검증 실패는 `MODEL_OUTPUT_INVALID_JSON`, 스키마·서�
 구분합니다. 이 로그만으로 이전 `ModelBehaviorError`의 세부 원인을 소급 확정할 수는 없습니다.
 이 진단 코드는 HTTP 응답에 노출하지 않으며, 검증 기준이나 부적합 후보 처리 방식을 바꾸지 않습니다.
 
+중복 지원 검토는 Langfuse 활성 시 Core 큐 작업 → `combination.review` → `combination.model`을
+본문 없이 추적합니다. 모델·프롬프트 버전·결과와 보고된 토큰을 기록하며, 사용량이 없으면 미보고로 남깁니다.
+추적 전송 성공이나 운영 환경 활성화 여부는 별도로 확인해야 합니다.
+
 ## 검색·근거 답변 LLMOps
 
 검색 추적은 `Core 검색 → Elasticsearch/Qdrant 후보 조회 → 후보 병합 → AI 랭킹 → 최종 선정`을

@@ -9,6 +9,12 @@ const metrics = { from_time: '2026-11-01T00:00:00Z', to_time: '2026-11-08T00:00:
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 describe('추적된 실행 집계', () => {
+  it('중복 지원 검토 실행을 집계에 표시한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ ...metrics, results: [{ ...metrics.results[0], name: 'combination.total' }] })))
+    render(<TraceMetricsPanel onExpired={vi.fn()} />)
+    expect(await screen.findByText('중복 지원 검토')).toBeTruthy()
+    expect(screen.getByText('5건')).toBeTruthy()
+  })
   it('로컬 개발 서버에서는 개발 환경의 추적을 기본으로 조회한다', async () => {
     vi.stubEnv('DEV', true)
     vi.stubEnv('MODE', 'development')
@@ -52,7 +58,7 @@ describe('추적된 실행 집계', () => {
     expect(help.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(help)
     expect(help.getAttribute('aria-expanded')).toBe('true')
-    expect(within(panel).getByText(/환경이 기록되지 않은 실행은 전체 환경 또는 환경 미기록을 선택하면 볼 수 있습니다/)).toBeTruthy()
+    expect(screen.getByText(/환경이 기록되지 않은 실행은 전체 환경 또는 환경 미기록을 선택하면 볼 수 있습니다/)).toBeTruthy()
     expect(new URL(fetch.mock.calls[0][0], 'https://govbiz.test').searchParams.get('environment')).toBe('production')
     expect(await within(panel).findByText(/조회 환경: 운영/)).toBeTruthy()
     expect(within(panel).getByText('5건')).toBeTruthy()

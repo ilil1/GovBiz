@@ -1,3 +1,4 @@
+import { createRequestId } from './requestId'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { createEvaluationSchedule, getEvaluationSchedules, getLiveReadiness, OpsApiError, pauseEvaluationSchedule } from '../../../data/ops/opsApi'
@@ -47,7 +48,7 @@ function ScheduleRow({ row, label, owner, onSaved, onError }: { row: EvaluationS
       <label className="text-sm">중지 사유<input aria-label={`${label} 계획 중지 사유`} aria-describedby={pauseHelpId} className={field} maxLength={500} value={reason} disabled={!!pending} onChange={(e) => setReason(e.target.value)} /></label>
       <p id={pauseHelpId} className={help}>이 계획의 앞으로의 접수를 중지하는 이유를 적으세요. 예: 답변 지침 변경으로 재검토가 필요함. 이미 접수된 실행의 취소와는 별개입니다.</p>
       {pending ? <><p className="text-sm">새 접수를 중지합니다. 이미 접수된 평가는 실행 상세에서 별도로 취소하세요.</p><button className={styles.secondaryButton} disabled={busy} onClick={() => void pause()}>확인한 계획 중지</button></>
-        : <button className={styles.secondaryButton} disabled={!reason.trim()} onClick={() => setPending({ request_id: crypto.randomUUID(), reason: reason.trim() })}>계획 중지 내용 확인</button>}
+        : <button className={styles.secondaryButton} disabled={!reason.trim()} onClick={() => setPending({ request_id: createRequestId(), reason: reason.trim() })}>계획 중지 내용 확인</button>}
     </div>}
     {row.occurrences.length === 0 ? <p className="text-sm text-ink-muted">아직 도래한 접수 기록이 없습니다.</p> : <ul className="grid gap-2 text-sm" aria-label="날짜별 접수 기록">{row.occurrences.map((item) => <li key={item.id}>
       {item.scheduled_on} · {item.status === 'BLOCKED' ? `접수 차단: ${reasons[item.reason_code] ?? item.reason_code}` : item.run_id
@@ -131,7 +132,7 @@ export function EvaluationSchedulesPanel({ owner, datasets, onExpired, refreshKe
     if (!ready || !selected?.baseline || !selected.live_config || !profile || !consent || !reason.trim() || !validDates) return
     setSaved(false)
     setMayEdit(true)
-    setPending({ request_id: crypto.randomUUID(), dataset_id: datasetId, reference_capture_id: selected.baseline.id,
+    setPending({ request_id: createRequestId(), dataset_id: datasetId, reference_capture_id: selected.baseline.id,
       baseline_version: selected.baseline.version, live_config: selected.live_config, execution_profile: profile,
       confirm_paid_run: true, daily_at: dailyAt, starts_on: startsOn, ends_on: endsOn, reason: reason.trim() })
   }

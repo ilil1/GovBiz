@@ -9,7 +9,7 @@ import { adminAiCostMessages, useAdminAiCostViewModel } from '../viewmodel/useAd
 import { adminAccountsPageStyles } from './AdminAccountsPage.styles'
 import { adminAiCostsPageStyles as styles } from './AdminAiCostsPage.styles'
 import { exampleCostUseCases, useMonitoringDemo } from '../../ops/MonitoringDemoContext'
-import { EvaluationHelp } from '../../ops/EvaluationHelp'
+import { MonitoringHelp } from '../../ops/MonitoringHelp'
 
 type ViewModel = ReturnType<typeof useAdminAiCostViewModel>
 
@@ -47,7 +47,7 @@ export function AdminAiCostsPage({ title = 'AI 비용', children, onExpired, com
             이 기간에는 로컬 테스트용 가상 데이터가 앱 기록에 포함되어 있습니다. 아래 앱 사용량은 실제 사용량만의 합계가 아닙니다.
           </p>
         ) : null}
-        {monitoring ? <EvaluationHelp label="비용 계산 기준" title={<span className="text-sm font-semibold text-ink">비용 계산 기준</span>}><p className="m-0">{vm.basis}</p></EvaluationHelp> : <p className={styles.intro}>{vm.basis}</p>}
+        {monitoring ? <MonitoringHelp label="비용 계산 기준" title={<span className="text-sm font-semibold text-ink">비용 계산 기준</span>}><p className="m-0">{vm.basis}</p></MonitoringHelp> : <p className={styles.intro}>{vm.basis}</p>}
 
         {vm.notice ? (
           <p className={adminAccountsPageStyles.notice} role="status">
@@ -120,7 +120,7 @@ function CostSections({ vm, compact, standalone }: { vm: ViewModel; compact: boo
   const headingClass = compact ? 'm-0 text-base font-bold text-ink' : workspacePageStyles.cardTitle
   const noteClass = compact ? 'm-0 text-sm leading-6 text-ink-muted' : styles.sectionNote
   const application = <>
-    {compact ? <EvaluationHelp label="앱 사용량" title={<h3 className={headingClass}>{vm.applicationTitle}</h3>}><p className="m-0">앱이 직접 기록한 호출과 토큰으로 계산한 추정치입니다. Core 밖 호출의 사용자·기능은 이 내역에 자동 연결되지 않아요.</p></EvaluationHelp> : <h2 className={headingClass}>{vm.applicationTitle}</h2>}
+    {compact ? <MonitoringHelp label="앱 사용량" title={<h3 className={headingClass}>{vm.applicationTitle}</h3>}><p className="m-0">앱이 직접 기록한 호출과 토큰으로 계산한 추정치입니다. Core 밖 호출의 사용자·기능은 이 내역에 자동 연결되지 않아요.</p></MonitoringHelp> : <h2 className={headingClass}>{vm.applicationTitle}</h2>}
     <p className={compact ? 'm-0 text-xs leading-5 text-ink-muted' : styles.sectionNote}>
       {compact ? '앱 기록 기준 · 일부 호출은 연결되지 않을 수 있습니다.' : '앱에 기록된 호출만 기능·모델·회원별로 나눠요. Core 밖 호출의 사용자·기능은 이 내역에 자동 연결되지 않아요.'}
     </p>
@@ -130,7 +130,7 @@ function CostSections({ vm, compact, standalone }: { vm: ViewModel; compact: boo
   return (
     <>
       {compact && application}
-      {compact ? <EvaluationHelp label="OpenAI 비용 비교" title={<h3 className={headingClass}>OpenAI 비용 비교 · UTC</h3>}><p className="m-0">OpenAI에서 함께 가져온 사용량의 추정 비용과 제공된 비용을 비교합니다.</p></EvaluationHelp> : <h2 className={headingClass}>OpenAI 비용 비교 · UTC</h2>}
+      {compact ? <MonitoringHelp label="OpenAI 비용 비교" title={<h3 className={headingClass}>OpenAI 비용 비교 · UTC</h3>}><p className="m-0">OpenAI에서 함께 가져온 사용량의 추정 비용과 제공된 비용을 비교합니다.</p></MonitoringHelp> : <h2 className={headingClass}>OpenAI 비용 비교 · UTC</h2>}
       {compact && <p className="m-0 text-xs leading-5 text-ink-muted">앱 기록과 범위가 다를 수 있으며, 최종 청구액이 아닐 수 있습니다.</p>}
       {vm.comparisonPeriod ? <p className={noteClass}>{vm.comparisonPeriod}</p> : null}
       {vm.comparisonNote ? <p className={noteClass} role="status">{vm.comparisonNote}</p> : null}
@@ -138,7 +138,7 @@ function CostSections({ vm, compact, standalone }: { vm: ViewModel; compact: boo
       <CostStats label="비용 요약" rows={vm.stats} compact={compact} comparison />
 
       <CostDetailGroup compact={compact && !standalone} label="날짜별 비용 보기"><section className={workspacePageStyles.card} aria-label="날짜별">
-        {compact ? <EvaluationHelp label="날짜별 OpenAI 비용" title={<h2 className={workspacePageStyles.cardTitle}>날짜별 OpenAI 비용</h2>}><p className="m-0">UTC 하루는 서울 오전 9시에 시작합니다. 사용량은 동기화 때 함께 수집한 값입니다.</p></EvaluationHelp> : <><h2 className={workspacePageStyles.cardTitle}>날짜별 OpenAI 비용</h2><p className={styles.sectionNote}>추정과 실제 모두 UTC 하루(서울 오전 9시 시작) 기준이에요. 사용량은 동기화 때 함께 수집한 값이에요.</p></>}
+        {compact ? <MonitoringHelp label="날짜별 OpenAI 비용" title={<h2 className={workspacePageStyles.cardTitle}>날짜별 OpenAI 비용</h2>}><p className="m-0">UTC 하루는 서울 오전 9시에 시작합니다. 사용량은 동기화 때 함께 수집한 값입니다.</p></MonitoringHelp> : <><h2 className={workspacePageStyles.cardTitle}>날짜별 OpenAI 비용</h2><p className={styles.sectionNote}>추정과 실제 모두 UTC 하루(서울 오전 9시 시작) 기준이에요. 사용량은 동기화 때 함께 수집한 값이에요.</p></>}
         <Table head={['날짜(UTC)', '호출', '추정', '실제']} empty="이 기간에 함께 가져온 사용량·비용이 없어요."
           rows={vm.days.map((row) => ({ key: row.date, cells: [row.date, row.calls, row.estimated, row.actual] }))} />
       </section></CostDetailGroup>

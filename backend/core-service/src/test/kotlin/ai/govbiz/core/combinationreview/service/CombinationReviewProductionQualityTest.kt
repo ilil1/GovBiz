@@ -3,6 +3,14 @@ package ai.govbiz.core.combinationreview.service
 import ai.govbiz.core.combinationreview.config.CombinationReviewProperties
 import ai.govbiz.core.combinationreview.domain.*
 import ai.govbiz.core.combinationreview.facade.AiCombinationReviewFacade
+import ai.govbiz.core.combinationreview.client.AiCombinationReviewClient
+import ai.govbiz.core.combinationreview.client.dto.AiCombinationReviewRequest
+import ai.govbiz.core.combinationreview.helper.CombinationReviewTracingHelper
+import ai.govbiz.core.aiusage.client.AiUsageRecordingInterceptor
+import ai.govbiz.core.aiusage.service.AiUsageService
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
+import io.opentelemetry.sdk.trace.SdkTracerProvider
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import ai.govbiz.core.combinationreview.repository.CombinationReviewRunRepository
 import ai.govbiz.core.planusage.PlanUsageTestHelper
 import ai.govbiz.core.supportprogram.client.bizinfo.BizInfoAttachmentClient
@@ -22,6 +30,13 @@ import java.time.ZoneId
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.*
+import org.springframework.http.MediaType
+import org.springframework.test.web.client.MockRestServiceServer
+import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
+import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
+import org.springframework.web.client.RestClient
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.KotlinModule
 
 class CombinationReviewProductionQualityTest {
     private val runs = mock(CombinationReviewRunRepository::class.java)
@@ -31,11 +46,12 @@ class CombinationReviewProductionQualityTest {
     private val ai = mock(AiCombinationReviewFacade::class.java)
     private val quality = mock(ProductionQualityClient::class.java)
     private val clock = Clock.fixed(java.time.Instant.parse("2026-10-15T03:00:00Z"), ZoneId.of("Asia/Seoul"))
-    private val service = CombinationReviewRunService(runs, reviews, attachments, mock(MsitAttachmentClient::class.java),
+    private fun service(tracing: CombinationReviewTracingHelper = CombinationReviewTracingHelper()) = CombinationReviewRunService(runs, reviews, attachments, mock(MsitAttachmentClient::class.java),
         mock(KStartupAttachmentClient::class.java), mock(CnTradeNoticeAttachmentClient::class.java),
         mock(SupportProgramDetailService::class.java), parser, ai,
         SupportProgramRequestAdmissionService(SupportProgramRequestAdmissionProperties()),
-        PlanUsageTestHelper.allowAll(), PlanUsageTestHelper.noTransactions(), clock, true, CombinationReviewProperties(), quality)
+        PlanUsageTestHelper.allowAll(), PlanUsageTestHelper.noTransactions(), clock, true, CombinationReviewProperties(), quality, tracing)
+    private val service = service()
     private val input = ReviewRunSnapshot("개인 식별 가능 제목은 수집하지 않음", listOf(
         SelectedReviewProgram(ReviewProgramIdentity("BIZINFO", "program-a")),
         SelectedReviewProgram(ReviewProgramIdentity("BIZINFO", "program-b"))), "같은 장비 비용으로 신청 예정", LocalDate.of(2026, 10, 15),
@@ -70,6 +86,43 @@ class CombinationReviewProductionQualityTest {
         }
         `when`(ai.configuration(ReviewContractVersion.V3)).thenReturn(configuration)
         doReturn(result).`when`(ai).analyze(eq(input) ?: input, any(ReviewEvidenceSnapshot::class.java) ?: ReviewEvidenceSnapshot(emptyList(), emptyList(), emptyList()), eq(configuration) ?: configuration)
+    }
+
+    @Test
+    fun queuedAnalysisConnectsUsageAndQualitySampleToTheSameTrace() {
+        prepare()
+        val exporter = InMemorySpanExporter.create()
+        SdkTracerProvider.builder().addSpanProcessor(SimpleSpanProcessor.create(exporter)).build().use { provider ->
+            val usageService = mock(AiUsageService::class.java)
+            val json = JsonMapper.builder().addModule(KotlinModule.Builder().build()).build()
+            val builder = RestClient.builder().baseUrl("http://ai.test")
+                .requestInterceptor(AiUsageRecordingInterceptor(usageService, json))
+            val server = MockRestServiceServer.bindTo(builder).build()
+            val client = AiCombinationReviewClient(builder.build(), json)
+            val requestJson = requireNotNull(javaClass.getResourceAsStream("/combinationreview/contract-request.json")).bufferedReader().use { it.readText() }
+            val responseJson = requireNotNull(javaClass.getResourceAsStream("/combinationreview/contract-response.json")).bufferedReader().use { it.readText() }
+            val request = json.readValue(requestJson, AiCombinationReviewRequest::class.java)
+            server.expect(requestTo("http://ai.test/internal/v1/combination-reviews/analyze"))
+                .andExpect { sent -> assertEquals(CombinationReviewTracingHelper.currentTraceParent(), sent.headers.getFirst("traceparent")) }
+                .andRespond(withSuccess(responseJson, MediaType.APPLICATION_JSON).header(
+                    AiUsageRecordingInterceptor.USAGE_HEADER,
+                    """[{"model":"test-model","serviceTier":"default","calls":1,"inputTokens":50,"cachedInputTokens":0,"outputTokens":20}]""",
+                ))
+            doAnswer {
+                client.analyze(request)
+                analysis
+            }.`when`(ai).analyze(eq(input) ?: input, any(ReviewEvidenceSnapshot::class.java) ?: ReviewEvidenceSnapshot(emptyList(), emptyList(), emptyList()), eq(configuration) ?: configuration)
+
+            service(CombinationReviewTracingHelper(provider.get("test"))).executeQueued(1)
+
+            val traceId = exporter.finishedSpanItems.single().traceId
+            val usageCall = mockingDetails(usageService).invocations.single { it.method.name == "record" }
+            assertEquals(traceId, usageCall.getArgument<String>(3))
+            val sample = mockingDetails(quality).invocations.single { it.method.name == "recordOperation" }
+            assertEquals(traceId, sample.getArgument<String>(5))
+            verify(runs).succeed(1, analysis)
+            server.verify()
+        }
     }
 
     @Test

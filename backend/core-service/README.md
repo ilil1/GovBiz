@@ -1279,6 +1279,14 @@ Elasticsearch 실패는 AI 오류와 별도 경계이며 ES 직접 시간 초과
 
 ## 검증
 
+### 중복 지원 검토 추적
+
+Langfuse를 Core와 AI 양쪽에서 활성화하면 큐에서 선점한 검토의 `combination.total` → AI의
+`combination.review` → `combination.model`을 연결합니다. Core의 사용량 기록과 성공 표본에도 같은
+추적 ID를 연결하며, 추적이 비활성이거나 사용량이 보고되지 않으면 연결·사용량이 없을 수 있습니다.
+사업 입력·첨부·질문·답변·예외 원문은 추적에 기록하지 않습니다. 전송 설정과 실제 서버 수신 여부는
+별도로 확인해야 합니다.
+
 ### AI 검색 Langfuse 추적
 
 `SupportProgramSearchTracingHelper`는 `search.total` 아래 DB 조회·적격 후보 준비·문서 준비·

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
-import { EvaluationHelp } from './EvaluationHelp'
+import { MonitoringHelp } from './MonitoringHelp'
 import { useMonitoringDemo } from './MonitoringDemoContext'
 import { createMonitoringRequest, MonitoringResponseError, monitoringFailureMessage, requireMonitoringResponse } from './monitoringRequest'
 
@@ -73,7 +73,7 @@ export function JobMetricsPanel({ onExpired, onSummaryChange, detailPage = false
 
   return <section className={`${styles.card} min-w-0`} aria-label="작업 결과">
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><EvaluationHelp label="작업 결과" title={<h2 className="m-0 text-lg font-bold tracking-tight text-ink">작업 결과</h2>}>신청 양식 찾기, 문서 만들기, 중복 지원 검토의 저장된 작업을 보여줍니다. 같은 작업을 다시 접수해도 한 건으로 세며 삭제된 작업은 포함되지 않습니다.</EvaluationHelp>{isExample && <p className="mt-2 mb-0 text-xs font-bold text-warning">예시 데이터 · 실제 기록 아님</p>}</div>
+      <div><MonitoringHelp label="작업 결과" title={<h2 className="m-0 text-lg font-bold tracking-tight text-ink">작업 결과</h2>}>신청 양식 찾기, 문서 만들기, 중복 지원 검토의 저장된 작업을 보여줍니다. 같은 작업을 다시 접수해도 한 건으로 세며 삭제된 작업은 포함되지 않습니다.</MonitoringHelp>{isExample && <p className="mt-2 mb-0 text-xs font-bold text-warning">예시 데이터 · 실제 기록 아님</p>}</div>
       <label className="grid gap-1 text-xs font-semibold text-ink-muted">접수 기간 (UTC)<select value={days} onChange={(event) => setDays(event.target.value)} className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-brand-primary"><option value="1">오늘</option><option value="7">최근 7일</option><option value="30">최근 30일</option></select></label>
     </div>
     {error ? <div className="rounded-xl bg-danger-soft p-4 text-sm text-danger" role="alert">{error} <button type="button" className="min-h-10 font-bold underline focus-visible:outline-2 focus-visible:outline-danger" onClick={() => setRevision((value) => value + 1)}>다시 조회</button></div>

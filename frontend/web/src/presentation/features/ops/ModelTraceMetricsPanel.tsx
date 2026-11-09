@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
-import { EvaluationHelp } from './EvaluationHelp'
+import { MonitoringHelp } from './MonitoringHelp'
 import { useMonitoringDemo } from './MonitoringDemoContext'
 import { createMonitoringRequest, MonitoringResponseError, monitoringFailureMessage, requireMonitoringResponse } from './monitoringRequest'
 
 const count = z.number().int().nonnegative()
 const duration = z.number().finite().nonnegative().nullable()
 const rowSchema = z.object({
-  feature: z.enum(['search.ranking.model', 'evidence.model', 'assistant.model']),
+  feature: z.enum(['search.ranking.model', 'evidence.model', 'assistant.model', 'combination.model']),
   model: z.string().nullable(), observed: count, completed: count, errors: count, warnings: count, timeouts: count, timeout_unknown: count,
   in_progress: count, latency_samples: count, missing_latency: count, p50_seconds: duration, p95_seconds: duration,
 }).refine((row) => row.observed === row.completed + row.in_progress
@@ -21,7 +21,7 @@ const resultSchema = z.object({
   environment: z.enum(['all', 'production', 'development', 'unknown', 'other']), results: z.array(rowSchema),
 })
 type Result = z.infer<typeof resultSchema>
-const features: Record<string, string> = { 'search.ranking.model': '공고 검색 순위', 'evidence.model': '공고 근거 답변', 'assistant.model': 'AI 도우미' }
+const features: Record<string, string> = { 'search.ranking.model': '공고 검색 순위', 'evidence.model': '공고 근거 답변', 'assistant.model': 'AI 도우미', 'combination.model': '중복 지원 검토' }
 const environments: Record<string, string> = { all: '전체 환경', production: '운영', development: '개발', unknown: '환경 미기록', other: '그 외 환경' }
 const seconds = (value: number | null) => value === null ? '측정 없음' : `${value.toLocaleString('ko-KR', { maximumFractionDigits: 3 })}초`
 const seoulTime = (value: string) => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value))
@@ -66,7 +66,7 @@ export function ModelTraceMetricsPanel({ onExpired, detailPage = false }: { onEx
   }, [range, selectedEnvironment, revision, monitoringFetch])
 
   return <section className={styles.card} aria-label="수집된 모델 실행 현황">
-    <EvaluationHelp label="모델 실행 현황" title={<h3 className="m-0 text-lg font-bold text-ink">모델 실행 현황</h3>}>검색 순위·근거 답변·도우미에서 수집된 모델 실행을 보여줍니다. 시간 초과는 오류에 포함됩니다.</EvaluationHelp>
+    <MonitoringHelp label="모델 실행 현황" title={<h3 className="m-0 text-lg font-bold text-ink">모델 실행 현황</h3>}>검색 순위·근거 답변·도우미에서 수집된 모델 실행을 보여줍니다. 시간 초과는 오류에 포함됩니다.</MonitoringHelp>
     {isExample && <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-950">예시 데이터 · 실제 모델 실행 기록이 아닙니다.</p>}
     <p className="m-0 text-sm leading-6 text-ink-muted">수집된 실행만 포함하므로 전체 모델 호출의 실패율이 아닙니다. 오류에는 응답 처리·형식 검사 실패도 포함될 수 있습니다.</p>
     <details open={filterOpen} onToggle={(event) => setFilterOpen(event.currentTarget.open)}>

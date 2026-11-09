@@ -418,7 +418,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
       const retrying = request !== null
       if (!request) {
         request = {
-          request_id: crypto.randomUUID(), dataset_id: dataset,
+          request_id: createRequestId(), dataset_id: dataset,
           execution_profile: mode === 'live' ? liveProfile! : selected!.execution_profiles.replay,
           candidate_capture_id: mode === 'live' ? 'new-model-response' : candidate,
           reference_capture_id: reference, live_config: mode === 'live' ? selectedOption!.live_config : null,
@@ -652,7 +652,7 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
   }
   const recover = async () => {
     if (!run || busy) return
-    if (recoveryRequest.current?.source !== run.id) recoveryRequest.current = { source: run.id, id: crypto.randomUUID() }
+    if (recoveryRequest.current?.source !== run.id) recoveryRequest.current = { source: run.id, id: createRequestId() }
     setBusy(true)
     try {
       const result = await recoverEvaluation(run.id, recoveryRequest.current.id)

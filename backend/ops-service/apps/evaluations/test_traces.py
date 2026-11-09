@@ -122,6 +122,7 @@ class TraceClientTests(SimpleTestCase):
                 ["search.total", "search.semantic.request", "search.ranking.request"],
             ),
             ("assistant-agent", "assistant.", ["assistant.total", "assistant.agent"]),
+            ("combination-review", "combination.", ["combination.total", "combination.review"]),
             (
                 "support-program-evidence",
                 "evidence.",

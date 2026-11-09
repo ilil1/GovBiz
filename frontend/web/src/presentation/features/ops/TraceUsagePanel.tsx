@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
+import { createMonitoringRequest } from './monitoringRequest'
 
 const totalsSchema = z.object({
   calls: z.number().int().nonnegative(), inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative(),
@@ -8,24 +9,27 @@ const totalsSchema = z.object({
 })
 type Totals = z.infer<typeof totalsSchema>
 
-export function TraceUsagePanel({ traceId }: { traceId: string }) {
+export function TraceUsagePanel({ traceId, onExpired }: { traceId: string; onExpired: () => void }) {
   const [data, setData] = useState<Totals | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const expiry = useRef(onExpired); expiry.current = onExpired
   useEffect(() => {
     if (!attempt) return
-    const controller = new AbortController()
+    const request = createMonitoringRequest()
     setData(null); setError(''); setLoading(true)
-    fetch(`/api/v1/admin/ai-costs/traces/${encodeURIComponent(traceId)}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
+    fetch(`/api/v1/admin/ai-costs/traces/${encodeURIComponent(traceId)}`, { credentials: 'same-origin', cache: 'no-store', signal: request.signal })
       .then(async (response) => {
+        if (!request.isActive()) return
+        if (response.status === 401 || response.status === 403) { expiry.current(); return }
         if (!response.ok) throw new Error('unavailable')
         const parsed = totalsSchema.safeParse(await response.json())
         if (!parsed.success) throw new Error('invalid')
-        if (!controller.signal.aborted) setData(parsed.data)
-      }).catch(() => { if (!controller.signal.aborted) setError('앱 사용량을 조회하지 못했습니다. 추적 상세는 계속 확인할 수 있습니다.') })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
+        if (request.isActive()) setData(parsed.data)
+      }).catch(() => { if (request.isActive()) setError('앱 사용량을 조회하지 못했습니다. 추적 상세는 계속 확인할 수 있습니다.') })
+      .finally(() => { request.finish(); if (request.isActive()) setLoading(false) })
+    return request.cancel
   }, [attempt, traceId])
   return <section className={styles.card} aria-label="연결된 앱 사용량">
     <h2 className={styles.cardTitle}>연결된 앱 사용량</h2>

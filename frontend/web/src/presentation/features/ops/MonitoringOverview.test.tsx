@@ -29,7 +29,7 @@ beforeEach(() => {
     if (url.pathname.endsWith('/model-trace-metrics')) return json({
       from_time: url.searchParams.get('from_time'), to_time: url.searchParams.get('to_time'),
       environment: url.searchParams.get('environment'), scope: 'observed-model-generations',
-      results: [{ feature: 'assistant.model', model: 'example', observed: 4, completed: 3, errors: 1, warnings: 0, timeouts: 0, timeout_unknown: 0, in_progress: 1 }],
+      results: [{ feature: 'combination.model', model: 'example', observed: 4, completed: 3, errors: 1, warnings: 0, timeouts: 0, timeout_unknown: 0, in_progress: 1 }],
     })
     return json({}, 404)
   }))

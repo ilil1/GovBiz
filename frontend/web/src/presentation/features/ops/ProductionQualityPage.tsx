@@ -1,3 +1,4 @@
+import { createRequestId } from './requestId'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { getProductionQuality, getProductionRegressionCandidate, getProductionSample, OpsApiError, productionScopes, saveProductionRegressionCandidate, saveProductionReview } from '../../../data/ops/opsApi'
@@ -123,7 +124,7 @@ function SampleReview({ id, owner, onExpired, onChanged }: { id: string; owner: 
       } else {
         const payload = { version: data.review_version, material_sha256: data.material_sha256, ...(operation === 'review' ? { ...draft, note: draft.note.trim(), expected_status: draft.expected_status || null } : {}) }
         const key = JSON.stringify({ operation, ...payload })
-        if (pending.current?.key !== key) pending.current = { key, requestId: crypto.randomUUID() }
+        if (pending.current?.key !== key) pending.current = { key, requestId: createRequestId() }
         const input = { ...payload, request_id: pending.current.requestId }
         const value = operation === 'review' ? await saveProductionReview(id, input as ProductionReviewInput, owner) : await saveProductionRegressionCandidate(id, input, owner)
         if (!mounted.current) return

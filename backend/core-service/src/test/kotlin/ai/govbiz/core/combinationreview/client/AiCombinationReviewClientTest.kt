@@ -6,6 +6,12 @@ import ai.govbiz.core.combinationreview.client.dto.AiCombinationReviewRequest
 import ai.govbiz.core.combinationreview.client.dto.AiCombinationReviewV3Request
 import ai.govbiz.core.combinationreview.client.exception.AiCombinationReviewClientException
 import ai.govbiz.core.combinationreview.client.exception.AiCombinationReviewClientException.Reason
+import ai.govbiz.core.combinationreview.helper.CombinationReviewTracingHelper
+import io.opentelemetry.api.common.AttributeKey
+import io.opentelemetry.api.trace.StatusCode
+import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter
+import io.opentelemetry.sdk.trace.SdkTracerProvider
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -29,6 +35,32 @@ class AiCombinationReviewClientTest {
     @Autowired private lateinit var client: AiCombinationReviewClient
     @Autowired private lateinit var server: MockRestServiceServer
     @Autowired private lateinit var json: ObjectMapper
+
+    @Test
+    fun propagatesTheQueuedAnalysisTraceWithoutPrivateErrorDetails() {
+        val exporter = InMemorySpanExporter.create()
+        SdkTracerProvider.builder().addSpanProcessor(SimpleSpanProcessor.create(exporter)).build().use { provider ->
+            val tracing = CombinationReviewTracingHelper(provider.get("test"))
+            val request = json.readValue(resource("contract-request.json"), AiCombinationReviewRequest::class.java)
+            server.expect(requestTo("http://ai.test/internal/v1/combination-reviews/analyze"))
+                .andExpect { sent -> assertEquals(CombinationReviewTracingHelper.currentTraceParent(), sent.headers.getFirst("traceparent")) }
+                .andRespond(withStatus(HttpStatus.GATEWAY_TIMEOUT))
+            assertThrows(AiServiceCallException::class.java) {
+                tracing.observe {
+                    assertNotNull(CombinationReviewTracingHelper.currentTraceId())
+                    client.analyze(request)
+                }
+            }
+            assertNull(CombinationReviewTracingHelper.currentTraceParent())
+            val span = exporter.finishedSpanItems.single()
+            assertEquals("combination.total", span.name)
+            assertEquals(StatusCode.ERROR, span.status.statusCode)
+            assertEquals("timeout", span.attributes.get(AttributeKey.stringKey("langfuse.observation.status_message")))
+            assertTrue(span.events.isEmpty())
+            assertFalse(span.toString().contains("계약 검증용 가상 입력"))
+            server.verify()
+        }
+    }
 
     @Test
     fun sendsAndReadsTheSharedInternalHttpContract() {
