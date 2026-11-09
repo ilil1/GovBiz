@@ -32,14 +32,33 @@ import { MonitoringDemoProvider } from './MonitoringDemoContext'
 
 const dashboardPath = '/ops/dashboard'
 const listPath = '/ops/evaluations'
-const notice = '저장된 과거 평가 결과를 비교합니다. 새 모델 호출은 없으며 현재 모델의 품질 측정이 아닙니다.'
-const liveNotice = '선택한 평가 자료의 질문·고정 근거 청크와 답변 지침을 OpenAI에 전송해 새 응답을 생성합니다. 검색·임베딩은 실행하지 않으며 API 비용이 발생합니다.'
-const recoveryNotice = '이미 생성된 응답으로 보고서와 평가 점수 등록만 다시 처리합니다. 추가 모델 호출은 0회이며 원본 실행 기록은 보존됩니다.'
-const reassessmentNotice = '저장된 답변을 현재 평가기로 다시 평가합니다. 원본과 별도의 평가 이력이며 AI 모델을 추가 호출하지 않습니다.'
-const modeLabel = (run: EvaluationRun) => run.recovery_kind === 'reassessment' ? '저장 답변 재평가' : run.execution_mode === 'recovery' ? '후처리 복구' : run.execution_mode === 'live' ? '새 모델 응답 생성' : '저장 응답 재평가'
 const field = 'min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm focus:outline-2 focus:outline-brand-primary'
 const date = (value: string | null) => value ? new Date(value).toLocaleString('ko-KR') : '—'
 const message = (error: unknown) => error instanceof Error ? error.message : '요청을 처리하지 못했습니다.'
+const evaluationProblem = (code: string) => ({
+  PREFECT_CANCEL_UNCONFIRMED: '취소가 끝났는지 확인하지 못했어요. 상태를 다시 확인해 주세요.',
+  EXECUTION_SPEC_REQUIRED: '이전 요청에 필요한 정보가 없어요. 새 평가를 만들어 주세요.',
+  EXECUTION_SPEC_MISMATCH: '평가 설정이 바뀌어 시작하지 못했어요. 설정을 확인한 뒤 새 평가를 만들어 주세요.',
+  PREFECT_DISPATCH_UNCONFIRMED: '요청이 접수됐는지 확인하지 못했어요. 접수를 다시 확인해 주세요.',
+  PREFECT_STATUS_UNAVAILABLE: '평가 상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.',
+  RESULTS_UNAVAILABLE: '결과를 가져오지 못했어요. 다시 확인하고 계속되면 관리자에게 알려 주세요.',
+  EVALUATION_FAILED: '평가가 중단됐어요. 작업 기록을 확인해 주세요.',
+  EVALUATION_CRASHED: '평가가 중단됐어요. 작업 기록을 확인해 주세요.',
+  EVALUATION_CANCELLED: '평가가 취소됐어요.',
+} as Record<string, string>)[code] ?? '문제가 생겼어요. 자세한 내용은 아래 기록을 확인해 주세요.'
+const recoveryBlockedMessage = (reason: string) => ({
+  '진행 중인 복구 실행을 먼저 확인하세요.': '이미 진행 중인 결과 정리를 먼저 확인해 주세요.',
+  '완료 응답·입력 무결성 또는 원본 평가기 버전의 호환성을 확인할 수 없습니다.': '필요한 자료나 설정을 확인하지 못해 결과를 다시 정리할 수 없어요.',
+  '실행 종료 상태를 확인한 뒤 실패한 후처리만 복구할 수 있습니다.': '평가가 끝난 뒤 결과를 다시 정리할 수 있어요.',
+} as Record<string, string>)[reason] ?? '지금은 결과를 다시 정리할 수 없어요. 자세한 내용은 관리자에게 확인해 주세요.'
+const reassessmentBlockedMessage = (reason: string) => ({
+  '같은 평가기로 재평가한 기록이 있습니다. 결과 또는 실패 원인을 확인해 주세요.': '이미 다시 평가한 기록이 있어요. 아래 기록을 확인해 주세요.',
+  '진행 중인 복구 또는 재평가를 먼저 확인해 주세요.': '이미 진행 중인 작업을 먼저 확인해 주세요.',
+  '평가의 종료 상태를 확인할 수 없어 재평가할 수 없습니다.': '평가가 끝났는지 확인한 뒤 다시 평가할 수 있어요.',
+  '평가가 종료된 후 재평가할 수 있습니다.': '평가가 끝난 뒤 다시 평가할 수 있어요.',
+  '저장된 응답과 재평가 입력을 확인할 수 없습니다.': '필요한 자료를 확인하지 못해 다시 평가할 수 없어요.',
+} as Record<string, string>)[reason] ?? '지금은 다시 평가할 수 없어요. 자세한 내용은 관리자에게 확인해 주세요.'
+
 
 function Status({ run }: { run: EvaluationRun }) {
   return <span className={workspaceTagClassName(run.error_code || ['FAILED', 'CRASHED', 'RESULT_ERROR'].includes(run.status) ? 'danger' : run.status === 'COMPLETED' ? 'ok' : 'info')}>{run.status_label}</span>
@@ -134,7 +153,7 @@ function OpsWorkspace({ session, onExpired, onReviewChanged }: { session: OpsSes
   const monitoringSection = location.pathname.startsWith('/ops/usage/') ? location.pathname.slice('/ops/usage/'.length) : ''
   const title = monitoringTitles[monitoringSection] ?? (location.pathname.startsWith(`${listPath}/`) && location.pathname.endsWith('/report') ? 'Evidently 평가 보고서' : current.label)
   const legacyPath = location.pathname === listPath ? ({ '#new-evaluation': `${listPath}/new`, '#evaluation-budget': '/ops/budget', '#evaluation-schedules': '/ops/schedules' } as Record<string, string>)[location.hash] : undefined
-  const compactEvaluationMenu = location.pathname === listPath
+  const compactEvaluationMenu = location.pathname === listPath || (location.pathname.startsWith(`${listPath}/`) && location.pathname !== `${listPath}/new` && !location.pathname.endsWith('/report'))
   useEffect(() => {
     document.title = `GovBiz · ${title}`
     if (previousPath.current !== location.pathname) {
@@ -330,6 +349,7 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   const [storageError, setStorageError] = useState(restored.error)
   const [rejected, setRejected] = useState(false)
   const [budgetRejected, setBudgetRejected] = useState(false)
+  const [confirmDiscardPending, setConfirmDiscardPending] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [busy, setBusy] = useState(false)
   const [step, setStep] = useState<1 | 2 | 3>(restored.pending ? 3 : 1)
@@ -351,13 +371,13 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   const supported = selected?.evaluation_scope === 'fixed-answer-context-only' || selected?.evaluation_scope === 'source-chunks-retrieval-answer'
   const ragLive = selected?.evaluation_scope === 'source-chunks-retrieval-answer' && mode === 'live'
   const liveEnabled = allLiveEnabled && (!ragLive || ragLiveEnabled)
-  const [confirmDiscardPending, setConfirmDiscardPending] = useState(false)
   const canGenerate = supported && options.length > 0
   const [reference, setReference] = useState(restored.pending?.reference_capture_id ?? draft?.reference ?? '')
   const [candidate, setCandidate] = useState(restored.pending?.candidate_capture_id ?? draft?.candidate ?? '')
   const changeDataset = (id: string) => {
     const value = datasets.find((item) => item.id === id)
     if (!liveOptions(value).length) setMode('replay')
+    if (!model) setModel(liveOptions(value)[0]?.live_config.model ?? '')
     setApproved(false); setDataset(id); setReference(value?.baseline?.id ?? value?.captures[0]?.id ?? ''); setCandidate(value?.captures.at(-1)?.id ?? '')
   }
   useEffect(() => { onDraftChange({ mode, dataset, reference, candidate, model }) }, [mode, dataset, reference, candidate, model, onDraftChange])
@@ -379,7 +399,6 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
     if (!restored.pending) return
     const controller = new AbortController()
     setBusy(true)
-    if (!model) setModel(liveOptions(value)[0]?.live_config.model ?? '')
     getEvaluation(restored.pending.request_id, controller.signal).then((value) => {
       if (!controller.signal.aborted) finish(value, restored.pending!)
     }).catch((reason) => {
@@ -426,6 +445,20 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
       }
     } finally { submitting.current = false; setBusy(false) }
   }
+  const discardPending = () => {
+    if (!pending || busy || submitting.current) return
+    try {
+      const stored = readPendingEvaluation(owner)
+      if (stored && stored.request_id !== pending.request_id) throw new Error('다른 요청이 보관되어 있습니다.')
+      clearPendingEvaluation(owner, pending.request_id)
+      requestId.current = null
+      setPending(null); setConfirmDiscardPending(false); setSubmitError(''); setStorageError('')
+      setRejected(false); setBudgetRejected(false); setApproved(false); setStep(1)
+      setMode('replay'); setDataset(''); setModel(''); setReference(''); setCandidate('')
+    } catch {
+      setStorageError('보관 기록을 지우지 못했습니다. 평가 이력을 확인한 뒤 다시 시도해 주세요.')
+    }
+  }
   const reselect = () => {
     if (!rejected || !pending) return
     try { clearPendingEvaluation(owner, pending.request_id); onExpired() }
@@ -462,20 +495,6 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
         <ol aria-label="평가 준비 단계" className="grid list-none gap-2 p-0 text-sm sm:grid-cols-3">
           {(['평가 자료', '답변 확인 방법', '비교 및 실행'] as const).map((label, index) => <li key={label} aria-current={step === index + 1 ? 'step' : undefined} className={`rounded-lg px-3 py-2 ${step === index + 1 ? 'bg-brand-primary font-bold text-white' : 'bg-surface-muted text-ink-muted'}`}><span className="mr-2">{index + 1}</span>{label}{step === index + 1 && <span className="sr-only"> · 현재 단계</span>}</li>)}
         </ol>
-  const discardPending = () => {
-    if (!pending || busy || submitting.current) return
-    try {
-      const stored = readPendingEvaluation(owner)
-      if (stored && stored.request_id !== pending.request_id) throw new Error('다른 요청이 보관되어 있습니다.')
-      clearPendingEvaluation(owner, pending.request_id)
-      requestId.current = null
-      setPending(null); setConfirmDiscardPending(false); setSubmitError(''); setStorageError('')
-      setRejected(false); setBudgetRejected(false); setApproved(false); setStep(1)
-      setMode('replay'); setDataset(''); setModel(''); setReference(''); setCandidate('')
-    } catch {
-      setStorageError('보관 기록을 지우지 못했습니다. 평가 이력을 확인한 뒤 다시 시도해 주세요.')
-    }
-  }
         <form className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (step === 3) void submit() }}>
           {step === 1 && <>
           <h3 ref={stepHeading} tabIndex={-1} className="border-t border-line pt-5 text-lg font-bold leading-snug sm:text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary md:col-span-2">1. 평가 자료 선택</h3>
@@ -559,6 +578,15 @@ function EvaluationCreate({ owner, datasets, liveEnabled: allLiveEnabled, ragLiv
   </>
 }
 
+function EvaluationDetailSection({ title, label, children }: { title: string; label?: string; children: ReactNode }) {
+  return <details aria-label={label} className="group min-w-0 rounded-[1.4rem] border border-line bg-white shadow-[0_8px_24px_rgb(32_33_36_/_4%)]">
+    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-[1.35rem] py-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden">
+      <span className="min-w-0">{title}</span><span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open:hidden">펼치기 +</span><span className="hidden group-open:inline">접기 −</span></span>
+    </summary>
+    <div className="grid min-w-0 gap-4 border-t border-line p-[1.35rem]">{children}</div>
+  </details>
+}
+
 function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => void; onReviewChanged: () => void }) {
   const { runId = '' } = useParams()
   const navigate = useNavigate()
@@ -573,6 +601,8 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
   const [refresh, setRefresh] = useState(0)
   const [busy, setBusy] = useState(false)
   const expiry = useRef(onExpired); expiry.current = onExpired
+  const primaryAction = `${styles.primaryButton} min-h-11 !text-sm`
+  const secondaryAction = `${styles.secondaryButton} min-h-11 !text-sm`
   const terminal = run !== null && ['COMPLETED', 'FAILED', 'CANCELLED', 'CRASHED'].includes(run.status)
   useEffect(() => {
     const controller = new AbortController()
@@ -645,89 +675,136 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
     } finally { reassessmentInFlight.current = false; setBusy(false) }
   }
   return <>
-    <WorkspacePageHeader title="평가 실행 상세" parent={{ to: listPath, label: '실행 이력' }} actions={run && <Status run={run} />} />
+    <WorkspacePageHeader title="평가 실행 상세" parent={{ to: listPath, label: '실행 이력' }} actions={run && (run.status !== 'COMPLETED' || run.status_stale) ? <Status run={run} /> : undefined} />
     <div className={styles.content}>
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
-      <div className="flex flex-wrap items-center gap-3"><button className={styles.secondaryButton} onClick={() => setRefresh((value) => value + 1)}>상태 다시 확인</button>{(run?.prefect_flow_run_id || run?.status === 'CANCELLING') && !terminal && !error && <p className="text-xs text-ink-muted">5초마다 상태를 확인합니다.</p>}</div>
-      {!run ? !error && <p role="status">실행 정보를 불러오고 있습니다.</p> : <>
-        {run.error_message && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">{run.error_message}</p>}
-        {run.status !== 'COMPLETED' && <p className="text-sm text-ink-muted">품질 판정: 미판정 · 완료된 평가 결과가 필요합니다. 실행 오류를 모델 품질 불합격으로 처리하지 않습니다.</p>}
-        {cancelError && <p role="alert" className="text-sm text-red-700">{cancelError}</p>}
-        {run.can_cancel && <section className={styles.card} aria-label="평가 취소">
-          <p className="text-sm text-ink-muted">취소하면 다음 모델 호출을 차단합니다. 이미 승인된 호출은 비용이 발생할 수 있으며, 사용량을 확인하지 못한 예산은 유지합니다.</p>
-          <button className={`${styles.secondaryButton} self-start`} disabled={busy} onClick={() => void cancel()}>평가 취소 요청</button>
-        </section>}
-        {run.cancel_requested_at && <p role="status" className="text-sm text-ink-muted">취소 요청: {run.cancel_requested_by} · {date(run.cancel_requested_at)}{run.status === 'CANCELLING' ? ' · 실행 종료를 확인하고 있습니다.' : ''}</p>}
-        {run.can_retry && <button className={`${styles.primaryButton} self-start`} disabled={busy} onClick={() => void retry()}>{busy ? '접수 확인 중…' : '같은 요청으로 접수 재확인'}</button>}
-        <section className={styles.card}><h2 className={styles.cardTitle}>{run.dataset_label}</h2><p className="text-sm leading-6 text-ink-muted">{run.recovery_kind === 'reassessment' ? reassessmentNotice : run.execution_mode === 'recovery' ? recoveryNotice : run.execution_mode === 'live' ? (run.evaluation_scope === 'source-chunks-retrieval-answer' ? ragLiveNotice(run.live_config) : liveNotice) : notice}</p>
-          <VectorPlan config={run.live_config} />
-          <p className="text-sm">{modeLabel(run)} · {scopeLabel(run.evaluation_scope)}</p>
-          {run.status === 'COMPLETED' && <p className="text-sm font-semibold text-brand-primary">평가 실행이 끝났습니다. 아래에서 답변과 근거를 검토하세요.</p>}
-          <details><summary className="cursor-pointer text-sm font-semibold">실행 정보·버전 자세히 보기</summary>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-3 text-sm">{[
-            ['실행 방식', modeLabel(run)], ['평가 범위', scopeLabel(run.evaluation_scope)], ['요청 ID', run.id],
-            ['접수 명세 ID', run.execution_spec_sha256 ?? '기존 기록 · 실행 명세 없음'],
-            ...(run.execution_spec ? [
-              ['고정 사례', run.execution_spec.dataset.case_ids.join(', ')],
-              ['평가기 버전', run.execution_spec.evaluation.sha256],
-              ...(run.recovery_kind === 'reassessment' ? [
-                ['원본에 기록된 평가기 버전', run.source_evaluator_version ?? '확인할 수 없음'],
-                ['원본 접수 시 승인된 평가기 버전', run.source_approved_evaluator_version ?? '확인할 수 없음'],
-              ] : []),
-              ...(run.execution_spec.generation ? [['프롬프트 버전', run.execution_spec.generation.prompt_sha256]] : []),
-            ] : []),
-            ['모델 호출 시도', run.model_api_calls === null ? '아직 확인되지 않음' : `${run.model_api_calls}회`],
-            ...(run.live_config ? [['승인 예산', `${run.live_config.model} · 최대 ${run.live_config.max_model_calls}회 · 출력 최대 ${run.live_config.max_output_tokens}토큰/호출 · 입력 최대 ${run.live_config.max_input_tokens ?? '기록 없음'}토큰/호출`]] : []), ['기준 실행', run.reference_label], ['후보 실행', run.candidate_label], ['요청자', run.requested_by], ['요청 시각', date(run.created_at)],
-            ['시작 / 종료', `${date(run.started_at)} / ${date(run.finished_at)}`], ['마지막 상태 확인', date(run.synced_at)], ['평가 결과 ID', run.evaluation_run_id ?? '결과 대기'],
-          ].map(([label, value]) => <div key={label} className="contents"><dt className="text-ink-muted">{label}</dt><dd className="break-all">{value}</dd></div>)}</dl>
-          </details>
+      {!run ? error ? <button className={`${styles.secondaryButton} min-h-11 !text-sm self-start`} onClick={() => setRefresh((value) => value + 1)}>다시 불러오기</button> : <p role="status">평가를 불러오고 있습니다.</p> : <>
+        <section className={styles.card} aria-label="이번 평가 한눈에 보기">
+          <div className="flex flex-wrap items-center justify-between gap-2"><h2 className={styles.cardTitle}>{run.status_stale || run.error_code === 'PREFECT_STATUS_UNAVAILABLE' ? '현재 상태를 확인할 수 없어요' : run.status === 'COMPLETED' ? '평가가 끝났어요' : run.status === 'CANCELLED' ? '평가가 취소됐어요' : run.status === 'CANCELLING' ? '평가를 취소하고 있어요' : run.status === 'RESULT_ERROR' ? '결과를 불러오지 못했어요' : ['FAILED', 'CRASHED'].includes(run.status) ? '평가를 끝내지 못했어요' : '평가를 진행하고 있어요'}</h2></div>
+          <p className="text-sm text-ink-muted">{run.dataset_label} · {date(run.created_at)}</p>
+          {(run.status !== 'COMPLETED' || run.status_stale || run.error_code === 'PREFECT_STATUS_UNAVAILABLE') && <p role={run.status_stale || run.error_code === 'PREFECT_STATUS_UNAVAILABLE' || ['RESULT_ERROR', 'FAILED', 'CRASHED'].includes(run.status) ? 'alert' : undefined} className="text-sm leading-6">{run.status_stale || run.error_code === 'PREFECT_STATUS_UNAVAILABLE' ? '상태를 다시 확인해 주세요. 평가가 끝났는지는 아직 알 수 없어요.' : run.status === 'CANCELLED' ? '취소된 평가의 결과는 확인할 수 없습니다.' : run.status === 'CANCELLING' ? '취소가 끝날 때까지 기다려 주세요.' : run.status === 'RESULT_ERROR' ? evaluationProblem(run.error_code) : ['FAILED', 'CRASHED'].includes(run.status) ? (run.postprocessing?.can_recover ? '만들어진 답변으로 결과 정리를 다시 시도할 수 있어요.' : run.can_retry ? '평가 요청이 접수됐는지 다시 확인해 주세요.' : run.postprocessing?.can_reassess ? '저장된 답변을 다시 평가할 수 있어요.' : run.error_code ? evaluationProblem(run.error_code) : '오류 내용을 확인한 뒤 새 평가를 진행해 주세요.') : '완료되면 결과를 확인할 수 있어요.'}</p>}
+          {run.status === 'COMPLETED' && (run.execution_mode === 'replay' || run.recovery_kind === 'reassessment' || run.execution_mode === 'recovery' || !['fixed-answer-context-only', 'source-chunks-retrieval-answer'].includes(run.evaluation_scope ?? '')) && <p className="text-sm leading-6 text-ink-muted">{run.execution_mode === 'replay' ? '저장된 답변을 확인한 결과예요. 현재 모델의 성능을 새로 측정한 것은 아니에요.' : run.recovery_kind === 'reassessment' ? '저장된 답변을 다시 평가했어요. AI를 추가로 호출하지 않았어요.' : run.execution_mode === 'recovery' ? '기존 답변으로 결과를 다시 정리했어요. AI를 추가로 호출하지 않았어요.' : null}{run.evaluation_scope !== 'fixed-answer-context-only' && run.evaluation_scope !== 'source-chunks-retrieval-answer' && ' 평가 범위를 확인할 수 없어요.'}</p>}
+          {cancelError && <p role="alert" className="text-sm text-red-700">{cancelError}</p>}
+          <div className="flex flex-wrap items-center gap-3">
+            {run.can_retry && <button className={primaryAction} disabled={busy} onClick={() => void retry()}>{busy ? '확인 중…' : '접수 다시 확인'}</button>}
+            {!run.status_stale && run.error_code !== 'PREFECT_STATUS_UNAVAILABLE' && run.postprocessing?.can_recover && <button className={primaryAction} disabled={busy} onClick={() => void recover()}>{busy ? '요청 중…' : '결과 정리 다시 시도'}</button>}
+            {!run.status_stale && run.error_code !== 'PREFECT_STATUS_UNAVAILABLE' && run.status !== 'COMPLETED' && !run.can_retry && !run.postprocessing?.can_recover && run.postprocessing?.can_reassess && <button className={primaryAction} disabled={busy} onClick={() => void reassess()}>{busy ? '요청 중…' : '저장 답변 다시 평가'}</button>}
+            {!run.status_stale && run.error_code !== 'PREFECT_STATUS_UNAVAILABLE' && !run.can_retry && !run.postprocessing?.can_recover && !run.postprocessing?.can_reassess && ['FAILED', 'CRASHED'].includes(run.status) && <Link className={primaryAction} to={`${listPath}/new`}>새 평가 만들기</Link>}
+            {(run.status_stale || run.error_code === 'PREFECT_STATUS_UNAVAILABLE' || run.status === 'RESULT_ERROR' || !!error || !!cancelError || (!terminal && !run.prefect_flow_run_id && run.status !== 'CANCELLING' && !run.can_retry)) && <button className={secondaryAction} onClick={() => setRefresh((value) => value + 1)}>상태 다시 확인</button>}
+          </div>
+          {run.postprocessing?.can_recover && <p className="text-sm text-ink-muted">이미 만든 답변으로 결과를 정리합니다. 추가 AI 호출은 없습니다.</p>}
+          {run.status !== 'COMPLETED' && !run.can_retry && !run.postprocessing?.can_recover && run.postprocessing?.can_reassess && <p className="text-sm text-ink-muted">저장된 답변을 다시 평가해 별도 기록으로 남겨요. AI를 추가로 호출하지 않아요.</p>}
+          {(run.prefect_flow_run_id || run.status === 'CANCELLING') && !terminal && !error && <p className="text-xs text-ink-muted">상태를 자동으로 확인하고 있어요.</p>}
+          {run.error_message && <details className="text-sm"><summary className="cursor-pointer font-semibold">문제 원인과 해결 방법</summary><p className="mt-2 leading-6">{evaluationProblem(run.error_code)}</p><details className="mt-3 text-ink-muted"><summary className="cursor-pointer">관리자용 원본 메시지</summary><p className="mt-2 whitespace-pre-wrap break-words">{run.error_message}</p></details></details>}
+          {run.can_cancel && <details className="text-sm"><summary className="cursor-pointer font-semibold">평가 취소하기</summary><p className="my-2 text-ink-muted">앞으로의 AI 호출을 중단해요. 이미 시작된 호출에는 비용이 생길 수 있고, 확인되지 않은 사용량은 예산에 남아요.</p><button className={secondaryAction} disabled={busy} onClick={() => void cancel()}>평가 취소 요청</button></details>}
+          {run.cancel_requested_at && <p role="status" className="text-sm text-ink-muted">취소 요청: {run.cancel_requested_by} · {date(run.cancel_requested_at)}{run.status === 'CANCELLING' ? ' · 종료 확인 중' : ''}</p>}
+          <div className="grid gap-3">
+            <details className="group rounded-xl border border-line">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                <span>평가 정보 보기</span><span aria-hidden="true" className="text-xs text-brand-primary"><span className="group-open:hidden">펼치기 +</span><span className="hidden group-open:inline">접기 −</span></span>
+              </summary>
+              <dl className="mx-4 mb-4 divide-y divide-line border-t border-line text-sm">
+                {([
+                  ['평가 방법', run.recovery_kind === 'reassessment' ? '저장된 답변 다시 평가' : run.execution_mode === 'recovery' ? '기존 답변으로 결과 정리' : run.execution_mode === 'live' ? '새 답변을 만들어 평가' : '저장된 답변 확인'],
+                  ['확인한 범위', run.evaluation_scope === 'fixed-answer-context-only' ? '준비된 공고 내용으로 답변 확인' : run.evaluation_scope === 'source-chunks-retrieval-answer' ? '정해진 공고에서 내용 찾기와 답변 확인' : '기록 없음'],
+                  ...(run.execution_mode === 'live' && run.live_config?.model ? [['답변 모델', run.live_config.model]] : []),
+                  ['비교 기준', run.reference_label || '기록 없음'],
+                  ['확인한 답변', run.candidate_label || '기록 없음'],
+                  ['요청한 사람', run.requested_by || '기록 없음'],
+                ] as [string, string][]).map(([label, value]) => <div className="grid min-w-0 grid-cols-[minmax(5rem,7rem)_minmax(0,1fr)] items-center gap-3 py-3" key={label}><dt className={`text-ink-muted ${label === '확인한 범위' ? 'self-start pt-3' : ''}`}>{label}</dt><dd className="min-w-0 font-semibold [overflow-wrap:anywhere]">{label === '확인한 범위' ? <EvaluationHelp label="확인한 범위" title={<span>{value}</span>}><p className="font-normal">{run.evaluation_scope === 'fixed-answer-context-only' ? '미리 준비한 공고 내용으로 답변을 확인해요. 실제 서비스의 공고 검색 성능은 측정하지 않았어요.' : run.evaluation_scope === 'source-chunks-retrieval-answer' ? '정해진 공고 안에서 내용을 찾고 답변한 결과를 확인해요. 실제 서비스의 공고 검색 성능은 측정하지 않았어요.' : '평가 범위가 기록되지 않아 무엇을 확인했는지 알 수 없어요.'}</p></EvaluationHelp> : value}</dd></div>)}
+              </dl>
+            </details>
+            <details className="group rounded-xl border border-line">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                <span>관리자용 기술 정보</span><span aria-hidden="true" className="text-xs text-brand-primary"><span className="group-open:hidden">펼치기 +</span><span className="hidden group-open:inline">접기 −</span></span>
+              </summary>
+              <div className="grid min-w-0 gap-5 border-t border-line p-4 text-sm">
+                <section aria-label="처리 시간">
+                  <h3 className="font-semibold">처리 시간</h3>
+                  <dl className="mt-2 divide-y divide-line">{([
+                    ['요청 시각', date(run.created_at)], ['시작 시각', run.started_at ? date(run.started_at) : '기록 없음'],
+                    ['종료 시각', run.finished_at ? date(run.finished_at) : '기록 없음'], ['마지막 상태 확인', run.synced_at ? date(run.synced_at) : '기록 없음'],
+                  ] as [string, string][]).map(([label, value]) => <div key={label} className="grid min-w-0 grid-cols-[minmax(6rem,9rem)_minmax(0,1fr)] gap-3 py-2"><dt className="text-ink-muted">{label}</dt><dd className="min-w-0 [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
+                </section>
+                <section aria-label="평가 설정과 호출 한도">
+                  <EvaluationHelp label="평가 설정과 호출 한도" title={<h3 className="font-semibold">평가 설정과 호출 한도</h3>}><p>호출 한도는 미리 허용한 최대치이며 실제 사용량과 다를 수 있어요. 토큰은 AI가 글을 처리할 때 사용하는 단위예요.</p></EvaluationHelp>
+                  <dl className="divide-y divide-line">{([
+                    ['AI 호출 시도', run.model_api_calls === null ? '아직 확인되지 않음' : `${run.model_api_calls}회`],
+                    ...(run.live_config ? [
+                      ['사용 모델', run.live_config.model], ['허용된 최대 호출', `${run.live_config.max_model_calls}회`],
+                      ['한 번에 입력할 수 있는 양', run.live_config.max_input_tokens == null ? '기록 없음' : `${run.live_config.max_input_tokens}토큰`],
+                      ['한 번에 출력할 수 있는 양', `${run.live_config.max_output_tokens}토큰`],
+                    ] : []),
+                    ...(run.execution_spec ? [
+                      ['확인할 질문 번호', run.execution_spec.dataset.case_ids.join(', ') || '기록 없음'], ['평가기 버전', run.execution_spec.evaluation.sha256],
+                      ...(run.recovery_kind === 'reassessment' ? [['원본에 기록된 평가기 버전', run.source_evaluator_version ?? '확인할 수 없음'], ['원본 접수 시 승인된 평가기 버전', run.source_approved_evaluator_version ?? '확인할 수 없음']] : []),
+                      ...(run.execution_spec.generation ? [['프롬프트 버전', run.execution_spec.generation.prompt_sha256]] : []),
+                    ] : []),
+                  ] as [string, string][]).map(([label, value]) => <div key={label} className="grid min-w-0 grid-cols-[minmax(6rem,9rem)_minmax(0,1fr)] gap-3 py-2"><dt className="text-ink-muted">{label}</dt><dd className="min-w-0 [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
+                  <VectorPlan config={run.live_config} />
+                </section>
+                <section aria-label="식별 번호">
+                  <EvaluationHelp label="식별 번호" title={<h3 className="font-semibold">식별 번호</h3>}><p>문제 확인이나 기록 대조에 사용하는 번호예요. 설정 번호는 접수한 평가 설정이 같은지 확인할 때 사용해요.</p></EvaluationHelp>
+                  <dl className="divide-y divide-line">{([
+                    ['요청 번호', run.id], ['평가 설정 번호', run.execution_spec_sha256 ?? '기존 기록 · 설정 번호 없음'],
+                    ['평가 결과 번호', run.evaluation_run_id ?? '결과 대기'],
+                  ] as [string, string][]).map(([label, value]) => <div key={label} className="grid min-w-0 grid-cols-[minmax(6rem,9rem)_minmax(0,1fr)] gap-3 py-2"><dt className="text-ink-muted">{label}</dt><dd className="min-w-0 [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
+                </section>
+              </div>
+            </details>
+          </div>
         </section>
+        {run.status === 'COMPLETED' && run.evaluation_scope !== 'source-chunks-retrieval-answer' && <section className={styles.card} aria-label="평가 결과">
+          <h2 className={styles.cardTitle}>결과 요약</h2>
+          <div className="grid gap-3 sm:grid-cols-3">{[
+            { label: '확인한 질문', value: `${run.summary.observedCaseCount ?? '—'} / ${run.summary.caseCount ?? '—'}개`, help: '평가할 질문 중 결과를 확인한 질문 수예요.' },
+            { label: '답변 여부가 예상과 일치', value: run.summary.statusAccuracy == null ? '미측정' : `${Number((run.summary.statusAccuracy * 100).toFixed(2))}%`, help: '답변했는지 또는 근거가 부족해 답변하지 않았는지가 예상과 일치한 비율이에요.' },
+            { label: '필요한 근거 표시', value: run.summary.referenceCitationRecall == null ? '미측정' : `${Number((run.summary.referenceCitationRecall * 100).toFixed(2))}%`, help: '평가 자료에서 필요하다고 정한 근거를 답변에 표시한 비율이에요.' },
+          ].map(({ label, value, help }) => <div className="min-w-0 rounded-xl bg-[#f3f7f5] p-4" key={label}><EvaluationHelp label={label} title={<p className="text-sm text-ink-muted">{label}</p>}><p>{help}</p></EvaluationHelp><strong className="mt-1 block text-2xl">{value}</strong></div>)}</div>
+          <p className="text-sm text-ink-muted">자동 확인 결과예요. 답변과 공고 내용을 직접 확인해 주세요.</p>
+        </section>}
+        {run.status === 'COMPLETED' && run.evaluation_scope === 'source-chunks-retrieval-answer' && run.comparison?.schema_version === 3 && <RagComparisonResult comparison={run.comparison} />}
         {run.status === 'COMPLETED' && run.evaluation_scope === 'fixed-answer-context-only' && <EvaluationReviewPanel runId={run.id} onExpired={onExpired} onChanged={onReviewChanged} />}
         {run.status === 'COMPLETED' && run.evaluation_scope === 'source-chunks-retrieval-answer' && <RagMaterialPanel runId={run.id} onExpired={onExpired} onReviewChanged={onReviewChanged} />}
         {run.source_run_id && <Link className="text-sm font-semibold text-brand-primary underline" to={`${listPath}/${run.source_run_id}`}>원본 실행과 실패 기록 보기</Link>}
-        <RunBudgetPanel runId={run.id} onExpired={onExpired} refreshKey={refresh} />
-        {run.postprocessing && <section className={styles.card} aria-label="후처리 복구">
-          <h2 className={styles.cardTitle}>후처리 복구</h2>
-          <p className="text-sm">복구 입력·평가기 호환: {run.postprocessing.inputs_ready ? '입력 무결성·평가기 호환 확인' : '미확인 또는 호환되지 않음'}</p>
-          <p className="text-sm">마지막 후처리 단계: {{ unverified: '미확인', report: '보고서 생성', publish: 'Langfuse 등록·재조회', completed: '완료' }[run.postprocessing.stage]}</p>
-          <p className="text-xs leading-5 text-ink-muted">{recoveryNotice}</p>
-          {run.postprocessing.can_recover ? <button className={`${styles.primaryButton} self-start`} disabled={busy} onClick={() => void recover()}>{busy ? '복구 접수 중…' : '후처리 다시 실행'}</button>
-            : (run.status !== 'COMPLETED' || !run.postprocessing.inputs_ready) && <p className="text-sm text-ink-muted">{run.postprocessing.blocked_reason}</p>}
-          {run.postprocessing.can_reassess && <div className="space-y-2 rounded-xl bg-surface-muted p-4">
-            <h3 className="font-semibold">저장된 답변을 현재 평가기로 다시 평가</h3>
-            <p className="text-sm leading-6">{reassessmentNotice}</p>
-            <button className={`${styles.secondaryButton} self-start`} disabled={busy} onClick={() => void reassess()}>{busy ? '재평가 접수 중…' : '저장 답변 다시 평가'}</button>
+        <EvaluationDetailSection title="AI 사용량 보기"><RunBudgetPanel runId={run.id} onExpired={onExpired} refreshKey={refresh} /></EvaluationDetailSection>
+        {run.postprocessing && <EvaluationDetailSection title="추가 작업과 처리 기록 보기" label="추가 작업">
+          <details className="group/processing rounded-xl border border-line text-sm">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden"><span>관리자용 처리 정보</span><span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open/processing:hidden">펼치기 +</span><span className="hidden group-open/processing:inline">접기 −</span></span></summary>
+            <div className="grid gap-2 border-t border-line p-4 text-ink-muted"><p>자료 확인: {run.postprocessing.inputs_ready ? '완료' : '미확인'}</p><p>마지막 단계: {{ unverified: '미확인', report: '보고서 생성', publish: '결과 등록', completed: '완료' }[run.postprocessing.stage]}</p>{run.postprocessing.blocked_reason && <p>결과 정리: {run.postprocessing.blocked_reason}</p>}{run.postprocessing.reassessment_blocked_reason && <p>다시 평가: {run.postprocessing.reassessment_blocked_reason}</p>}</div>
+          </details>
+          {!run.postprocessing.can_recover && (run.status !== 'COMPLETED' || !run.postprocessing.inputs_ready) && <p className="text-sm text-ink-muted">{recoveryBlockedMessage(run.postprocessing.blocked_reason)}</p>}
+          {run.status === 'COMPLETED' && run.postprocessing.can_reassess && <div className="space-y-2 rounded-xl bg-surface-muted p-4">
+            <h3 className="font-semibold">저장된 답변 다시 평가</h3>
+            <p className="text-sm leading-6">AI를 추가로 호출하지 않고 별도 기록으로 저장해요.</p>
+            <button className={`${secondaryAction} self-start`} disabled={busy} onClick={() => void reassess()}>{busy ? '재평가 접수 중…' : '저장 답변 다시 평가'}</button>
           </div>}
-          {!run.postprocessing.can_reassess && run.postprocessing.reassessment_blocked_reason && <p className="text-sm text-ink-muted">저장 답변 재평가: {run.postprocessing.reassessment_blocked_reason}</p>}
-          {run.postprocessing.attempts.length > 0 && <ul className="space-y-2 text-sm">{run.postprocessing.attempts.map((attempt) => <li key={attempt.id}><Link className="text-brand-primary underline" to={`${listPath}/${attempt.id}`}>{attempt.recovery_kind === 'reassessment' ? '재평가 실행' : '복구 실행'} {attempt.id.slice(0, 8)} · {attempt.status_label}</Link></li>)}</ul>}
-        </section>}
-        {run.status === 'COMPLETED' && run.evaluation_scope !== 'source-chunks-retrieval-answer' && <section className={styles.card} aria-label="평가 결과"><h2 className={styles.cardTitle}>평가 결과</h2><p className="text-sm">{scopeNotice(run.evaluation_scope)}</p><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[
-          ['처리 사례', `${run.summary.observedCaseCount ?? '—'} / ${run.summary.caseCount ?? '—'}`], ['상태 일치율', run.summary.statusAccuracy?.toFixed(2) ?? '미측정'],
-          ['인용 재현율', run.summary.referenceCitationRecall?.toFixed(2) ?? '미측정'], ['모델 API 호출', run.model_api_calls === null ? '미확인' : `${run.model_api_calls}회`],
-        ].map(([label, value]) => <div className="rounded-xl bg-[#f3f7f5] p-4" key={label}><p className="text-xs text-ink-muted">{label}</p><strong className="mt-3 block text-2xl">{value}</strong></div>)}</div><p className="text-xs leading-5 text-ink-muted">점수 범위는 0–1입니다. AI 작성 참조 자료에 대한 평가이며 의미 충실도는 미측정입니다. 완료 상태는 품질 합격을 뜻하지 않습니다.</p></section>}
-        {run.status === 'COMPLETED' && (run.comparison ? <ComparisonResult comparison={run.comparison} /> : <p className="text-sm text-ink-muted">이전 실행에는 비교 상세가 없습니다. 새 평가를 실행하면 기준·후보 차이를 확인할 수 있습니다.</p>)}
-        <section className={styles.card}><h2 className={styles.cardTitle}>상세 기록과 보고서</h2><div className="flex flex-wrap gap-3">
-          {run.report_url && <a className={styles.primaryButton} href={`${listPath}/${run.id}/report`} target="_blank" rel="noopener noreferrer">Evidently 보고서</a>}
+          {!run.postprocessing.can_reassess && run.postprocessing.reassessment_blocked_reason && <p className="text-sm text-ink-muted">{reassessmentBlockedMessage(run.postprocessing.reassessment_blocked_reason)}</p>}
+          {run.postprocessing.attempts.length > 0 && <ul className="space-y-2 text-sm">{run.postprocessing.attempts.map((attempt, index) => <li key={attempt.id}><Link className="text-brand-primary underline" to={`${listPath}/${attempt.id}`}>{index + 1}번째 {attempt.recovery_kind === 'reassessment' ? '다시 평가' : '결과 정리'} · {attempt.status_label}</Link></li>)}</ul>}
+        </EvaluationDetailSection>}
+
+        {run.status === 'COMPLETED' && run.comparison && !(run.evaluation_scope === 'source-chunks-retrieval-answer' && run.comparison.schema_version === 3) && <EvaluationDetailSection title="이전 결과와 비교하기"><ComparisonResult comparison={run.comparison} /></EvaluationDetailSection>}
+        <EvaluationDetailSection title="보고서와 실행 기록 보기"><div className="flex flex-wrap items-center gap-3">
+          {run.report_url && <a className={primaryAction} href={`${listPath}/${run.id}/report`} target="_blank" rel="noopener noreferrer">평가 보고서 보기</a>}
           {run.trace_links.map((trace) => {
             const target = new URL(trace.url, window.location.origin)
             return target.origin === window.location.origin && /^\/ops\/traces\/[a-zA-Z0-9_-]+$/.test(target.pathname)
-              ? <Link key={trace.case_id} className={styles.secondaryButton} to={target.pathname}>{trace.case_id} 실행 추적</Link>
-              : <a key={trace.case_id} className={styles.secondaryButton} href={trace.url} target="_blank" rel="noopener noreferrer">{trace.case_id} 실행 추적 ↗</a>
+              ? <Link key={trace.case_id} className={secondaryAction} to={target.pathname}>{trace.case_id} 실행 추적</Link>
+              : <a key={trace.case_id} className={secondaryAction} href={trace.url} target="_blank" rel="noopener noreferrer">{trace.case_id} 실행 추적 ↗</a>
           })}
-          {run.langfuse_url && <a className={styles.secondaryButton} href={run.langfuse_url} target="_blank" rel="noopener noreferrer">Langfuse 평가 점수</a>}
+          {run.langfuse_url && <a className={secondaryAction} href={run.langfuse_url} target="_blank" rel="noopener noreferrer">상세 점수 보기</a>}
           {!run.report_url && !run.prefect_flow_run_id && <p className="text-sm text-ink-muted">평가가 접수되면 실행 기록을 확인할 수 있습니다.</p>}
-        </div></section>
-        {run.prefect_flow_run_id && <EvaluationLogsPanel key={`${run.id}:${run.prefect_flow_run_id}`} runId={run.id} flowId={run.prefect_flow_run_id} onExpired={onExpired} />}
+        </div>
+        {run.prefect_flow_run_id && <EvaluationLogsPanel key={`${run.id}:${run.prefect_flow_run_id}`} runId={run.id} flowId={run.prefect_flow_run_id} onExpired={onExpired} />}</EvaluationDetailSection>
       </>}
     </div>
   </>
 }
 
 const metricLabels = {
-  statusAccuracy: '상태 일치율', referenceCitationRecall: '인용 재현율', failureRate: '실패율', missingRate: '누락률',
-  meanLatencyMs: '평균 지연 (ms)', meanInputTokens: '평균 입력 토큰', meanOutputTokens: '평균 출력 토큰', semanticFaithfulness: '의미 충실도',
+  statusAccuracy: '예상대로 답변하거나 보류한 비율', referenceCitationRecall: '필요한 공고 내용을 근거로 표시한 비율', failureRate: '실행 실패 비율', missingRate: '답변 누락 비율',
+  meanLatencyMs: '평균 답변 시간 (밀리초)', meanInputTokens: 'AI에 보낸 양 (평균 토큰)', meanOutputTokens: 'AI가 만든 양 (평균 토큰)', semanticFaithfulness: '답변의 근거 충실도',
 }
-const scopeLabel = (scope: string | null) => scope === 'fixed-answer-context-only' ? '고정 근거 답변' : scope === 'source-chunks-retrieval-answer' ? '전체 RAG 저장 캡처' : '미확인 또는 지원하지 않는 범위'
 const ragLiveNotice = (config: EvaluationRun['live_config'] | undefined) => `${config?.document_vectors ? '동일한 원문·청크와 임베딩 설정의 평가용 벡터를 재사용합니다. 없는 벡터만 새로 만들고 질문 임베딩·검색·답변을 실행합니다.' : '고정 원문·청크로 새 임베딩·검색·답변을 실행합니다.'} 사례마다 격리된 메모리 색인을 사용하며 Core 원문 재수집·재청킹 및 운영 색인 성능은 측정하지 않습니다.`
 
 function VectorPlan({ config }: { config: EvaluationRun['live_config'] | undefined }) {
@@ -743,22 +820,39 @@ function VectorPlan({ config }: { config: EvaluationRun['live_config'] | undefin
   </section>
 }
 const scopeNotice = (scope: string | null) => scope === 'fixed-answer-context-only'
-  ? '원문 수집·청킹·색인·검색을 실행하지 않습니다. 검색 품질은 미측정이며 인용 재현율은 답변이 선택한 인용만 평가합니다.'
-  : scope === 'source-chunks-retrieval-answer' ? '저장된 검색·답변 기록의 지표를 재계산합니다. 새 검색·임베딩·답변 생성은 없으며 합성 자료는 실제 모델 품질 측정이 아닙니다.' : '기록된 범위를 확인할 수 없어 전체 RAG 평가로 해석할 수 없습니다.'
+  ? '제공된 공고 내용으로 답변을 확인했어요. 공고를 찾아오는 성능은 측정하지 않았어요.'
+  : scope === 'source-chunks-retrieval-answer' ? '정해진 공고 안에서 내용을 찾고 답변한 결과예요. 실제 서비스의 공고 검색 성능은 알 수 없어요.' : '평가 범위를 확인할 수 없어 검색 성능으로 해석할 수 없어요.'
 const measurement = (value: number | null) => value === null ? '미측정' : value.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 function ComparisonResult({ comparison }: { comparison: NonNullable<EvaluationRun['comparison']> }) {
   if (comparison.schema_version === 3) return <RagComparisonResult comparison={comparison} />
-  return <section className={styles.card} aria-label="기준·후보 비교">
-    <h2 className={styles.cardTitle}>기준·후보 비교</h2>
-    <p className="text-sm">비교 평가 범위: {scopeLabel(comparison.scope)}. {scopeNotice(comparison.scope)}</p>
-    <p className={styles.cardDescription}>{comparison.comparison === 'self-replay' ? '같은 저장 결과를 다시 계산한 재현 검증입니다.' : '기준 응답과 후보 응답을 비교합니다.'} 비교 사례: {comparison.case_ids.join(', ')} ({comparison.case_ids.length}건).</p>
-    <p className="text-xs leading-5 text-ink-muted">변화량은 후보 − 기준입니다. 비율은 0–1이며 미측정 값은 0으로 계산하지 않습니다. 이 표만으로 전체 모델의 품질 향상이나 변경 원인의 효과를 판단하지 않습니다.</p>
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-line"><tr>{['지표', '기준', '후보', '변화량 (후보 − 기준)'].map((label) => <th className="px-3 py-3 whitespace-nowrap" key={label}>{label}</th>)}</tr></thead><tbody>
-      {comparison.metrics.map((metric) => <tr key={metric.key} className="border-b border-line"><th scope="row" className="px-3 py-3 font-medium">{metricLabels[metric.key]}</th><td className="px-3 py-3">{measurement(metric.reference)}</td><td className="px-3 py-3">{measurement(metric.candidate)}</td><td className="px-3 py-3 font-mono">{metric.delta === null ? '비교 불가' : `${metric.delta > 0 ? '+' : ''}${measurement(metric.delta)}`}</td></tr>)}
-    </tbody></table></div>
-    <div className="grid gap-4 md:grid-cols-2">{([['기준', comparison.reference_execution], ['후보', comparison.candidate_execution]] as const).map(([label, execution]) => <div className="rounded-xl bg-[#f3f7f5] p-4 text-xs leading-6 break-all" key={label}>
-      <h3 className="text-sm font-bold">{label} 실행 정보</h3><p>모델: {execution.model}</p><p>원 실행 시각: {date(execution.started_at)}</p><p>원본 사례: {execution.source_case_ids.join(', ')}</p><p>프롬프트: {execution.prompt_sha256 ?? '미확인'}</p><p>실행기: {execution.runner_sha256 ?? '미확인'}</p><p>캡처: {execution.capture_sha256}</p>
-    </div>)}</div>
-    <details className="text-sm"><summary className="cursor-pointer font-semibold">사례별 상태·인용 비교</summary><div className="overflow-x-auto"><table className="mt-3 w-full text-left text-xs"><thead><tr>{['사례', '기준 결과', '후보 결과', '상태 일치 (기준 → 후보)', '인용 재현 (기준 → 후보)'].map((label) => <th className="px-2 py-2" key={label}>{label}</th>)}</tr></thead><tbody>{comparison.cases.map((item) => <tr key={item.case_id}><th className="px-2 py-2">{item.case_id}</th><td>{item.reference.outcome}</td><td>{item.candidate.outcome}</td><td>{measurement(item.reference.status_match)} → {measurement(item.candidate.status_match)}</td><td>{measurement(item.reference.citation_recall)} → {measurement(item.candidate.citation_recall)}</td></tr>)}</tbody></table></div></details>
+  return <section className="grid min-w-0 gap-3" aria-label="이전 결과와 비교">
+    <EvaluationHelp label="결과 비교" title={<p className="text-sm font-semibold">{comparison.comparison === 'self-replay' ? '같은 저장 답변을 다시 확인한 결과예요.' : '기준 결과와 이번 결과를 비교해요.'}</p>}>
+      <p>{scopeNotice(comparison.scope)}</p><p>차이는 이번 결과에서 기준 결과를 뺀 값이에요. 비율 1은 100%이며, 확인하지 못한 값은 0으로 계산하지 않아요. 토큰은 AI가 처리한 글의 양을 세는 단위예요. 이 결과만으로 전체 모델의 품질을 판단할 수 없어요.</p>
+      <p>비교한 질문: {comparison.case_ids.join(', ')} ({comparison.case_ids.length}개)</p>
+    </EvaluationHelp>
+    <ul aria-label="결과별 비교" className="grid min-w-0 list-none gap-3 p-0 sm:grid-cols-2">
+      {comparison.metrics.map((metric) => <li key={metric.key} className="min-w-0 rounded-xl bg-surface-muted p-4">
+        <p className="font-semibold">{metricLabels[metric.key]}</p>
+        <dl className="mt-3 grid min-w-0 grid-cols-3 gap-2 text-sm">{([
+          ['기준', measurement(metric.reference)], ['이번 결과', measurement(metric.candidate)],
+          ['차이', metric.delta === null ? '비교 불가' : `${metric.delta > 0 ? '+' : ''}${measurement(metric.delta)}`],
+        ] as [string, string][]).map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 font-semibold [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
+      </li>)}
+    </ul>
+    <details className="group/compare rounded-xl border border-line">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden"><span>비교한 실행의 모델과 기록 보기</span><span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open/compare:hidden">펼치기 +</span><span className="hidden group-open/compare:inline">접기 −</span></span></summary>
+      <div className="grid gap-4 border-t border-line p-4 md:grid-cols-2">{([['기준', comparison.reference_execution], ['이번 결과', comparison.candidate_execution]] as const).map(([label, execution]) => <div className="min-w-0 rounded-xl bg-surface-muted p-4 text-xs leading-6 [overflow-wrap:anywhere]" key={label}>
+        <h3 className="text-sm font-bold">{label} 실행 정보</h3><p>모델: {execution.model}</p><p>원 실행 시각: {date(execution.started_at)}</p><p>원본 사례: {execution.source_case_ids.join(', ')}</p><p>프롬프트: {execution.prompt_sha256 ?? '미확인'}</p><p>실행기: {execution.runner_sha256 ?? '미확인'}</p><p>캡처: {execution.capture_sha256}</p>
+      </div>)}</div>
+    </details>
+    <details className="group/cases rounded-xl border border-line">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden"><span>질문별 결과 비교 보기</span><span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open/cases:hidden">펼치기 +</span><span className="hidden group-open/cases:inline">접기 −</span></span></summary>
+      <ul className="grid gap-3 border-t border-line p-4 text-sm">{comparison.cases.map((item) => <li key={item.case_id} className="min-w-0 rounded-xl bg-surface-muted p-3">
+        <h3 className="font-semibold">질문 {item.case_id}</h3>
+        <p>기준: {{ success: '답변 있음', error: '실행 오류', missing: '답변 누락' }[item.reference.outcome]} · 이번 결과: {{ success: '답변 있음', error: '실행 오류', missing: '답변 누락' }[item.candidate.outcome]}</p>
+        <p>답변 상태 일치: {measurement(item.reference.status_match)} → {measurement(item.candidate.status_match)}</p>
+        <p>필요한 근거 표시: {measurement(item.reference.citation_recall)} → {measurement(item.candidate.citation_recall)}</p>
+      </li>)}</ul>
+    </details>
   </section>
 }

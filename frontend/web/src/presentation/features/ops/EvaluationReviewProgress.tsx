@@ -2,14 +2,15 @@ import type { EvaluationReview } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 
 // Navigation only. The existing API remains responsible for approval and promotion.
-export function EvaluationReviewProgress({ data, hasDrafts, disabled, onNavigate }: {
-  data: EvaluationReview; hasDrafts: boolean; disabled: boolean; onNavigate: (target: string) => void
+export function EvaluationReviewProgress({ data, hasDrafts, draftCaseId, disabled, onNavigate }: {
+  data: EvaluationReview; hasDrafts: boolean; draftCaseId?: string; disabled: boolean; onNavigate: (target: string) => void
 }) {
   const material = data.material
   const quality = data.quality
-  if (!material?.cases.length || !quality || !quality.input_sha256 || disabled) return <section aria-label="검토 진행 안내" className="rounded-xl bg-slate-50 p-4 text-sm">
-    <h3 className="font-semibold">검토 진행 안내</h3>
-    <p>현재 검토 자료와 판정 정보를 확인한 뒤 진행 상태를 안내합니다.</p>
+  if (disabled) return null
+  if (!material?.cases.length || !quality || !quality.input_sha256) return <section aria-label="검토 진행 안내" className="rounded-xl bg-slate-50 p-4 text-sm">
+    <h3 className="font-semibold">검토 상태를 확인할 수 없어요</h3>
+    <p>검토 자료와 결과를 확인해 주세요.</p>
   </section>
   const fixture = quality.fixture_reviews[0]
   const fixtureCurrent = !!fixture && fixture.fixture_sha256 === material.fixture_sha256
@@ -21,35 +22,43 @@ export function EvaluationReviewProgress({ data, hasDrafts, disabled, onNavigate
     const review = data.case_reviews.find((row) => row.case_id === item.case_id)
     const current = review?.capture_sha256 === material.capture_sha256
       && review?.fixture_sha256 === material.fixture_sha256 && review?.rubric_version === data.rubric.version
-    return { id: item.case_id, suitable: current && review.decision === 'SUITABLE',
-      state: current ? { SUITABLE: '적합', UNSUITABLE: '부적합', DEFERRED: '판단 보류' }[review.decision] : review ? '재검토 필요' : '미검토' }
+    return { id: item.case_id, question: item.question, reviewed: !!current, suitable: current && review.decision === 'SUITABLE',
+      state: current ? { SUITABLE: '문제없음', UNSUITABLE: '문제 있음', DEFERRED: '판단 보류' }[review.decision] : review ? '다시 확인 필요' : '확인 전' }
   })
   const remaining = cases.filter((item) => !item.suitable)
   const qualityPassed = quality.is_current && quality.status === 'PASS'
   const baselineCurrent = data.is_baseline && !data.baseline_requires_review && data.can_promote
     && fixtureApproved && remaining.length === 0 && data.approval_current && qualityPassed
+  const latestReview = data.reviews[0]
   const steps = [
-    { label: '기준 자료 검토', done: fixtureApproved, hint: '평가 조건이 원문과 맞는지 확인', value: fixtureApproved ? '승인 완료' : fixtureCurrent ? fixture.decision === 'DEFERRED' ? '판단 보류' : '수정 필요' : fixture ? '재검토 필요' : '미검토' },
-    { label: '사례별 답변 검토', done: remaining.length === 0, hint: '각 답변의 판단과 사유 저장', value: `적합 ${cases.length - remaining.length} / ${cases.length}건` },
-    { label: '전체 응답 승인', done: data.approval_current, hint: '모든 사례의 검토 결과 승인', value: data.approval_current ? '승인 완료' : '승인 필요' },
-    { label: '품질 판정', done: qualityPassed, hint: '저장된 검토로 품질 판정', value: qualityPassed ? '현재 근거로 합격' : quality.is_current ? quality.status === 'FAIL' ? '불합격 · 근거 확인 필요' : '검토 필요' : quality.history.length ? '재판정 필요' : '미판정' },
-    { label: '비교 기준 지정', done: baselineCurrent, hint: '다음 평가에 쓸 비교 기준 선택', value: baselineCurrent ? '지정 완료' : data.is_baseline ? '기존 기준 재검토 필요' : data.can_promote ? '지정 가능' : '조건 미충족' },
+    { label: '평가 기준', value: fixtureApproved ? '확인 완료' : fixtureCurrent ? fixture.decision === 'DEFERRED' ? '판단 보류' : '수정 필요' : fixture ? '다시 확인 필요' : '확인 전' },
+    { label: '현재 자료로 검토한 질문', value: `${cases.filter((item) => item.reviewed).length} / ${cases.length}개` },
+    { label: '문제없는 답변', value: `${cases.length - remaining.length} / ${cases.length}개` },
+    { label: '전체 검토', value: data.approval_current ? '승인 완료' : latestReview?.decision === 'CHANGES_REQUESTED' ? '저장된 기록: 수정 필요' : latestReview?.decision === 'APPROVED' ? '다시 확인 필요' : '승인 전' },
+    { label: '최종 결과', value: quality.is_current ? { PASS: '합격', FAIL: '불합격', NEEDS_REVIEW: '확인 필요', NOT_EVALUATED: '확인 전' }[quality.status] : quality.history.length ? '다시 확인 필요' : '확인 전' },
+    { label: '비교 기준 (선택)', value: baselineCurrent ? '지정됨' : data.is_baseline ? '다시 확인 필요' : '지정 전' },
   ]
-  const next = !fixtureApproved ? { target: 'fixture-review', label: '기준 자료 검토로 이동' }
-    : remaining.length ? { target: `case-review-${remaining[0].id}`, label: `${remaining[0].id} 사례 검토로 이동` }
-    : !data.approval_current ? { target: 'overall-review', label: '전체 응답 승인으로 이동' }
-    : !qualityPassed ? { target: 'quality-review', label: '품질 판정과 사유로 이동' }
-    : !baselineCurrent ? { target: 'overall-review', label: '비교 기준 지정으로 이동' } : null
-  const completed = steps.filter((step) => step.done).length
-  return <section aria-label="검토 진행 안내" className="grid gap-4 rounded-xl border border-brand-primary/20 bg-[#f3f7f5] p-5 text-sm">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">검토 진행 안내</h3><span className="font-semibold tabular-nums">{completed} / {steps.length}단계 완료</span></div>
-    <progress className="h-2 w-full accent-brand-primary" aria-label="검토 단계 진행률" value={completed} max={steps.length} />
-    <p>대상 사례: {cases.map((item) => item.id).join(', ')} · 현재 저장된 자료와 검토 기록 기준입니다.</p>
-    <ol className="grid grid-cols-2 gap-3 lg:grid-cols-5">{steps.map((step, index) => <li key={step.label} className={`min-w-0 border-t-2 pt-3 ${step.done ? 'border-brand-primary' : 'border-line'}`}><strong>{index + 1}. {step.label}</strong><p className="mt-1 font-medium">{step.value}</p><p className="mt-1 text-xs leading-5 text-ink-muted">{step.hint}</p></li>)}</ol>
-    {remaining.length > 0 && <p>확인할 사례: {remaining.map((item) => `${item.id} (${item.state})`).join(', ')}</p>}
-    {hasDrafts ? <p>저장하지 않은 사례 판단이 있습니다. 사례 검토를 저장한 뒤 다음 단계를 확인하세요.</p>
-      : next ? <button type="button" className={`${styles.primaryButton} justify-self-start`} onClick={() => onNavigate(next.target)}>{next.label}</button>
-      : <p>이 실행이 현재 자료의 비교 기준입니다. 다른 자료나 전체 모델의 품질 승인을 뜻하지 않습니다.</p>}
-    <p className="text-xs text-ink-muted">이동 버튼은 검토·판정·기준을 저장하지 않습니다. 각 위치에서 내용을 확인하고 별도로 저장하세요.</p>
+  const next = hasDrafts ? { title: '작성 중인 답변을 저장해 주세요', description: '작성한 내용을 확인하고 저장해 주세요.', target: draftCaseId ? `case-review-${draftCaseId}` : null, label: '작성 중인 답변으로 이동' }
+    : !fixtureApproved ? { title: fixture ? '평가 기준을 다시 확인해 주세요' : '먼저 평가 기준을 확인해 주세요', description: '바로 아래에서 공고 내용과 평가 기준을 비교하고 저장해 주세요.', target: null, label: '' }
+    : remaining.length ? { title: remaining[0].state === '확인 전' ? '확인할 답변이 남아 있어요' : '답변을 다시 확인해 주세요', description: remaining[0].state === '확인 전' ? '공고 내용과 답변을 비교한 뒤 결과를 저장해 주세요.' : `이전에 저장한 상태: ${remaining[0].state}. 공고 내용과 답변을 다시 확인해 주세요.`, question: remaining[0].question, target: `case-review-${remaining[0].id}`, label: '답변 확인하기' }
+    : !data.approval_current ? { title: '전체 검토를 저장해 주세요', description: '확인한 답변을 바탕으로 전체 의견을 남겨 주세요.', target: 'overall-review', label: '전체 검토 확인하기' }
+    : !qualityPassed ? { title: '최종 결과를 확인해 주세요', description: quality.is_current && quality.status === 'FAIL' ? '확인 결과와 이유를 살펴보고 필요한 내용을 다시 검토해 주세요.' : '저장한 검토를 바탕으로 최종 결과를 확인해 주세요.', target: 'quality-review', label: '최종 결과 확인하기' }
+    : !data.is_baseline && data.can_promote ? { title: '검토가 끝났어요', description: '필요하면 이 결과를 다음 평가의 비교 기준으로 사용할 수 있어요. 선택 사항이에요.', target: 'overall-review', label: '비교 기준 설정 확인하기' }
+    : data.is_baseline && !baselineCurrent ? { title: '검토가 끝났어요', description: '기존 비교 기준의 상태를 확인해 주세요.', target: 'overall-review', label: '비교 기준 상태 확인하기' }
+    : { title: '검토가 끝났어요', description: baselineCurrent ? '이 결과는 다음 평가의 비교 기준으로 지정되어 있어요.' : '검토와 최종 결과를 확인했어요.', target: null, label: '' }
+  return <section aria-label="검토 진행 안내" className="grid gap-3 rounded-xl border border-brand-primary/20 bg-[#f3f7f5] p-5 text-sm">
+    <h3 className="text-base font-bold">{next.title}</h3>
+    <p>{next.description}</p>
+    {'question' in next && next.question && <p className="rounded-lg bg-white p-3 font-semibold [overflow-wrap:anywhere]">{next.question}</p>}
+    {next.target && <button type="button" className={`${styles.primaryButton} min-h-11 !text-sm justify-self-start`} onClick={() => onNavigate(next.target!)}>{next.label}</button>}
+    <details className="group min-w-0 rounded-xl border border-line bg-white">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden">
+        <span>전체 검토 상태 보기</span><span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open:hidden">펼치기 +</span><span className="hidden group-open:inline">접기 −</span></span>
+      </summary>
+      <div className="border-t border-line px-4 pb-4">
+        <dl className="divide-y divide-line">{steps.map((step) => <div key={step.label} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 py-3"><dt className="text-ink-muted">{step.label}</dt><dd className="text-right font-semibold">{step.value}</dd></div>)}</dl>
+        {remaining.length > 0 && <div className="mt-3"><p className="font-semibold">확인이 필요한 질문</p><ul className="mt-2 grid gap-2">{remaining.map((item) => <li key={item.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-3"><span className="[overflow-wrap:anywhere]">{item.question}</span><span className="text-right text-ink-muted">{item.state}</span></li>)}</ul></div>}
+      </div>
+    </details>
   </section>
 }

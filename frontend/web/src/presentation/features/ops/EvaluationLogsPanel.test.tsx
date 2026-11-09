@@ -9,7 +9,7 @@ const log = { id: '30000000-0000-4000-8000-000000000003', timestamp: '2026-10-13
 const page = { run_id: runId, prefect_flow_run_id: flowId, offset: 0, next_offset: null, results: [log] }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const mount = (onExpired = vi.fn()) => render(<EvaluationLogsPanel runId={runId} flowId={flowId} onExpired={onExpired} />)
-const load = () => fireEvent.click(screen.getByRole('button', { name: 'Prefect 실행 로그' }))
+const load = () => fireEvent.click(screen.getByRole('button', { name: '기록 불러오기' }))
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('관리자 실행 로그', () => {
@@ -20,11 +20,23 @@ describe('관리자 실행 로그', () => {
     expect(fetch).not.toHaveBeenCalled()
     expect(screen.queryByRole('link')).toBeNull()
     load()
-    const list = await screen.findByRole('list', { name: '실행 로그 목록' })
+    const list = await screen.findByRole('list', { name: '실행 기록 목록' })
     expect(list.textContent).toContain(log.message)
+    expect(screen.getByText('오류')).toBeTruthy()
+    const summary = screen.getByText('오류').closest('summary')!
+    const item = summary.closest('details')!
+    expect(item.open).toBe(false)
+    expect(summary.className).toContain('min-h-11')
+    expect(summary.querySelector('[aria-hidden="true"]')?.textContent).toContain('펼치기 +')
+    summary.focus()
+    expect(document.activeElement).toBe(summary)
+    fireEvent.click(summary)
+    expect(item.open).toBe(true)
+    expect(summary.querySelector('[aria-hidden="true"]')?.textContent).toContain('접기 −')
+    expect(screen.getByText('기록 출처: prefect.flow_runs')).toBeTruthy()
     expect(view.container.querySelector('script')).toBeNull()
     expect(fetch).toHaveBeenCalledWith(`/api/v1/ops/evaluations/${runId}/logs?offset=0`, expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }))
-    expect(screen.queryByRole('button', { name: '더 오래된 로그' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '더 오래된 기록' })).toBeNull()
   })
 
   it('이전 로그 페이지를 조회하고 새로고침하면 최신 페이지로 돌아온다', async () => {
@@ -34,13 +46,13 @@ describe('관리자 실행 로그', () => {
       .mockResolvedValueOnce(json(page))
     vi.stubGlobal('fetch', fetch)
     mount(); load()
-    fireEvent.click(await screen.findByRole('button', { name: '더 오래된 로그' }))
-    await screen.findByRole('button', { name: '이전 페이지' })
+    fireEvent.click(await screen.findByRole('button', { name: '더 오래된 기록' }))
+    await screen.findByRole('button', { name: '최신 기록 쪽으로' })
     expect(fetch.mock.calls[1][0]).toBe(`/api/v1/ops/evaluations/${runId}/logs?offset=100`)
-    fireEvent.click(screen.getByRole('button', { name: '최신 로그 새로고침' }))
+    fireEvent.click(screen.getByRole('button', { name: '기록 새로고침' }))
     await screen.findByRole('list')
     expect(fetch.mock.calls[2][0]).toBe(`/api/v1/ops/evaluations/${runId}/logs?offset=0`)
-    expect(screen.queryByRole('button', { name: '이전 페이지' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '최신 기록 쪽으로' })).toBeNull()
   })
 
   it('빈 로그와 조회 장애를 구분하고 실패 시 이전 로그를 지운다', async () => {
@@ -49,12 +61,12 @@ describe('관리자 실행 로그', () => {
       .mockResolvedValueOnce(json({ code: 'PREFECT_LOGS_UNAVAILABLE' }, 503))
       .mockResolvedValueOnce(json({ ...page, results: [] })))
     mount(); load(); await screen.findByRole('list')
-    fireEvent.click(screen.getByRole('button', { name: '최신 로그 새로고침' }))
-    expect((await screen.findByRole('alert')).textContent).toContain('Prefect 실행 로그를 가져오지 못했습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '기록 새로고침' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('기록을 가져오지 못했습니다.')
     expect(screen.queryByRole('list')).toBeNull()
-    expect(screen.queryByText(/저장된 실행 로그가 없습니다/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '최신 로그 새로고침' }))
-    await screen.findByText('이 페이지에 저장된 실행 로그가 없습니다.')
+    expect(screen.queryByText(/저장된 기록이 없습니다/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '기록 새로고침' }))
+    await screen.findByText('저장된 기록이 없습니다.')
     expect(screen.queryByRole('alert')).toBeNull()
   })
 

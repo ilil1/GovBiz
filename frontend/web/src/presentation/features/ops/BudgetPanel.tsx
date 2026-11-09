@@ -6,6 +6,7 @@ import { UnaccountedRunsPanel } from './UnaccountedRunsPanel'
 import { BudgetLimitsForm } from './BudgetLimitsForm'
 import { DailyBudgetPanel } from './DailyBudgetPanel'
 import { DailyBudgetLimitsForm } from './DailyBudgetLimitsForm'
+import { EvaluationHelp } from './EvaluationHelp'
 
 const date = (value: string) => new Date(value).toLocaleString('ko-KR')
 const count = (value: number) => value.toLocaleString('ko-KR')
@@ -255,15 +256,18 @@ export function RunBudgetPanel({ runId, onExpired, refreshKey }: { runId: string
     void read()
     return () => { controller.abort(); clearTimeout(timer) }
   }, [runId, refreshKey])
-  return <section className={styles.card} aria-label="실행 예산 장부">
-    <h2 className={styles.cardTitle}>실행 예산 장부</h2>
+  const detailClass = 'group/run-usage min-w-0 rounded-xl border border-line bg-white'
+  const summaryClass = 'flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden'
+  const disclosureState = <span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open/run-usage:hidden">펼치기 +</span><span className="hidden group-open/run-usage:inline">접기 −</span></span>
+  return <section className="grid min-w-0 gap-3" aria-label="실행 예산 장부">
     {error && <p role="alert" className="text-sm text-red-700">{error} 표시된 값이 있으면 마지막 조회 기록입니다.</p>}
-    {!data && !error && <p role="status">실행 예약을 불러오고 있습니다.</p>}
+    {!data && !error && <p role="status">사용량을 불러오고 있어요.</p>}
     {data && <>
       <p className="text-xs text-ink-muted">조회 시각: {date(data.as_of)}</p>
-      {data.state === 'missing' && <p className="text-sm text-amber-800">이 모델 실행에는 예약 기록이 없습니다. 사용량을 0으로 판단할 수 없습니다.</p>}
-      {data.state === 'not_applicable' && <p className="text-sm">새 모델 호출을 예약하는 실행이 아닙니다. 원본 실행의 비용은 원본 장부에서 확인하세요.</p>}
-      {data.legacy_usage && <section aria-label="과거 사용량 반영 이력" className="space-y-2 rounded-xl bg-[#f3f7f5] p-4 text-sm">
+      {data.state === 'missing' && <p className="text-sm text-amber-800">사용량 기록을 찾지 못했어요. 사용량이 없다는 뜻은 아니에요.</p>}
+      {data.state === 'not_applicable' && <p className="text-sm">이번 실행은 AI를 새로 호출하지 않았어요. 이전 실행의 사용량은 원본 기록에서 확인해 주세요.</p>}
+      {data.legacy_usage && <p className="text-sm">이전에 저장한 답변에 기록된 AI 호출: <strong>{count(data.legacy_usage.usage.calls)}회</strong></p>}
+      {data.legacy_usage && <details className={detailClass}><summary className={summaryClass}><span>이전에 기록한 사용량</span>{disclosureState}</summary><section aria-label="과거 사용량 반영 이력" className="space-y-2 border-t border-line p-4 text-sm">
         <h3 className="font-semibold">과거 사용량 반영 이력</h3>
         <p>{date(data.legacy_usage.created_at)} · {data.legacy_usage.actor} · {data.legacy_usage.actor_source ?? 'CLI'}</p>
         <p>사유: {data.legacy_usage.reason}</p>
@@ -273,13 +277,25 @@ export function RunBudgetPanel({ runId, onExpired, refreshKey }: { runId: string
         <p className="break-all text-xs text-ink-muted">검토 증거 SHA-256: {data.legacy_usage.evidence_sha256} · 요청: {data.legacy_usage.request_id}</p>
         <p>저장 응답을 검토한 기록이며 당시 예약·서명 영수증·제공자 청구 확인이 아닙니다. 답변 품질 승인과도 별개입니다.</p>
         <p className="text-xs text-ink-muted">{data.legacy_usage.actor_source === 'CORE_ADMIN' ? '기존 프로젝트의 관리자 세션을 확인해 기록한 검토자입니다.' : '검토자는 CLI 운영자가 입력한 값이며 Core 로그인으로 인증한 신원은 아닙니다.'}</p>
-      </section>}
+      </section></details>}
       {data.reservation && <>
-        <p className="text-sm">예약 상태: {data.reservation.closed_at ? `닫힘 · ${date(data.reservation.closed_at)}` : '열림'} · 실행의 완료·취소 상태와 별도로 관리합니다.</p>
-        <p className="text-sm">실행 내 입력 상한 최댓값: {inputCount(data.reservation.max_input_tokens)}</p>
-        <Breakdown value={data.reservation.breakdown} />
-        {data.reservation.breakdown.unknown_calls > 0 && <p className="text-sm text-amber-800">미확인 호출은 전송·사용량을 확정하지 못한 상태입니다. 예약이 닫혀도 해당 호출의 최대 출력 몫은 유지됩니다. 입력 상한이 기록된 호출은 입력 예약도 유지됩니다.</p>}
-        {data.cleanup && <section aria-label="종료 예약 정리 이력" className="space-y-2 rounded-xl bg-[#f3f7f5] p-4 text-sm">
+        <div className="grid gap-2 rounded-xl bg-surface-muted p-4 text-sm">
+          <EvaluationHelp label="확인된 AI 사용량" title={<h3 className="font-semibold">확인된 AI 사용량</h3>}><p>기록에서 확인한 사용량이에요. 토큰은 AI가 처리한 글의 양을 세는 단위이며, 실제 청구 금액은 별도로 확인해야 해요.</p></EvaluationHelp>
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">{([
+            ['확인된 AI 호출', `${count(data.reservation.breakdown.settled_calls)}회`],
+            ['AI에 보낸 양', inputCount(data.reservation.breakdown.confirmed_input_tokens)],
+            ['AI가 출력한 양', `${count(data.reservation.breakdown.confirmed_output_tokens)}토큰`],
+          ] as [string, string][]).map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-ink-muted">{label}</dt><dd className="mt-1 font-semibold [overflow-wrap:anywhere]">{value}</dd></div>)}</dl>
+          {(data.reservation.breakdown.legacy_calls ?? 0) > 0 && <p className="text-xs text-ink-muted">이전 기록에서 반영한 호출: {count(data.reservation.breakdown.legacy_calls ?? 0)}회</p>}
+        </div>
+        {data.reservation.breakdown.unknown_calls > 0 && <p className="text-sm text-amber-800">사용량을 확인하지 못한 호출이 {count(data.reservation.breakdown.unknown_calls)}회 있어요. 확인될 때까지 해당 예산은 유지됩니다.</p>}
+        <details className={detailClass}><summary className={summaryClass}><span>사용량과 남겨둔 예산</span>{disclosureState}</summary><div className="grid gap-3 border-t border-line p-4">
+          <p className="mt-3 text-sm">예약 상태: {data.reservation.closed_at ? `닫힘 · ${date(data.reservation.closed_at)}` : '열림'} · 실행의 완료·취소 상태와 별도로 관리합니다.</p>
+          <p className="text-sm">실행 내 입력 상한 최댓값: {inputCount(data.reservation.max_input_tokens)}</p>
+          <Breakdown value={data.reservation.breakdown} />
+          {data.reservation.breakdown.unknown_calls > 0 && <p className="text-sm text-amber-800">미확인 호출은 전송·사용량을 확정하지 못한 상태입니다. 예약이 닫혀도 해당 호출의 최대 출력 몫은 유지됩니다. 입력 상한이 기록된 호출은 입력 예약도 유지됩니다.</p>}
+        </div></details>
+        {data.cleanup && <details className={detailClass}><summary className={summaryClass}><span>종료 후 예산 정리 기록</span>{disclosureState}</summary><section aria-label="종료 예약 정리 이력" className="space-y-2 border-t border-line p-4 text-sm">
           <h3 className="font-semibold">종료 예약 정리 이력</h3>
           <p>{date(data.cleanup.created_at)} · {data.cleanup.actor} · CLI</p>
           <p>사유: {data.cleanup.reason}</p>
@@ -289,8 +305,8 @@ export function RunBudgetPanel({ runId, onExpired, refreshKey }: { runId: string
           <p>종료 근거: Prefect {data.cleanup.evidence.state_type} · 확인 {date(data.cleanup.evidence.observed_at)}</p>
           <p className="break-all text-xs text-ink-muted">정리 요청: {data.cleanup.request_id} · 종료 상태 ID: {data.cleanup.evidence.state_id}</p>
           <p className="text-xs text-ink-muted">변경자는 CLI 운영자가 입력한 값입니다. 실제 결제 환불이나 미확인 사용량 보정이 아니며 새 모델 실행을 시작하지 않습니다.</p>
-        </section>}
-        {Boolean(data.corrections?.length) && <section aria-label="사용량 보정 이력" className="space-y-3 rounded-xl bg-[#f3f7f5] p-4 text-sm">
+        </section></details>}
+        {Boolean(data.corrections?.length) && <details className={detailClass}><summary className={summaryClass}><span>사용량 수정 기록</span>{disclosureState}</summary><section aria-label="사용량 보정 이력" className="space-y-3 border-t border-line p-4 text-sm">
           <h3 className="font-semibold">사용량 보정 이력</h3>
           <p>서명을 검증한 실행기 응답 기록으로 미확인 사용량을 확인했습니다. 원래 호출 기록은 보존하며 확정 합계에는 보정값을 포함합니다.</p>
           {data.corrections!.map((record) => <article key={record.request_id} className="space-y-1 border-t pt-3">
@@ -304,9 +320,9 @@ export function RunBudgetPanel({ runId, onExpired, refreshKey }: { runId: string
             <p className="break-all text-xs text-ink-muted">보정 요청: {record.request_id}</p>
           </article>)}
           <p className="text-xs text-ink-muted">변경자는 CLI 운영자가 입력한 값입니다. 실행기가 보관한 사용량이며 제공자의 청구 확정이나 실제 결제 환불을 뜻하지 않습니다.</p>
-        </section>}
-        <details><summary className="cursor-pointer text-sm font-semibold">호출별 승인·정산 · {data.calls.length}건</summary>
-          <ul className="mt-3 space-y-2 text-sm">{data.calls.map((call) => <li key={call.sequence}>
+        </section></details>}
+        <details className={detailClass}><summary className={summaryClass}><span>호출별 사용량 · {data.calls.length}건</span>{disclosureState}</summary>
+          <ul className="space-y-3 border-t border-line p-4 text-sm">{data.calls.map((call) => <li key={call.sequence}>
             <p>승인 상한: 입력 {inputCount(call.max_input_tokens)} / 출력 {inputCount(call.max_output_tokens)}</p>
             <p>생성 전 입력 계산: {inputCount(call.counted_input_tokens)}</p>
             <p>{call.operation_id ? `${call.operation_id.startsWith('document_embedding:') ? '문서 임베딩' : call.operation_id.startsWith('query_embedding:') ? '질문 임베딩' : '답변 작업'} · ${call.operation_id}` : '작업 식별 기록 없음 · 과거 승인'}</p>

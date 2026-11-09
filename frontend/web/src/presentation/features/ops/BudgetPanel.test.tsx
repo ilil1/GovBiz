@@ -392,6 +392,7 @@ describe('관리자 예산 장부', () => {
     const fetch = vi.fn().mockResolvedValue(json(legacyDetail))
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><RunBudgetPanel runId={id} onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    expect(await screen.findByText(/이전에 저장한 답변에 기록된 AI 호출/)).toBeTruthy()
     const audit = await screen.findByRole('region', { name: '과거 사용량 반영 이력' })
     expect(within(audit).getByText(/저장 응답 사용량: 6회 · 입력 6,834 \/ 출력 689토큰/)).toBeTruthy()
     expect(within(audit).getByText(/당시 예약·서명 영수증·제공자 청구 확인이 아닙니다/)).toBeTruthy()
@@ -443,7 +444,7 @@ describe('관리자 예산 장부', () => {
       { ...detail.calls[1], operation_id: null },
     ] })))
     render(<MemoryRouter><RunBudgetPanel runId={id} onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
-    fireEvent.click(await screen.findByText('호출별 승인·정산 · 2건'))
+    fireEvent.click(await screen.findByText('호출별 사용량 · 2건'))
     expect(screen.getByText('답변 작업 · answer:TC01')).toBeTruthy()
     expect(screen.getByText('작업 식별 기록 없음 · 과거 승인')).toBeTruthy()
     expect(screen.queryByText(/answer:TC02/)).toBeNull()
@@ -654,8 +655,28 @@ describe('관리자 예산 장부', () => {
   it('예약 기록이 없는 과거 실행을 무료 실행으로 해석하지 않는다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ as_of: time, state: 'missing', reservation: null, calls: [] })))
     render(<RunBudgetPanel runId={id} onExpired={vi.fn()} refreshKey={0} />)
-    expect(await screen.findByText(/사용량을 0으로 판단할 수 없습니다/)).toBeTruthy()
+    expect(await screen.findByText(/사용량이 없다는 뜻은 아니에요/)).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('확인된 사용량과 미확인 호출을 먼저 보여주고 상세 장부는 접는다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(detail)))
+    render(<RunBudgetPanel runId={id} onExpired={vi.fn()} refreshKey={0} />)
+    const summary = (await screen.findByRole('heading', { name: '확인된 AI 사용량' })).closest<HTMLDivElement>('div.rounded-xl')!
+    const usage = within(summary)
+    expect(usage.getByText('확인된 AI 호출').nextElementSibling?.textContent).toBe('1회')
+    expect(usage.getByText('AI에 보낸 양').nextElementSibling?.textContent).toBe('100토큰')
+    expect(usage.getByText('AI가 출력한 양').nextElementSibling?.textContent).toBe('50토큰')
+    const help = usage.getByRole('button', { name: '확인된 AI 사용량 도움말' })
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(help)
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(usage.getByText(/실제 청구 금액은 별도로 확인/)).toBeTruthy()
+    expect(screen.getByText(/사용량을 확인하지 못한 호출이 1회/)).toBeTruthy()
+    const disclosure = screen.getByText('사용량과 남겨둔 예산')
+    expect(disclosure.closest('details')).toHaveProperty('open', false)
+    fireEvent.click(disclosure)
+    expect(screen.getByRole('table', { name: '예산 할당량 구성' })).toBeTruthy()
   })
 
   it('닫힌 예약도 미확인 호출을 표시하고 정산된 0토큰과 구분한다', async () => {
@@ -664,7 +685,7 @@ describe('관리자 예산 장부', () => {
     })))
     render(<RunBudgetPanel runId={id} onExpired={vi.fn()} refreshKey={0} />)
     expect(await screen.findByText(/예약 상태: 닫힘/)).toBeTruthy()
-    fireEvent.click(screen.getByText('호출별 승인·정산 · 2건'))
+    fireEvent.click(screen.getByText('호출별 사용량 · 2건'))
     expect(screen.getByText(/입력 100 \/ 출력 0토큰/)).toBeTruthy()
     expect(screen.getByText(/호출 2 .* 사용량 미확인/)).toBeTruthy()
     expect(screen.getByText(/예약이 닫혀도 해당 호출의 최대 출력 몫은 유지/)).toBeTruthy()
@@ -796,7 +817,7 @@ it('임베딩 승인과 답변의 개별 상한을 표시한다', async () => {
     { ...detail.calls[1], operation_id: 'answer:E01', max_input_tokens: 32768, max_output_tokens: 2000 },
   ] })))
   render(<RunBudgetPanel runId={id} onExpired={vi.fn()} refreshKey={0} />)
-  fireEvent.click(await screen.findByText('호출별 승인·정산 · 2건'))
+  fireEvent.click(await screen.findByText('호출별 사용량 · 2건'))
   expect(screen.getByText('문서 임베딩 · document_embedding:D1:0')).toBeTruthy()
   expect(screen.getByText('승인 상한: 입력 120토큰 / 출력 0토큰')).toBeTruthy()
   expect(screen.getByText('승인 상한: 입력 32,768토큰 / 출력 2,000토큰')).toBeTruthy()
