@@ -754,9 +754,9 @@ describe('React LLMOps 운영 화면', () => {
     } else if (kind === 'daily') {
       expect(await screen.findByRole('heading', { name: '하루 평가 한도' })).toBeTruthy()
       fireEvent.click(await screen.findByRole('button', { name: '하루 한도 설정하기' }))
-      fireEvent.change(screen.getByLabelText('일별 호출 한도'), { target: { value: '12' } })
-      fireEvent.change(screen.getByLabelText('일별 입력 토큰 한도'), { target: { value: '400000' } })
-      fireEvent.change(screen.getByLabelText('일별 출력 토큰 한도'), { target: { value: '24000' } })
+      fireEvent.change(screen.getByLabelText('AI 요청 (회)'), { target: { value: '12' } })
+      fireEvent.change(screen.getByLabelText('AI에 보내는 내용 (입력 토큰)'), { target: { value: '400000' } })
+      fireEvent.change(screen.getByLabelText('AI 답변 (출력 토큰)'), { target: { value: '24000' } })
       fireEvent.change(screen.getByLabelText('일별 한도 변경 사유'), { target: { value: '일별 한도 확인' } })
       fireEvent.click(screen.getByRole('button', { name: '일별 변경 내용 확인' }))
       fireEvent.click(screen.getByRole('button', { name: '확인한 일별 정책 저장' }))
