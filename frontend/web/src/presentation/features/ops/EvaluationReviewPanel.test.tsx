@@ -36,12 +36,31 @@ it('평가 기준을 바로 보고 질문의 답변을 선택하면 해당 영�
   expect(panel.open).toBe(true)
 })
 
+it.each([
+  ['admin-authored', '관리자가 작성한 답변 기준'],
+  ['ai-authored', 'AI가 작성한 답변 기준'],
+  [undefined, '답변 기준'],
+] as const)('기준 출처 %s를 하나의 제목으로 표시한다', async (source, heading) => {
+  const value = structuredClone(state)
+  value.material!.reference_source = source
+  vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(value)
+  render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
+  const section = await screen.findByRole('region', { name: '기준을 확인할 자료' })
+  expect(within(section).getByRole('heading', { name: heading })).toBeTruthy()
+  expect(within(section).queryByText('관리자가 작성한 기준')).toBeNull()
+  expect(within(section).getByText('답변 가능 여부').nextElementSibling?.textContent).toBe('공고 내용으로 답변 가능')
+  expect(within(section).getByText('답변에 표시할 공고 내용 번호').nextElementSibling?.textContent).toBe('1')
+  expect(within(section).getByText('답변에 포함할 내용').nextElementSibling?.textContent).toBe('지정된 내용 없음')
+  expect(within(section).getByText('답변에 포함하면 안 되는 내용').nextElementSibling?.textContent).toBe('지정된 내용 없음')
+})
+
 it('평가 기준 양식에서 질문별 공고와 기준을 비교해도 작성 중인 판단은 보존된다', async () => {
   const value = structuredClone(state)
   const first = value.material!.cases[0]
   first.reference_facts = ['첫 질문의 확인할 사실']
   first.forbidden_claims = ['첫 질문의 주의할 주장']
-  value.material!.cases.push({ ...first, case_id: 'E02', question: '신청 기간은?',
+  const longQuestion = '신청 기간과 함께 제출해야 할 서류는 무엇이며, 신청 전에 따로 확인해야 하는 조건이 있나요?'
+  value.material!.cases.push({ ...first, case_id: 'E02', question: longQuestion,
     evidence: [{ order: 0, text: '7월까지 신청' }], reference_facts: ['두 번째 질문의 확인할 사실'],
     forbidden_claims: ['두 번째 질문의 주의할 주장'] })
   vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(value)
@@ -58,17 +77,30 @@ it('평가 기준 양식에서 질문별 공고와 기준을 비교해도 작성
   expect(confirmed).toHaveProperty('checked', false)
   fireEvent.change(within(fixture).getByLabelText('평가 기준이 맞나요?'), { target: { value: 'DEFERRED' } })
   fireEvent.change(within(fixture).getByLabelText('기준을 확인한 이유'), { target: { value: '검토 중인 의견' } })
-  const select = within(fixture).getByLabelText('기준을 확인할 질문')
-  const secondOption = within(select).getByRole('option', { name: /신청 기간은\?/ })
-  fireEvent.change(select, { target: { value: (secondOption as HTMLOptionElement).value } })
-  expect(within(section).getByText('신청 기간은?')).toBeTruthy()
+  const select = within(fixture).getByLabelText('질문 선택')
+  expect(within(select).getByRole('option', { name: '1번째 질문' })).toBeTruthy()
+  const secondOption = within(select).getByRole('option', { name: '2번째 질문' })
+  expect(within(section).getAllByText('지원 대상은?')).toHaveLength(1)
+  expect(within(section).getByRole('button', { name: '기준의 이전 질문' })).toHaveProperty('disabled', true)
+  expect(within(section).getByRole('button', { name: '기준의 다음 질문' })).toHaveProperty('disabled', false)
+  fireEvent.click(within(section).getByRole('button', { name: '기준의 다음 질문' }))
+  expect(within(section).getAllByText(longQuestion)).toHaveLength(1)
   expect(within(section).getByText('7월까지 신청')).toBeTruthy()
   expect(within(section).getByText(/두 번째 질문의 확인할 사실/)).toBeTruthy()
   expect(within(section).getByText(/두 번째 질문의 주의할 주장/)).toBeTruthy()
   expect(within(section).queryByText('서울 기업')).toBeNull()
+  expect(within(section).getByRole('button', { name: '기준의 이전 질문' })).toHaveProperty('disabled', false)
+  expect(within(section).getByRole('button', { name: '기준의 다음 질문' })).toHaveProperty('disabled', true)
   expect(within(fixture).getByLabelText('평가 기준이 맞나요?')).toHaveProperty('value', 'DEFERRED')
   expect(within(fixture).getByLabelText('기준을 확인한 이유')).toHaveProperty('value', '검토 중인 의견')
   expect(confirmed).toHaveProperty('checked', false)
+  fireEvent.click(confirmed)
+  fireEvent.click(within(section).getByRole('button', { name: '기준의 이전 질문' }))
+  expect(within(section).getAllByText('지원 대상은?')).toHaveLength(1)
+  fireEvent.change(select, { target: { value: (secondOption as HTMLOptionElement).value } })
+  expect(within(section).getAllByText(longQuestion)).toHaveLength(1)
+  expect(confirmed).toHaveProperty('checked', true)
+  expect(within(fixture).getByLabelText('기준을 확인한 이유')).toHaveProperty('value', '검토 중인 의견')
   expect(save).not.toHaveBeenCalled()
 })
 
@@ -291,6 +323,12 @@ it('질문이 하나면 질문 선택은 감추고 다음 단계는 접어 둔�
   vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(state)
   render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
   fireEvent.click(await screen.findByText('질문과 답변 검토하기'))
+  const fixture = document.getElementById('fixture-review')!
+  const materialSection = within(fixture).getByRole('region', { name: '기준을 확인할 자료' })
+  expect(within(materialSection).getAllByText('지원 대상은?')).toHaveLength(1)
+  expect(within(materialSection).queryByLabelText('질문 선택')).toBeNull()
+  expect(within(materialSection).queryByRole('button', { name: '기준의 이전 질문' })).toBeNull()
+  expect(within(materialSection).queryByRole('button', { name: '기준의 다음 질문' })).toBeNull()
   expect(screen.queryByRole('region', { name: '사례 선택' })).toBeNull()
   expect(screen.queryByRole('button', { name: '이전 질문' })).toBeNull()
   expect(screen.queryByRole('button', { name: '다음 질문' })).toBeNull()

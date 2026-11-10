@@ -90,6 +90,19 @@ class SupportProgramRequestAdmissionControllerTest {
     }
 
     @Test
+    fun officialSourceDocumentSharesTheLimitAndRejectedRequestsDoNotFetch() {
+        val mvc = mvc()
+        Mockito.`when`(search.search("서울 AI", true, sampleProduction = true)).thenReturn(result)
+        mvc.perform(searchRequest()).andExpect(status().isOk())
+        mvc.perform(get("/api/v1/support-programs/detail/source-document")
+            .param("sourceCode", "BIZINFO").param("sourceProgramId", "PBLN_TEST")
+            .with { it.remoteAddr = "192.0.2.1"; it })
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.code").value("SUPPORT_PROGRAM_RATE_LIMITED"))
+        Mockito.verifyNoInteractions(evidence)
+    }
+
+    @Test
     fun searchAndEvidenceShareTheSameLimitAndRejectionsNeverCallTheDownstreamService() {
         val mvc = mvc()
         Mockito.`when`(search.search("서울 AI", true, sampleProduction = true)).thenReturn(result)

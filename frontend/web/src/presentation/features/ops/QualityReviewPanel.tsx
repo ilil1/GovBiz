@@ -76,19 +76,27 @@ export function QualityReviewPanel({ runId, data, busy, onBusy, onDirty, onConfl
       <div className="grid gap-3 border-t border-line p-4 text-sm">
         <p>각 질문에서 공고 내용과 답변을 확인할 기준이 맞는지 살펴봐 주세요.</p>
         {fixtureCase && <section aria-label="기준을 확인할 자료" className="grid min-w-0 gap-3 rounded-xl bg-slate-50 p-4">
-          {fixtureCases.length > 1 && <label className="grid gap-2 font-semibold">기준을 확인할 질문
-            <select className="min-h-11 w-full min-w-0 rounded-xl border border-line bg-white p-3 font-normal" value={fixtureCaseIndex} disabled={busy} onChange={(event) => setFixtureCaseIndex(Number(event.target.value))}>
-              {fixtureCases.map((item, index) => <option key={item.case_id} value={index}>{index + 1}. {item.question}</option>)}
-            </select>
-          </label>}
-          <div aria-live="polite" className="grid min-w-0 gap-3">
-            <div><h4 className="font-semibold">질문</h4><p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{fixtureCase.question}</p></div>
+          {fixtureCases.length > 1 && <>
+            <label className="grid gap-2 font-semibold"><span className="flex items-center justify-between gap-3"><span>질문 선택</span><span aria-hidden="true" className="text-xs font-normal text-ink-muted">총 {fixtureCases.length}개</span></span>
+              <select aria-label="질문 선택" className="min-h-11 w-full min-w-0 rounded-xl border border-line bg-white p-3 font-normal" value={fixtureCaseIndex} disabled={busy} onChange={(event) => setFixtureCaseIndex(Number(event.target.value))}>
+                {fixtureCases.map((item, index) => <option key={item.case_id} value={index}>{index + 1}번째 질문</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" aria-label="기준의 이전 질문" className={`${styles.secondaryButton} min-h-11 !text-sm justify-center`} disabled={busy || fixtureCaseIndex === 0} onClick={() => setFixtureCaseIndex((index) => Math.max(0, index - 1))}>이전 질문</button>
+              <button type="button" aria-label="기준의 다음 질문" className={`${styles.secondaryButton} min-h-11 !text-sm justify-center`} disabled={busy || fixtureCaseIndex >= fixtureCases.length - 1} onClick={() => setFixtureCaseIndex((index) => Math.min(fixtureCases.length - 1, index + 1))}>다음 질문</button>
+            </div>
+          </>}
+          <div className="grid min-w-0 gap-3">
+            <div><h4 className="font-semibold">질문</h4><p aria-live="polite" aria-atomic="true" className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{fixtureCase.question}</p></div>
             <div><h4 className="font-semibold">공고 내용</h4>{fixtureCase.evidence.length ? <div className="mt-1 grid gap-2">{fixtureCase.evidence.map((chunk) => <div key={chunk.order} className="border-l-2 border-brand-primary pl-3"><p className="text-xs font-semibold">공고 내용 {chunk.order + 1}</p><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{chunk.text}</p></div>)}</div> : <p className="mt-1 text-ink-muted">기록된 공고 내용이 없어요.</p>}</div>
-            <div><h4 className="font-semibold">답변을 확인할 기준</h4><p className="mt-1 text-xs text-ink-muted">{data.material?.reference_source === 'admin-authored' ? '관리자가 작성한 기준' : data.material?.reference_source === 'ai-authored' ? 'AI가 작성한 기준' : '기록된 평가 기준'}</p>
-              <p className="mt-1">예상 답변: {fixtureCase.expected_status === 'ANSWERED' ? '공고 내용으로 답변 가능' : fixtureCase.expected_status === 'INSUFFICIENT_EVIDENCE' ? '공고 내용이 부족해 답변 보류' : '확인할 수 없음'}</p>
-              <p>답변에 표시할 공고 내용 번호: {fixtureCase.expected_citation_orders.map((order) => order + 1).join(', ') || '정해진 번호 없음'}</p>
-              <p>답변에 포함할 내용: {fixtureCase.reference_facts.join(' / ') || '지정된 내용 없음'}</p>
-              <p>답변에 포함하면 안 되는 내용: {fixtureCase.forbidden_claims.join(' / ') || '지정된 내용 없음'}</p>
+            <div><h4 className="font-semibold">{data.material?.reference_source === 'admin-authored' ? '관리자가 작성한 답변 기준' : data.material?.reference_source === 'ai-authored' ? 'AI가 작성한 답변 기준' : '답변 기준'}</h4>
+              <dl className="mt-2 grid gap-3 rounded-lg bg-white p-3 [overflow-wrap:anywhere]">
+                <div><dt className="font-semibold">답변 가능 여부</dt><dd className="mt-1">{fixtureCase.expected_status === 'ANSWERED' ? '공고 내용으로 답변 가능' : fixtureCase.expected_status === 'INSUFFICIENT_EVIDENCE' ? '공고 내용이 부족해 답변 보류' : '확인할 수 없음'}</dd></div>
+                <div><dt className="font-semibold">답변에 표시할 공고 내용 번호</dt><dd className="mt-1">{fixtureCase.expected_citation_orders.map((order) => order + 1).join(', ') || '정해진 번호 없음'}</dd></div>
+                <div><dt className="font-semibold">답변에 포함할 내용</dt><dd className="mt-1 whitespace-pre-wrap">{fixtureCase.reference_facts.join(' / ') || '지정된 내용 없음'}</dd></div>
+                <div><dt className="font-semibold">답변에 포함하면 안 되는 내용</dt><dd className="mt-1 whitespace-pre-wrap">{fixtureCase.forbidden_claims.join(' / ') || '지정된 내용 없음'}</dd></div>
+              </dl>
             </div>
           </div>
         </section>}

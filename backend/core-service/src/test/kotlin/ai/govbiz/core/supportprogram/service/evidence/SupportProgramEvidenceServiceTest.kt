@@ -70,6 +70,42 @@ class SupportProgramEvidenceServiceTest {
     }
 
     @Test
+    fun returnsCompleteCurrentSourceDocumentWithoutCallingAi() {
+        val program = SupportProgramTestHelper.catalogProgram("PBLN_TEST").program
+        val original = "신청 기간: 2026-09-03 ~ 2026-09-21\n" + "공고 내용 ".repeat(2000)
+        val cached = document(program, LocalDateTime.of(2026, 9, 5, 11, 0), original)
+        doReturn(program).`when`(detailService).get("BIZINFO", "PBLN_TEST")
+        doReturn(cached).`when`(repository).findPresentSourceDocument("BIZINFO", "PBLN_TEST")
+
+        assertEquals(original, service.getSourceDocument("BIZINFO", "PBLN_TEST"))
+        verifyNoInteractions(sourceDocumentFacade, aiEvidenceFacade)
+    }
+
+    @Test
+    fun refusesUnsupportedSourceDocumentWithoutFetchingIt() {
+        val program = SupportProgramTestHelper.catalogProgram("PBLN_TEST").program.copy(sourceCode = "OTHER")
+        doReturn(program).`when`(detailService).get("OTHER", "PBLN_TEST")
+
+        assertThrows(SupportProgramEvidenceNotSupportedException::class.java) {
+            service.getSourceDocument("OTHER", "PBLN_TEST")
+        }
+        verifyNoInteractions(repository, sourceDocumentFacade, aiEvidenceFacade)
+    }
+
+    @Test
+    fun propagatesSourceDocumentFailureWithoutFallingBackToCatalogSummary() {
+        val program = SupportProgramTestHelper.catalogProgram("PBLN_TEST").program
+        doReturn(program).`when`(detailService).get("BIZINFO", "PBLN_TEST")
+        doReturn(null).`when`(repository).findPresentSourceDocument("BIZINFO", "PBLN_TEST")
+        doThrow(sourceFailure()).`when`(sourceDocumentFacade).load(program)
+
+        assertThrows(SupportProgramEvidenceUnavailableException::class.java) {
+            service.getSourceDocument("BIZINFO", "PBLN_TEST")
+        }
+        verifyNoInteractions(aiEvidenceFacade)
+    }
+
+    @Test
     fun reusesAFreshCurrentDocumentWithoutFetchingTheSourceAgain() {
         val program = SupportProgramTestHelper.catalogProgram("PBLN_TEST").program
         val cached = document(program, LocalDateTime.of(2026, 9, 5, 11, 0))

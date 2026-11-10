@@ -123,6 +123,29 @@ class SupportProgramControllerTest {
     }
 
     @Test
+    fun returnsOfficialSourceDocumentWithoutAttachments() {
+        val text = "공식 상세 본문\n신청 기간: 2026-09-03 ~ 2026-09-21"
+        Mockito.doReturn(text).`when`(evidenceService).getSourceDocument("BIZINFO", "PBLN_TEST")
+        mockMvc.perform(get("$DETAIL_PATH/source-document").queryParam("sourceCode", "BIZINFO").queryParam("sourceProgramId", "PBLN_TEST"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").value(text))
+            .andExpect(jsonPath("$.includesAttachments").value(false))
+        Mockito.verify(evidenceService).getSourceDocument("BIZINFO", "PBLN_TEST")
+    }
+
+    @Test
+    fun doesNotReturnFallbackWhenOfficialSourceIsUnavailableOrUnsupported() {
+        Mockito.doThrow(SupportProgramEvidenceNotSupportedException()).`when`(evidenceService).getSourceDocument("OTHER", "PBLN_TEST")
+        mockMvc.perform(get("$DETAIL_PATH/source-document").queryParam("sourceCode", "OTHER").queryParam("sourceProgramId", "PBLN_TEST"))
+            .andExpect(status().isUnprocessableContent())
+            .andExpect(jsonPath("$.code").value("SUPPORT_PROGRAM_EVIDENCE_NOT_SUPPORTED"))
+        Mockito.doThrow(SupportProgramEvidenceUnavailableException(IllegalStateException("private detail"))).`when`(evidenceService).getSourceDocument("BIZINFO", "PBLN_TEST")
+        mockMvc.perform(get("$DETAIL_PATH/source-document").queryParam("sourceCode", "BIZINFO").queryParam("sourceProgramId", "PBLN_TEST"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(content().string(not(containsString("private detail"))))
+    }
+
+    @Test
     fun returnsTheStableFrontendContractIncludingNullableParsedDates() {
         Mockito.doReturn(listOf(catalogProgram())).`when`(retrieval)
             .retrieve("서울 AI", listOf(catalogProgram()))

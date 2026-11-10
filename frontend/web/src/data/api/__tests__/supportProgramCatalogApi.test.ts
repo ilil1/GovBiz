@@ -4,7 +4,7 @@ import { BrowseSupportProgramsUseCase } from '../../../domain/usecases/BrowseSup
 import type { SupportProgramCatalogFilters } from '../../../domain/entities/SupportProgramCatalog'
 import { supportPrograms } from '../../fixtures/supportPrograms'
 import { SupportProgramRepositoryImpl } from '../../repositories/SupportProgramRepositoryImpl'
-import { browseSupportProgramsApi } from '../supportProgramCatalogApi'
+import { browseSupportProgramsApi, getSupportProgramSourceDocumentApi } from '../supportProgramCatalogApi'
 
 const defaultCatalogFilters: SupportProgramCatalogFilters = { keyword: '', region: '', category: '', status: 'OPEN', sort: 'RECENT', page: 1, pageSize: 12,
   sourceCode: '', startupStage: '', applicantType: '', founderAge: '' }
@@ -13,6 +13,35 @@ const startupProgram = { ...response.programs[0], sourceCode: 'KSTARTUP', source
   sourceUrl: 'https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do' }
 const startupOptions = { startupStages: ['3년미만'], applicantTypes: ['일반기업'], founderAges: ['만 40세 이상'] }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+describe('공고 공식 본문 HTTP 경계', () => {
+  it('제공처와 공고 ID로 조회하고 취소 신호를 전달한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ content: '공식 본문', includesAttachments: false }))
+    vi.stubGlobal('fetch', fetchMock)
+    const signal = new AbortController().signal
+    await expect(getSupportProgramSourceDocumentApi('BIZINFO', 'PBLN_123', signal)).resolves.toBe('공식 본문')
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/v1/support-programs/detail/source-document?sourceCode=BIZINFO&sourceProgramId=PBLN_123'), expect.objectContaining({ signal, credentials: 'include' }))
+  })
+  it.each([{ content: '', includesAttachments: false }, { content: '  ', includesAttachments: false }, { includesAttachments: false }, { content: '본문', includesAttachments: true }, { content: '본문' }])('잘못된 응답을 거부한다 (%#)', async (body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(body)))
+    await expect(getSupportProgramSourceDocumentApi('BIZINFO', 'PBLN_123', new AbortController().signal)).rejects.toThrow()
+  })
+  it('HTTP 실패와 취소를 성공으로 처리하지 않는다', async () => {
+    const error = new DOMException('중단', 'AbortError')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 })).mockRejectedValueOnce(error))
+    const signal = new AbortController().signal
+    await expect(getSupportProgramSourceDocumentApi('BIZINFO', 'PBLN_123', signal)).rejects.toThrow()
+    await expect(getSupportProgramSourceDocumentApi('BIZINFO', 'PBLN_123', signal)).rejects.toBe(error)
+  })
+  it.each([
+    [404, '공고 또는 공고 본문 조회 기능을 찾을 수 없습니다. 서버 상태를 확인해 주세요.'],
+    [429, '요청이 많습니다. 잠시 후 다시 시도해 주세요.'],
+    [503, '공고 본문을 가져오지 못했습니다. 다시 시도하거나 공식 공고를 확인하고 직접 입력해 주세요.'],
+  ])('HTTP %i 오류는 안전한 안내를 제공한다', async (status, message) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('서버 내부 비밀 오류', { status })))
+    await expect(getSupportProgramSourceDocumentApi('BIZINFO', 'PBLN_123', new AbortController().signal)).rejects.toThrow(message)
+  })
+})
 
 describe('공고 카탈로그 HTTP 경계', () => {
   it.each([

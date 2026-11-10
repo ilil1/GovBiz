@@ -12,6 +12,7 @@ import ai.govbiz.core.supportprogram.controller.dto.SupportProgramSearchRequest
 import ai.govbiz.core.supportprogram.controller.dto.SupportProgramSearchResponse
 import ai.govbiz.core.supportprogram.controller.dto.SupportProgramSearchRestoreRequest
 import ai.govbiz.core.supportprogram.controller.dto.SupportProgramSearchRestoreResponse
+import ai.govbiz.core.supportprogram.controller.dto.SupportProgramSourceDocumentResponse
 import ai.govbiz.core.supportprogram.controller.validation.CodePointMax
 import ai.govbiz.core.supportprogram.service.admission.SupportProgramRequestAdmissionService
 import ai.govbiz.core.supportprogram.service.detail.SupportProgramDetailService
@@ -101,6 +102,18 @@ class SupportProgramController(
         sourceProgramId: String,
     ): SupportProgramDetailResponse =
         SupportProgramDetailResponse.from(detailService.get(sourceCode, sourceProgramId))
+
+    /** 공식 HTML 상세 본문만 반환하며 첨부파일은 포함하지 않습니다. */
+    @GetMapping("/detail/source-document")
+    fun sourceDocument(
+        @RequestParam @NotBlank @Size(max = 64) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}") sourceCode: String,
+        @RequestParam @NotBlank @CodePointMax(max = 255) @Pattern(regexp = "(?Us)^(?!\\s)(?!.*\\s$)(?!.*\\p{C}).+$") sourceProgramId: String,
+        httpRequest: HttpServletRequest,
+    ): ResponseEntity<SupportProgramSourceDocumentResponse> = requestAdmissionService.execute(httpRequest.remoteAddr) {
+        ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
+            SupportProgramSourceDocumentResponse(evidenceService.getSourceDocument(sourceCode, sourceProgramId)),
+        )
+    }
 
     /** 공고 원문 질문은 로그인한 회원만 씁니다. 요금제의 하루 질문 횟수에서 먼저 빼고 답하지 못하면 돌려줍니다. */
     @PostMapping("/detail/answers")

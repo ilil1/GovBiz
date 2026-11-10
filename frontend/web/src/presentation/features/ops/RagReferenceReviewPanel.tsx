@@ -55,24 +55,23 @@ export function RagReferenceReviewPanel({ runId, state, disabled, onDirty, onBus
     </EvaluationHelp>
     <p className="text-sm">질문마다 공고 내용과 평가 기준이 맞는지 확인해 주세요.</p>
     {selected && <section aria-label="평가 기준 살펴보기" className="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm">
-      {cases.length > 1 && <label className="grid gap-2 font-semibold">확인할 질문 선택
+      {cases.length > 1 && <label className="grid gap-2 font-semibold"><span className="flex items-center justify-between gap-2"><span>질문 선택</span><span aria-hidden="true" className="text-xs font-normal text-ink-muted">총 {cases.length}개</span></span>
         <select className="min-h-11 w-full rounded-lg border border-line bg-white p-2" value={selectedCase} onChange={(event) => setSelectedCase(Number(event.target.value))}>
-          {cases.map((item, index) => <option key={item.case_id} value={index}>{index + 1}. {item.question}</option>)}
+          {cases.map((item, index) => <option key={item.case_id} value={index}>{index + 1}번째 질문</option>)}
         </select>
       </label>}
-      <div><h4 className="font-semibold">질문</h4><p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{selectedCase + 1}. {selected.question}</p></div>
+      {cases.length > 1 && <div className="grid grid-cols-2 gap-3">
+        <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm justify-center`} aria-label="기준의 이전 질문" disabled={selectedCase === 0} onClick={() => setSelectedCase(selectedCase - 1)}>이전 질문</button>
+        <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm justify-center`} aria-label="기준의 다음 질문" disabled={selectedCase === cases.length - 1} onClick={() => setSelectedCase(selectedCase + 1)}>다음 질문</button>
+      </div>}
+      <div><h4 className="font-semibold">질문</h4><p aria-live="polite" aria-atomic="true" className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{selected.question}</p></div>
       <div className="grid min-w-0 items-start gap-3 md:grid-cols-2">
         <section className="min-w-0"><h4 className="font-semibold">공고 내용</h4>{state.material.data_type === 'official-html-snapshot' && <p className="mt-1 text-xs text-ink-muted">저장한 공고 본문이에요. 첨부파일은 포함되지 않아요.</p>}<pre tabIndex={0} aria-label="공고 내용" className="mt-2 max-h-60 overflow-auto rounded-lg bg-white p-3 font-sans whitespace-pre-wrap [overflow-wrap:anywhere]">{selected.content}</pre></section>
-        <section className="min-w-0"><h4 className="font-semibold">AI가 작성한 평가 기준</h4><p className="mt-1">{selected.expected_status === 'ANSWERED' ? '이 공고 내용으로 답변할 수 있어야 해요.' : '공고 내용이 부족하면 답변을 보류해야 해요.'}</p>
+        <section className="min-w-0"><h4 className="font-semibold">AI가 작성한 답변 기준</h4><p className="mt-1">{selected.expected_status === 'ANSWERED' ? '이 공고 내용으로 답변할 수 있어야 해요.' : '공고 내용이 부족하면 답변을 보류해야 해요.'}</p>
           {selected.expected_evidence.length > 0 && <div className="mt-2 grid gap-2"><p>확인할 공고 내용:</p>{selected.expected_evidence.map((evidence, index) => <blockquote key={`${evidence.chunk_id}-${index}`} className="border-l-2 border-brand-primary pl-3 whitespace-pre-wrap [overflow-wrap:anywhere]">{evidence.quote}</blockquote>)}</div>}
           {selected.expected_evidence.length === 0 && <p className="mt-2">지정된 근거가 없어요.</p>}
         </section>
       </div>
-      {cases.length > 1 && <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm`} disabled={selectedCase === 0} onClick={() => setSelectedCase(selectedCase - 1)}>이전 기준</button>
-        <span className="tabular-nums">{selectedCase + 1} / {cases.length}</span>
-        <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm`} disabled={selectedCase === cases.length - 1} onClick={() => setSelectedCase(selectedCase + 1)}>다음 기준</button>
-      </div>}
     </section>}
     <p className="text-sm text-ink-muted">평가 기준 확인은 답변 합격과 별개예요.</p>
     <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void save() }}>

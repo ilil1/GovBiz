@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DatasetManagementPage } from './DatasetManagementPage'
 import type { ManagedDataset, ManagedDatasetContent } from '../../../data/ops/opsApi'
-import { browseSupportProgramsApi } from '../../../data/api/supportProgramCatalogApi'
+import { browseSupportProgramsApi, getSupportProgramSourceDocumentApi, SupportProgramSourceDocumentError } from '../../../data/api/supportProgramCatalogApi'
 
-vi.mock('../../../data/api/supportProgramCatalogApi', () => ({ browseSupportProgramsApi: vi.fn() }))
+vi.mock('../../../data/api/supportProgramCatalogApi', async (importOriginal) => ({ ...await importOriginal<typeof import('../../../data/api/supportProgramCatalogApi')>(), browseSupportProgramsApi: vi.fn(), getSupportProgramSourceDocumentApi: vi.fn() }))
 const browseMock = vi.mocked(browseSupportProgramsApi)
+const sourceMock = vi.mocked(getSupportProgramSourceDocumentApi)
 type CatalogResponse = Awaited<ReturnType<typeof browseSupportProgramsApi>>
 type CatalogProgram = CatalogResponse['programs'][number]
 const catalogProgram = (overrides: Partial<CatalogProgram>): CatalogProgram => ({
@@ -57,7 +58,12 @@ const selectSaved = async () => fireEvent.click(await screen.findByRole('button'
 const showDocuments = () => fireEvent.click(screen.getByRole('button', { name: '1. 공고 입력' }))
 const showQuestions = () => fireEvent.click(screen.getByRole('button', { name: '2. 질문·비교 답변' }))
 const showPublish = () => fireEvent.click(screen.getByRole('button', { name: '3. 평가 준비 확인' }))
-afterEach(() => { cleanup(); browseMock.mockReset(); vi.unstubAllGlobals() })
+beforeEach(() => { sourceMock.mockImplementation(async (sourceCode, sourceProgramId) => {
+  const response = await browseMock.mock.results.at(-1)?.value
+  const program = response?.programs.find((item: CatalogProgram) => item.sourceCode === sourceCode && item.id === sourceProgramId)
+  return [program?.summary, program?.targetDescription].filter(Boolean).join('\n\n') || '공식 본문'
+}) })
+afterEach(() => { cleanup(); browseMock.mockReset(); sourceMock.mockReset(); vi.unstubAllGlobals() })
 
 describe('관리자 평가 자료 등록', () => {
   it('자료를 불러오는 동안 0개나 빈 목록으로 오해하지 않게 표시한다', async () => {
@@ -168,7 +174,7 @@ describe('관리자 평가 자료 등록', () => {
     expect(screen.queryByRole('button', { name: '공고 1 비우고 다시 선택' })).toBeNull()
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 첫 공고' }))
-    expect(screen.getByRole('link', { name: '선택한 공고의 공식 원문 보기' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: '공고 1 비우고 다시 선택' }))
     const confirm = screen.getByRole('region', { name: '공고 1 내용 비우기 확인' })
@@ -184,7 +190,7 @@ describe('관리자 평가 자료 등록', () => {
     expect(screen.getByRole('textbox', { name: '공고 1 주소' })).toHaveProperty('value', '')
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 다른 공고' }))
-    expect(screen.getByRole('textbox', { name: '공고 1 제목 · 필수' })).toHaveProperty('value', '다른 공고')
+    await waitFor(() => expect(screen.getByRole('textbox', { name: '공고 1 제목 · 필수' })).toHaveProperty('value', '다른 공고'))
     expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '다른 공고 요약')
     expect(writes(fetch)).toHaveLength(0)
   })
@@ -200,6 +206,7 @@ describe('관리자 평가 자료 등록', () => {
     showDocuments()
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 첫 공고' }))
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
     showPublish()
     let questions = screen.getByRole('region', { name: '질문·비교 답변 확인' })
     expect(within(questions).getByText('질문 1 공고 선택').closest('li')?.textContent).toContain('입력 완료')
@@ -219,6 +226,7 @@ describe('관리자 평가 자료 등록', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: '1. 공고 내용을 알려주세요' })))
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 다른 공고' }))
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
     showPublish()
     questions = screen.getByRole('region', { name: '질문·비교 답변 확인' })
     expect(within(questions).getByText('질문 1 공고 선택').closest('li')?.textContent).toContain('입력 완료')
@@ -242,6 +250,7 @@ describe('관리자 평가 자료 등록', () => {
     fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 첫 공고' }))
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
     fireEvent.change(screen.getByRole('textbox', { name: '자료 이름 · 필수' }), { target: { value: '작성 중인 자료' } })
     fireEvent.change(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' }), { target: { value: '직접 수정한 내용' } })
     fireEvent.click(screen.getByText('공고나 내용을 더 넣기 · 선택'))
@@ -312,27 +321,149 @@ describe('관리자 평가 자료 등록', () => {
     expect(body.content.documents.map((doc: { id: string }) => doc.id)).toEqual(['doc-1', 'doc-2'])
     expect(body.content.cases[0].document_id).toBe('doc-2')
   })
-  it('기존 공고를 찾아 제공된 요약을 편집 가능한 자료로 가져온다', async () => {
-    const program = catalogProgram({ sourceCode: 'BIZINFO', id: 'notice-1', title: '창업 지원사업', sourceName: '기업마당', sourceUrl: 'https://www.bizinfo.go.kr/notice/1', organization: '서울시', summary: '창업 기업의 사업화를 지원합니다.', targetDescription: '창업 3년 이내 기업' })
+  it('기존 공고의 공식 본문과 신청 기간을 편집 가능한 자료로 가져온다', async () => {
+    const program = catalogProgram({ sourceCode: 'BIZINFO', id: 'notice-1', title: '창업 지원사업', sourceName: '기업마당', sourceUrl: 'https://www.bizinfo.go.kr/notice/1', organization: '서울시', summary: '요약', applicationPeriod: '2026-09-03 ~ 2026-09-21' })
     browseMock.mockResolvedValue(catalogPage({ programs: [program], page: 1, pageSize: 10, total: 1, totalPages: 1 }))
+    sourceMock.mockResolvedValueOnce('제공처 공식 본문 전체')
     const fetch = setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
     fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
     expect(browseMock).not.toHaveBeenCalled()
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     const pick = await screen.findByRole('button', { name: '공고 선택: 창업 지원사업' })
     expect(browseMock).toHaveBeenCalledWith(expect.objectContaining({ keyword: '', page: 1 }), expect.any(AbortSignal))
-    expect(screen.getByText(/공고 전체나 첨부파일은 가져오지 않으므로/)).toBeTruthy()
+    expect(screen.getByText(/첨부파일은 포함되지 않으니/)).toBeTruthy()
     fireEvent.click(pick)
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
     expect(screen.getByText('기존 공고에서 찾기').closest('details')?.open).toBe(false)
     expect(document.activeElement).toBe(screen.getByText('기존 공고에서 찾기'))
     expect(screen.getByRole('link', { name: '선택한 공고의 공식 원문 보기' }).getAttribute('href')).toBe('https://www.bizinfo.go.kr/notice/1')
     expect(screen.getByRole('textbox', { name: '공고 1 제목 · 필수' })).toHaveProperty('value', '창업 지원사업')
-    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '창업 기업의 사업화를 지원합니다.\n\n창업 3년 이내 기업')
+    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '신청 기간: 2026-09-03 ~ 2026-09-21\n\n제공처 공식 본문 전체')
+    expect(sourceMock).toHaveBeenCalledWith('BIZINFO', 'notice-1', expect.any(AbortSignal))
     fireEvent.click(screen.getByText('공고 주소 추가 · 선택'))
     expect(screen.getByRole('textbox', { name: '공고 1 주소' })).toHaveProperty('value', 'https://www.bizinfo.go.kr/notice/1')
-    expect(screen.getByText(/원문을 확인하고 필요한 내용을 보완해 주세요/)).toBeTruthy()
+    expect(screen.getByText(/공식 공고 본문을 가져왔습니다/)).toBeTruthy()
     expect(pick).toHaveProperty('disabled', true)
     expect(writes(fetch)).toHaveLength(0)
+  })
+
+  it('긴 본문은 공백과 이모지를 보존하며 여러 내용으로 나눈다', async () => {
+    const program = catalogProgram({ title: '긴 공고' })
+    const text = `  ${'가'.repeat(11997)}😀\n${'나'.repeat(12000)}  `
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    sourceMock.mockResolvedValueOnce(text)
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 긴 공고' }))
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
+    const inputs = screen.getAllByRole('textbox', { name: /공고 1 내용 \d+ · 필수/ }) as HTMLTextAreaElement[]
+    expect(inputs.length).toBeGreaterThan(1)
+    expect(inputs.map((input) => input.value).join('')).toBe(text)
+    expect(inputs.every((input) => input.value.length <= 12000)).toBe(true)
+  })
+
+  it('문단 경계는 공백에서 나누고 기간 정보가 없으면 본문에 덧붙이지 않는다', async () => {
+    const program = catalogProgram({ title: '긴 공고', applicationPeriod: '정보 없음' })
+    const text = '지원 내용과 신청 조건을 확인하세요. '.repeat(1200)
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    sourceMock.mockResolvedValueOnce(text)
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 긴 공고' }))
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
+    const inputs = screen.getAllByRole('textbox', { name: /공고 1 내용 \d+ · 필수/ }) as HTMLTextAreaElement[]
+    expect(inputs.length).toBeGreaterThan(1)
+    expect(inputs.map((input) => input.value.trim()).join(' ')).toBe(text.trim())
+  })
+
+  it('길이 제한을 넘으면 내용을 자르지 않고 직접 입력을 안내한다', async () => {
+    const program = catalogProgram({ title: '아주 긴 공고' })
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    sourceMock.mockResolvedValueOnce('가'.repeat(60001))
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 아주 긴 공고' }))
+    expect(await screen.findByText(/공고 내용이 너무 길어 가져올 수 없습니다/)).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: '공고 1 제목 · 필수' })).toHaveProperty('value', '')
+    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '')
+  })
+
+  it('본문을 가져오는 동안 직접 입력하면 요청을 취소하고 입력을 보존한다', async () => {
+    const program = catalogProgram({ title: '공고' })
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    let finish: (value: string) => void = () => { throw new Error('조회가 시작되지 않았습니다.') }
+    sourceMock.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 공고' }))
+    expect(screen.getByText('공고 본문을 가져오고 있습니다.')).toBeTruthy()
+    fireEvent.change(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' }), { target: { value: '직접 입력한 내용' } })
+    await waitFor(() => expect(sourceMock.mock.calls[0][2].aborted).toBe(true))
+    await act(async () => { finish('늦게 도착한 본문') })
+    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '직접 입력한 내용')
+    expect(screen.getByRole('textbox', { name: '공고 1 제목 · 필수' })).toHaveProperty('value', '')
+  })
+
+  it('본문을 가져오는 중에 취소할 수 있다', async () => {
+    const program = catalogProgram({ title: '공고' })
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    let finish: (value: string) => void = () => { throw new Error('조회가 시작되지 않았습니다.') }
+    sourceMock.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 공고' }))
+    fireEvent.click(screen.getByRole('button', { name: '가져오기 취소' }))
+    expect(sourceMock.mock.calls[0][2].aborted).toBe(true)
+    await act(async () => { finish('늦게 도착한 본문') })
+    expect(screen.getByRole('textbox', { name: '공고 1 제목 · 필수' })).toHaveProperty('value', '')
+    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '')
+  })
+
+  it('본문 조회 실패 후 다시 시도할 수 있다', async () => {
+    const program = catalogProgram({ title: '공고' })
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    sourceMock.mockRejectedValueOnce(new Error('연결 오류')).mockResolvedValueOnce('공식 본문')
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 공고' }))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 본문 다시 가져오기' }))
+    await screen.findByRole('link', { name: '선택한 공고의 공식 원문 보기' })
+    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '공식 본문')
+  })
+
+  it.each([
+    [new SupportProgramSourceDocumentError(404), '공고 또는 공고 본문 조회 기능을 찾을 수 없습니다. 서버 상태를 확인해 주세요.'],
+    [new SupportProgramSourceDocumentError(429), '요청이 많습니다. 잠시 후 다시 시도해 주세요.'],
+    [new Error('서버 내부 비밀 오류'), '공고 본문을 가져오지 못했습니다. 다시 시도하거나 공식 공고를 확인하고 직접 입력해 주세요.'],
+  ])('원문 조회 오류에 맞는 안전한 안내를 표시한다', async (error, message) => {
+    const program = catalogProgram({ title: '오류 공고' })
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    sourceMock.mockRejectedValueOnce(error)
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 오류 공고' }))
+    expect(await screen.findByText(message)).toBeTruthy()
+    expect(screen.queryByText('서버 내부 비밀 오류')).toBeNull()
+    expect(screen.getByRole('button', { name: '공고 본문 다시 가져오기' })).toBeTruthy()
+  })
+
+  it('원문 자동 조회를 지원하지 않는 제공처는 직접 입력하도록 안내한다', async () => {
+    const program = catalogProgram({ sourceCode: 'MSIT', title: '미지원 공고', sourceUrl: 'https://www.msit.go.kr/bbs/view.do' })
+    browseMock.mockResolvedValue(catalogPage({ programs: [program], total: 1, totalPages: 1 }))
+    setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
+    fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
+    fireEvent.click(screen.getByText('기존 공고에서 찾기'))
+    fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 미지원 공고' }))
+    expect(screen.getByText(/이 제공처는 공고 본문을 자동으로 가져올 수 없습니다/)).toBeTruthy()
+    expect(sourceMock).not.toHaveBeenCalled()
+    expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '')
   })
 
   it('이미 작성했거나 출처로 사용 중인 공고는 검색 결과로 덮어쓰지 못한다', async () => {
@@ -374,7 +505,7 @@ describe('관리자 평가 자료 등록', () => {
     expect(screen.queryByRole('link', { name: '공식 공고 보기' })).toBeNull()
     fireEvent.click(pick)
     expect(screen.queryByRole('link', { name: '선택한 공고의 공식 원문 보기' })).toBeNull()
-    expect(screen.getByText(/주소가 제외되었습니다/)).toBeTruthy()
+    expect(screen.getByText(/공고 제목이나 주소를 확인할 수 없습니다/)).toBeTruthy()
     fireEvent.click(screen.getByText('공고 주소 추가 · 선택'))
     expect(screen.getByRole('textbox', { name: '공고 1 주소' })).toHaveProperty('value', '')
   })
@@ -424,15 +555,16 @@ describe('관리자 평가 자료 등록', () => {
     expect(browseMock).toHaveBeenCalledTimes(2)
   })
 
-  it('제공된 내용이 없는 공고는 직접 입력하도록 안내한다', async () => {
+  it('공식 본문 조회에 실패하면 직접 입력하도록 안내한다', async () => {
     const program = catalogProgram({ sourceCode: 'BIZINFO', id: 'notice-1', title: '내용 없는 공고', sourceName: '기업마당', sourceUrl: 'https://www.bizinfo.go.kr/notice/1', organization: '서울시', summary: '', targetDescription: '' })
     browseMock.mockResolvedValue(catalogPage({ programs: [program], page: 1, pageSize: 10, total: 1, totalPages: 1 }))
+    sourceMock.mockRejectedValueOnce(new Error('원문 없음'))
     setup(); open(); await screen.findByText('아직 직접 만든 자료가 없습니다.')
     fireEvent.click(screen.getByRole('button', { name: '새 평가 자료 만들기' }))
     fireEvent.click(screen.getByText('기존 공고에서 찾기'))
     fireEvent.click(await screen.findByRole('button', { name: '공고 선택: 내용 없는 공고' }))
     expect(screen.getByRole('textbox', { name: '공고 1 내용 1 · 필수' })).toHaveProperty('value', '')
-    expect(screen.getByText('공고 제목을 가져왔습니다. 제공된 내용이 없어 직접 입력해 주세요.')).toBeTruthy()
+    expect(await screen.findByText(/공고 본문을 가져오지 못했습니다/)).toBeTruthy()
   })
 
   it('기본 자료로 시작할 수 있고 새 자료를 만들 때 실제 입력 예시를 안내한다', async () => {

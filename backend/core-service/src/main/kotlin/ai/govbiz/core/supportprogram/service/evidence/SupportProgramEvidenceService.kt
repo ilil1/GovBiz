@@ -59,6 +59,13 @@ class SupportProgramEvidenceService(
         return chunksFor(currentSourceDocument(program))
     }
 
+    /** 평가 자료에 사용할 공식 상세 본문입니다. 첨부파일은 수집하지 않습니다. */
+    fun getSourceDocument(sourceCode: String, sourceProgramId: String): String {
+        val program = detailService.get(sourceCode, sourceProgramId)
+        if (program.sourceCode !in EVIDENCE_SOURCE_LABELS) throw SupportProgramEvidenceNotSupportedException()
+        return currentSourceDocument(program).content
+    }
+
     private fun currentSourceDocument(program: SupportProgram): SupportProgramSourceDocument {
         val cached = try {
             repository.findPresentSourceDocument(program.sourceCode, program.id)

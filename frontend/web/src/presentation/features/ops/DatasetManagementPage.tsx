@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { browseSupportProgramsApi } from '../../../data/api/supportProgramCatalogApi'
+import { browseSupportProgramsApi, getSupportProgramSourceDocumentApi, SupportProgramSourceDocumentError } from '../../../data/api/supportProgramCatalogApi'
 import { isOfficialSupportProgramSourceUrl } from '../../../data/models/SupportProgramDto'
 import { defaultProgramSelectionFilters } from '../../shared/support-program/catalogSearchParams'
 import { archiveManagedDataset, createManagedDataset, getManagedDatasets, OpsApiError, publishManagedDataset, saveManagedDataset, type ManagedDataset, type ManagedDatasetContent } from '../../../data/ops/opsApi'
@@ -27,11 +27,11 @@ type Step = 0 | 1 | 2
 type CatalogProgram = Awaited<ReturnType<typeof browseSupportProgramsApi>>['programs'][number]
 type CatalogResult = Awaited<ReturnType<typeof browseSupportProgramsApi>>
 
-/** 저장된 공고의 제공처 요약을 선택하며, 사용자가 이미 작성한 내용은 덮어쓰지 않습니다. */
+/** 공식 본문을 가져오되 사용자가 이미 작성한 내용은 덮어쓰지 않습니다. */
 function CatalogPicker({ index, canImport, onPick }: {
   index: number
   canImport: boolean
-  onPick: (program: CatalogProgram) => void
+  onPick: (program: CatalogProgram, chunks: string[]) => void
 }) {
   const [opened, setOpened] = useState(false)
   const [keyword, setKeyword] = useState('')
@@ -42,7 +42,21 @@ function CatalogPicker({ index, canImport, onPick }: {
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const [selectedUrl, setSelectedUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [retryProgram, setRetryProgram] = useState<CatalogProgram | null>(null)
+  const importRequest = useRef<AbortController | null>(null)
+  const canImportRef = useRef(canImport)
+  canImportRef.current = canImport
   const summaryRef = useRef<HTMLElement>(null)
+
+  useEffect(() => () => { importRequest.current?.abort() }, [])
+  useEffect(() => {
+    if (!canImport && importRequest.current) {
+      importRequest.current.abort(); importRequest.current = null; setImporting(false)
+      setImportError('입력 내용이 변경되어 공고를 가져오지 않았습니다.')
+    }
+  }, [canImport])
 
   useEffect(() => {
     if (!opened) return
@@ -56,26 +70,44 @@ function CatalogPicker({ index, canImport, onPick }: {
   }, [opened, query, page, retry])
 
   const search = () => { setPage(1); setQuery(keyword.trim()); setRetry((value) => value + 1); setMessage('') }
-  return <div className="grid gap-2"><details open={opened} className="rounded-xl bg-surface-muted p-4" onToggle={(event) => setOpened(event.currentTarget.open)}>
+  const importProgram = async (program: CatalogProgram) => {
+    if (!canImportRef.current || importRequest.current) return
+    setImportError(''); setRetryProgram(program)
+    if (!['BIZINFO', 'KSTARTUP'].includes(program.sourceCode)) { setImportError('이 제공처는 공고 본문을 자동으로 가져올 수 없습니다. 공식 공고를 확인하고 직접 입력해 주세요.'); return }
+    if (program.title.length > 300 || program.sourceUrl.length > 2000 || !isOfficialSupportProgramSourceUrl(program.sourceCode, program.sourceUrl)) { setImportError('공고 제목이나 주소를 확인할 수 없습니다. 공식 공고를 확인하고 직접 입력해 주세요.'); return }
+    const controller = new AbortController()
+    importRequest.current = controller; setImporting(true)
+    try {
+      const content = await getSupportProgramSourceDocumentApi(program.sourceCode, program.id, controller.signal)
+      if (controller.signal.aborted || !canImportRef.current) return
+      const period = program.applicationPeriod.trim()
+      const periodText = period && !/^(미정|정보 없음|확인 불가|공고 원문 확인)$/.test(period) && !content.includes(period) ? `신청 기간: ${period}\n\n` : ''
+      const chunks = splitImportedContent(`${periodText}${content}`)
+      if (!chunks) { setImportError('공고 내용이 너무 길어 가져올 수 없습니다. 공식 공고를 확인하고 필요한 내용을 직접 나눠 입력해 주세요.'); return }
+      onPick(program, chunks)
+      setMessage('공식 공고 본문을 가져왔습니다. 첨부파일은 포함되지 않으니 필요한 내용을 확인해 주세요.')
+      setSelectedUrl(program.sourceUrl)
+      importRequest.current = null
+      summaryRef.current?.focus(); setOpened(false)
+    } catch (cause) {
+      if (!controller.signal.aborted) setImportError(cause instanceof SupportProgramSourceDocumentError ? cause.message : '공고 본문을 가져오지 못했습니다. 다시 시도하거나 공식 공고를 확인하고 직접 입력해 주세요.')
+    } finally {
+      if (importRequest.current === controller) importRequest.current = null
+      if (!controller.signal.aborted) setImporting(false)
+    }
+  }
+  return <div className="grid gap-2"><details open={opened} className="rounded-xl bg-surface-muted p-4" onToggle={(event) => { const open = event.currentTarget.open; setOpened(open); if (!open && importRequest.current) { importRequest.current.abort(); importRequest.current = null; setImporting(false) } }}>
     <summary ref={summaryRef} className="cursor-pointer text-sm font-bold text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-primary">기존 공고에서 찾기</summary>
     <div className="mt-3 grid gap-3 text-sm">
-      <p>선택한 공고의 제목과 제공된 요약·지원 대상만 가져옵니다. 공고 전체나 첨부파일은 가져오지 않으므로 내용을 확인하고 보완해 주세요.</p>
+      <p>선택한 공고의 공식 본문을 가져옵니다. 첨부파일은 포함되지 않으니 필요한 내용을 확인해 주세요.</p>
       {!canImport && <p className="text-amber-800">이미 입력했거나 질문·비교 답변에서 사용 중인 공고는 바꿀 수 없습니다. 다른 공고를 추가해 선택해 주세요.</p>}
+      {importing && <div className="grid justify-items-start gap-2"><p role="status">공고 본문을 가져오고 있습니다.</p><button type="button" className={styles.secondaryButton} onClick={() => { importRequest.current?.abort(); importRequest.current = null; setImporting(false); setRetryProgram(null) }}>가져오기 취소</button></div>}
+      {importError && <div role="alert" className="grid gap-2"><p>{importError}</p>{retryProgram && canImport && ['BIZINFO', 'KSTARTUP'].includes(retryProgram.sourceCode) && <button type="button" className={`${styles.secondaryButton} justify-self-start`} disabled={importing} onClick={() => void importProgram(retryProgram)}>공고 본문 다시 가져오기</button>}</div>}
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end"><label className="grid min-w-0 flex-1 gap-1 font-semibold">공고 검색어<input aria-label={`공고 ${index} 검색어`} className={field} maxLength={100} value={keyword} onChange={(event) => setKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); search() } }} placeholder="예: 창업 지원" /></label>
       <button type="button" className={`${styles.secondaryButton} min-h-11 sm:shrink-0`} onClick={search} disabled={state === 'loading'}>공고 검색</button></div>
       {state === 'loading' && <p role="status">공고를 불러오고 있습니다.</p>}
       {state === 'error' && <div role="alert" className="grid gap-2"><p>공고를 불러오지 못했습니다. 다시 시도해 주세요.</p><button type="button" className={`${styles.secondaryButton} justify-self-start`} onClick={() => setRetry((value) => value + 1)}>다시 시도</button></div>}
-      {state === 'ready' && result && (result.programs.length === 0 ? <p>검색 결과가 없습니다. 다른 검색어를 입력해 주세요.</p> : <><ul className="grid gap-2">{result.programs.map((program) => <li key={JSON.stringify([program.sourceCode, program.id])} className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><div className="grid min-w-0 gap-1"><p className="font-semibold leading-6 text-ink">{program.title}</p><p className="text-xs text-ink-muted">{program.sourceName} · {program.organization}</p>{isOfficialSupportProgramSourceUrl(program.sourceCode, program.sourceUrl) && <a className="w-fit text-sm text-brand-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary" href={program.sourceUrl} target="_blank" rel="noopener noreferrer">공식 공고 보기</a>}</div><button type="button" aria-label={`공고 선택: ${program.title}`} className={`${styles.secondaryButton} self-start sm:shrink-0 sm:self-center`} disabled={!canImport} onClick={() => {
-        if (!canImport) return
-        onPick(program)
-        const parts = [program.summary.trim(), program.targetDescription.trim()].filter(Boolean)
-        const safeUrl = isOfficialSupportProgramSourceUrl(program.sourceCode, program.sourceUrl) ? program.sourceUrl : ''
-        const isLong = program.title.length > 300 || parts.join('\n\n').length > 12000 || program.sourceUrl.length > 2000 || !safeUrl
-        setMessage(isLong ? '일부 내용이 길어 잘리거나 주소가 제외되었습니다. 공식 공고를 확인하고 내용을 보완해 주세요.' : parts.length ? '공고의 제목과 제공된 내용을 가져왔습니다. 원문을 확인하고 필요한 내용을 보완해 주세요.' : '공고 제목을 가져왔습니다. 제공된 내용이 없어 직접 입력해 주세요.')
-        setSelectedUrl(safeUrl)
-        summaryRef.current?.focus()
-        setOpened(false)
-      }}>이 공고 선택</button></li>)}</ul><div className="flex flex-wrap items-center gap-2"><button type="button" className={styles.secondaryButton} disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>이전 결과</button><span>{result.page} / {result.totalPages} 페이지 · 총 {result.total}개</span><button type="button" className={styles.secondaryButton} disabled={page >= result.totalPages} onClick={() => setPage((value) => value + 1)}>다음 결과</button></div></>)}
+      {state === 'ready' && result && (result.programs.length === 0 ? <p>검색 결과가 없습니다. 다른 검색어를 입력해 주세요.</p> : <><ul className="grid gap-2">{result.programs.map((program) => <li key={JSON.stringify([program.sourceCode, program.id])} className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between"><div className="grid min-w-0 gap-1"><p className="font-semibold leading-6 text-ink">{program.title}</p><p className="text-xs text-ink-muted">{program.sourceName} · {program.organization}</p>{isOfficialSupportProgramSourceUrl(program.sourceCode, program.sourceUrl) && <a className="w-fit text-sm text-brand-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary" href={program.sourceUrl} target="_blank" rel="noopener noreferrer">공식 공고 보기</a>}</div><button type="button" aria-label={`공고 선택: ${program.title}`} className={`${styles.secondaryButton} self-start sm:shrink-0 sm:self-center`} disabled={!canImport || importing} onClick={() => void importProgram(program)}>이 공고 선택</button></li>)}</ul><div className="flex flex-wrap items-center gap-2"><button type="button" className={styles.secondaryButton} disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>이전 결과</button><span>{result.page} / {result.totalPages} 페이지 · 총 {result.total}개</span><button type="button" className={styles.secondaryButton} disabled={page >= result.totalPages} onClick={() => setPage((value) => value + 1)}>다음 결과</button></div></>)}
     </div>
   </details>{message && <div className="grid gap-1 text-sm"><p role="status">{message}</p>{selectedUrl && <a className="w-fit text-brand-primary underline" href={selectedUrl} target="_blank" rel="noopener noreferrer">선택한 공고의 공식 원문 보기</a>}</div>}</div>
 }
@@ -95,9 +127,24 @@ function canImportCatalogDocument(content: ManagedDatasetContent, id: string): b
     && doc.chunks.every((chunk) => !chunk.trim()) && !hasQuestionWork(content, id))
 }
 
-function clipInput(value: string, max: number): string {
-  const clipped = value.slice(0, max)
-  return /[\uD800-\uDBFF]$/.test(clipped) ? clipped.slice(0, -1) : clipped
+function splitImportedContent(value: string): string[] | null {
+  const chunks: string[] = []
+  let start = 0
+  while (start < value.length) {
+    let end = Math.min(start + 12000, value.length)
+    if (end < value.length) {
+      const minimum = Math.max(start + 6000, value.length - (4 - chunks.length) * 12000)
+      const boundary = Math.max(value.lastIndexOf('\n', end - 1), value.lastIndexOf(' ', end - 1), value.lastIndexOf('\t', end - 1))
+      if (boundary >= minimum) end = boundary + 1
+    }
+    if (end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1]) && /[\uDC00-\uDFFF]/.test(value[end])) end--
+    const chunk = value.slice(start, end)
+    if (!chunk.trim()) return null
+    chunks.push(chunk)
+    if (chunks.length > 5) return null
+    start = end
+  }
+  return chunks.length ? chunks : null
 }
 
 type PublicationCheck = { label: string; missingLabel: string; step: Step; caseId?: string; targetStep?: Step; complete: boolean }
@@ -210,15 +257,14 @@ export function DatasetManagementPage({ owner, onExpired }: { owner: string; onE
     setPickerResets((values) => ({ ...values, [id]: (values[id] ?? 0) + 1 }))
     documentHeadings.current[id]?.focus()
   }
-  const importCatalog = (id: string, program: CatalogProgram) => {
+  const importCatalog = (id: string, program: CatalogProgram, chunks: string[]) => {
     setDraft((current) => {
       if (!canImportCatalogDocument(current, id)) return current
-      const chunks = [program.summary.trim(), program.targetDescription.trim()].filter(Boolean)
       return { ...current, documents: current.documents.map((doc) => doc.id === id ? {
         ...doc,
-        title: clipInput(program.title, 300),
-        source_url: program.sourceUrl.length <= 2000 && isOfficialSupportProgramSourceUrl(program.sourceCode, program.sourceUrl) ? program.sourceUrl : '',
-        chunks: [clipInput(chunks.join('\n\n'), 12000)],
+        title: program.title,
+        source_url: program.sourceUrl,
+        chunks,
       } : doc) }
     })
     setConfirmPublish(false)
@@ -306,7 +352,7 @@ export function DatasetManagementPage({ owner, onExpired }: { owner: string; onE
                 <p className="font-semibold">공고를 고르고 질문을 만들어 보세요</p>
                 <ol className="list-decimal space-y-2 pl-5">
                   <li>자료 이름을 적고, 아래에서 공고를 검색해 선택하거나 제목과 내용을 직접 입력하세요.</li>
-                  <li>공고 내용에 질문에 답할 때 필요한 부분이 있는지 확인하세요. 검색해서 가져온 내용은 요약·지원 대상뿐이므로, 빠진 내용은 원문을 보고 추가해 주세요.</li>
+                  <li>공고 내용에 질문에 답할 때 필요한 부분이 있는지 확인하세요. 첨부파일은 가져오지 않으므로 필요한 내용은 직접 추가해 주세요.</li>
                   <li>다음 단계에서 질문과 직접 작성한 비교 답변을 입력하세요.</li>
                 </ol>
                 <div className="rounded-lg bg-surface-muted p-3"><p className="font-semibold">예시</p><p>공고 내용: 창업 3년 이내 기업이 신청할 수 있습니다.</p><p>질문: 누가 신청할 수 있나요?</p><p>비교 답변: 창업 3년 이내 기업입니다.</p></div>
@@ -314,7 +360,7 @@ export function DatasetManagementPage({ owner, onExpired }: { owner: string; onE
                 <p>자료를 저장하거나 등록할 때는 AI가 실행되지 않습니다. 나중에 새 AI 평가를 실행하면 입력한 공고 내용이 AI 모델에 전달됩니다.</p>
               </div></details></div><p className="text-sm text-ink-muted">‘필수’ 항목은 평가 자료를 등록할 때 입력해 주세요. 임시 저장에는 자료 이름만 필요합니다.</p><label className={inputLabel}><span>자료 이름 · <span className={requiredBadge}>필수</span></span><input className={field} required maxLength={150} value={draft.title} onChange={(event) => update({ ...draft, title: event.target.value })} placeholder="예: 우리 지역 창업 지원사업 신청 조건" /></label><details className="rounded-lg bg-surface-muted p-3"><summary className="cursor-pointer text-sm font-semibold">자료 설명 추가 · 선택</summary><label className="mt-3 grid gap-1 text-sm">자료 설명<textarea className={field} rows={2} maxLength={2000} value={draft.description} onChange={(event) => update({ ...draft, description: event.target.value })} placeholder="어떤 답변을 확인하려는지 적어 주세요." /></label></details></div>
             <section className="grid gap-3" aria-label="원문 근거 입력">
-              {draft.documents.map((doc, docIndex) => <article key={doc.id} className="grid min-w-0 gap-4 rounded-2xl border border-line bg-white p-4 sm:p-5" aria-label={`공고 ${docIndex + 1} 입력`}><h4 ref={(element) => { documentHeadings.current[doc.id] = element }} tabIndex={-1} className="text-lg font-bold leading-snug text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary">공고 {docIndex + 1}</h4><CatalogPicker key={`${doc.id}-${pickerResets[doc.id] ?? 0}`} index={docIndex + 1} canImport={canImportCatalogDocument(draft, doc.id)} onPick={(program) => importCatalog(doc.id, program)} /><label className={inputLabel}><span>공고 제목 · <span className={requiredBadge}>필수</span></span><input aria-label={`공고 ${docIndex + 1} 제목 · 필수`} className={field} value={doc.title} maxLength={300} onChange={(event) => docChange(doc.id, { title: event.target.value })} /></label>
+              {draft.documents.map((doc, docIndex) => <article key={doc.id} className="grid min-w-0 gap-4 rounded-2xl border border-line bg-white p-4 sm:p-5" aria-label={`공고 ${docIndex + 1} 입력`}><h4 ref={(element) => { documentHeadings.current[doc.id] = element }} tabIndex={-1} className="text-lg font-bold leading-snug text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary">공고 {docIndex + 1}</h4><CatalogPicker key={`${doc.id}-${pickerResets[doc.id] ?? 0}`} index={docIndex + 1} canImport={!locked && !selected?.archived && canImportCatalogDocument(draft, doc.id)} onPick={(program, chunks) => importCatalog(doc.id, program, chunks)} /><label className={inputLabel}><span>공고 제목 · <span className={requiredBadge}>필수</span></span><input aria-label={`공고 ${docIndex + 1} 제목 · 필수`} className={field} value={doc.title} maxLength={300} onChange={(event) => docChange(doc.id, { title: event.target.value })} /></label>
                 {doc.chunks.map((chunk, chunkIndex) => <div key={chunkIndex} className="grid gap-2"><label className={inputLabel}><span>공고 내용 {chunkIndex + 1} · <span className={requiredBadge}>필수</span></span><textarea aria-label={`공고 ${docIndex + 1} 내용 ${chunkIndex + 1} · 필수`} className={field} rows={4} maxLength={12000} value={chunk} onChange={(event) => docChange(doc.id, { chunks: doc.chunks.map((text, index) => index === chunkIndex ? event.target.value : text) })} placeholder="예: 창업 3년 이내 기업을 지원합니다." /></label></div>)}
                 <details className="rounded-lg bg-surface-muted p-3"><summary className="cursor-pointer text-sm font-semibold">공고 주소 추가 · 선택</summary><p className="mt-2 text-xs text-ink-muted">주소만으로 공고 내용이나 첨부파일을 가져오지 않습니다.</p><label className="mt-2 grid gap-1 text-sm">주소<input aria-label={`공고 ${docIndex + 1} 주소`} className={field} type="url" value={doc.source_url} maxLength={2000} onChange={(event) => docChange(doc.id, { source_url: event.target.value })} placeholder="https://공식-공고-주소" /></label></details>
                 {(doc.title !== '' || doc.source_url !== '' || doc.chunks.length > 1 || doc.chunks.some((chunk) => chunk !== '')) && <div className="grid gap-2">

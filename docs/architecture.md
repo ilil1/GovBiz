@@ -588,11 +588,11 @@ Core를 거치지 않은 Catalog·평가·직접 호출도 선택한 조직/프�
 
 ## 검색·상세 조회·원문 근거 질문
 
-공개 대화 해석·검색·근거 질문은 입력 검증 뒤 Controller에서 `SupportProgramRequestAdmissionService`를 거쳐
+공개 대화 해석·검색·근거 질문과 공식 본문 조회는 입력 검증 뒤 Controller에서 `SupportProgramRequestAdmissionService`를 거쳐
 기존 업무 Service를 실행합니다. 하나의 Bean이 접속 주소별/전체 최근 60초 및 동시 작업 한도를 공유하며,
 거절 시 하위 Service를 호출하지 않고 429 또는 503을 반환합니다. 잠금은 입장 판단·카운터 갱신에만 사용하고
 외부 호출 중에는 유지하지 않습니다. `finally`로 정상·예외 종료 모두 동시 슬롯을 반환합니다.
-준비 상태·상세 GET·Health·백그라운드 동기화·비웹 평가는 이 공개 제한과 분리합니다.
+준비 상태·일반 공고 상세 GET·Health·백그라운드 동기화·비웹 평가는 이 공개 제한과 분리합니다.
 전달 헤더를 기본 신뢰하지 않으며 Compose 프록시/NAT 뒤에서는 주소별 한도를 공유할 수 있습니다.
 단일 프로세스 보호이며 분산 한도·전역 비용 상한은 아닙니다. [설정·경계·검증](support-program-request-limits.md)을 참고하세요.
 
@@ -881,6 +881,11 @@ GET /api/v1/support-programs/detail/attachments/download?index=
 빼며, 원문 사이트로 가는 요청(보관 목록이 없을 때·받기)만 검색·AI와 별도인 고정 한도(주소별 분당 30, 전체 600, 동시 8)를 씁니다.
 
 ### 공고별 공식 원문 근거 질문
+
+평가 자료의 공고 선택에는 `GET /api/v1/support-programs/detail/source-document`를 사용합니다.
+제공처 코드와 원본 ID로 현재 공고를 확인한 뒤 아래와 같은 공식 HTML 수집·검증·캐시 경로를 재사용하며,
+`content`에 상세 본문 전체를 반환합니다. 첨부파일은 포함하지 않아 `includesAttachments`는 false입니다.
+지원하지 않는 제공처와 수집 실패는 오류로 반환하며 요약으로 대체하지 않습니다.
 
 기업마당·K-Startup 상세 화면의 **이 공고에 질문하기** 링크는
 `/support-programs/detail/question?sourceCode={sourceCode}&sourceProgramId={id}`로 이동합니다.

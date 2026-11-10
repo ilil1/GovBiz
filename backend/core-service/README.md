@@ -639,6 +639,7 @@ Controller의 `SupportProgramRequestAdmissionService.execute`가 공개 요청 �
 | `POST /api/v1/support-programs/conversation/interpret` | 현재 발화로 조건 변경 초안을 만들며 사용자 확인 전에는 검색하지 않음 |
 | `POST /api/v1/assistant/messages` | 도우미 자유 질문 한 건의 의도 분류·답변. 로그인 필요(401), 세션 계정의 관심 공고함·받은 제안함·기업 상태로 답함. 프런트 `VITE_ASSISTANT_AI_ENABLED=true`일 때만 호출됨 |
 | `GET /api/v1/support-programs/detail` | 제공처 코드와 원본 ID로 현재 공고 상세 조회. `sourceUrl`은 공고 상세, `applicationRoute`는 공식 신청방법·URL·경로 분류, `contact`(담당 부서·제공처 원문 전화번호·문의처 원문, 없으면 null)·`preferenceDescription`·`supervisingInstitutionType`은 공식 API 값을 반환 |
+| `GET /api/v1/support-programs/detail/source-document` | 제공처 코드와 원본 ID로 기업마당·K-Startup 공식 상세 HTML 본문 조회. `content`에는 검증한 본문 전체를 반환하며 `includesAttachments`는 false. 첨부파일은 포함하지 않음. 지원하지 않는 제공처는 422, 수집 실패는 503 |
 | `POST /api/v1/support-programs/detail/answers` | 특정 공고의 공식 원문 근거 질문·답변. 로그인 필요(401), 요금제 하루 질문 횟수를 씀(429 `PLAN_QUOTA_EXCEEDED`) |
 | `GET /api/v1/plan-usage` | 현재 요금제와 기능별 남은 사용량. 로그인 전에는 AI 대화 검색 체험만 |
 | `POST /api/v1/plan-trials` | 출시 전 플러스·프리미엄 14일 무료 체험 시작(요금제마다 한 번) |
@@ -859,7 +860,7 @@ v1을 사용하던 환경은 **새 v2 인덱스 이름으로 전환하고 재색
   Core 검색에서 계정 정보로 조건을 다시 덮어쓰지 않으므로 대화에서 명시적으로 수정·해제한 조건이 유지됩니다.
   대화 계약의 선택 foundedYear와 FOUNDED_YEAR 변경 필드를 지원하며 설립일/연도 변경·해제는 기존 반대 정밀도 값을 지웁니다.
   설립연도는 Ranking Facade가 AI에 그대로 전달하며 특정 월·일로 변환하지 않습니다.
-  GET 검색·POST 검색·대화 조건 해석·원문 근거 질문은 같은 요청 제한을 공유합니다.
+  GET 검색·POST 검색·대화 조건 해석·원문 근거 질문·공식 본문 조회는 같은 요청 제한을 공유합니다.
 - 공개 검색 노출: GET·POST 모두 `Controller → SupportProgramSearchPreviewService → SupportProgramSearchService`로
   검색하며, 응답은 `{query, programs, totalCount, resultToken, expiresAt}`입니다. `totalCount`는 이번에 선정된
   최대 5개의 개수이며 전체 DB 공고 수가 아닙니다. 비로그인은 처음 2개만 받고, 일반 회원을 포함한 로그인 계정은
