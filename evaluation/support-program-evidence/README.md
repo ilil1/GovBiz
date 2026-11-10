@@ -566,6 +566,13 @@ AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
 `execute()` 이후 오류는 이 기록으로 0회 처리하지 않습니다. 기존 CLI `evaluate.py --execute`는
 별도의 수동 실행 경로이며 Ops 접수 명세를 대신하지 않습니다.
 
+Prefect에서는 실행 준비의 `validate-evaluation-inputs`, 새 응답 생성 시 예약 사용을 확인하는
+`claim-evaluation-budget`, 전체 응답 생성의 `generate-evaluation-responses`를 별도 Task로
+확인할 수 있습니다. 저장 응답 재평가는 마지막 두 Task를 실행하지 않습니다. RAG 후처리는
+`validate-rag-results`, `render-rag-comparison`, `publish-rag-scores`로 나뉩니다.
+새 Task들은 자동 재시도와 결과 영속화를 사용하지 않습니다. 예산 예약은 접수 시 Ops에서
+이루어지며 모델 호출별 사용 승인과 정산은 기존과 같이 응답 생성 내부에서 수행합니다.
+
 `EVALUATOR_VERSION`은 평가 코드·입력 모델·식별자 규칙·AI 잠금 의존성의 해시입니다.
 의존성 변경도 새로운 점수 ID로 구분합니다. 저장 응답의 과거 프롬프트는 현재 생성 프롬프트와
 다를 수 있으며 그대로 보존합니다. 후처리 복구는 원본 평가기와 일치할 때만 허용하고,

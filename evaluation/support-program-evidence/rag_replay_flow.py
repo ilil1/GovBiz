@@ -12,7 +12,8 @@ from evidently import Report
 from evidently.metrics import MeanValue, RowCount
 from filelock import FileLock
 from llmops import ROOT, LangfuseSettings, publish_payloads, write_json
-from prefect import flow
+from prefect import flow, task
+from prefect.cache_policies import NO_CACHE
 from prefect.runtime import flow_run
 
 RESULT_SCHEMA = pa.DataFrameSchema(
@@ -153,11 +154,15 @@ def evaluate_rag_capture(
         }
         write_json(output / "manifest.json", manifest)
         try:
-            current = rag_evaluate.evaluate(Path(fixture), Path(capture))
-            if spec["execution_mode"] == "live":
-                current.update(measurementKind="recorded-live-evaluation", liveExecutionPerformed=True)
-            baseline = rag_evaluate.evaluate(Path(fixture), Path(reference))
-            value = rag_replay.comparison(current, baseline, spec)
+            @task(name="validate-rag-results", retries=0, cache_policy=NO_CACHE, persist_result=False)
+            def validate_rag_results():
+                current = rag_evaluate.evaluate(Path(fixture), Path(capture))
+                if spec["execution_mode"] == "live":
+                    current.update(measurementKind="recorded-live-evaluation", liveExecutionPerformed=True)
+                baseline = rag_evaluate.evaluate(Path(fixture), Path(reference))
+                return current, baseline, rag_replay.comparison(current, baseline, spec)
+
+            current, baseline, value = validate_rag_results()
             # 저장 원본이 실패한 사례도 정상적인 재계산 대상이다. 원본 완료 여부는 별도 필드다.
             manifest.update(
                 evaluation_run_id=value["evaluation_run_id"],
@@ -169,7 +174,11 @@ def evaluate_rag_capture(
                 stage="report",
             )
             write_json(output / "manifest.json", manifest)
-            render(value, output)
+            @task(name="render-rag-comparison", retries=0, cache_policy=NO_CACHE, persist_result=False)
+            def render_rag_comparison():
+                render(value, output)
+
+            render_rag_comparison()
             write_json(output / "comparison.json", value)
             manifest.update(
                 stage="publish",
@@ -179,10 +188,12 @@ def evaluate_rag_capture(
                 },
             )
             write_json(output / "manifest.json", manifest)
-            settings = LangfuseSettings.from_environment()
-            manifest["score_ids"] = publish_payloads(
-                score_payloads(value, spec, settings), settings
-            )
+            @task(name="publish-rag-scores", retries=0, cache_policy=NO_CACHE, persist_result=False)
+            def publish_rag_scores():
+                settings = LangfuseSettings.from_environment()
+                return publish_payloads(score_payloads(value, spec, settings), settings)
+
+            manifest["score_ids"] = publish_rag_scores()
             manifest.update(status="completed", stage="completed")
         except BaseException:
             manifest["status"] = "failed"

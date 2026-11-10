@@ -183,7 +183,7 @@ def test_different_captures_share_explicit_cases_and_reject_cross_dataset(monkey
 
 
 @pytest.mark.parametrize("recovery_kwargs", [{}, {"recovery_config": None}], ids=["omitted", "null"])
-def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(monkeypatch, tmp_path, stub_budget, recovery_kwargs):
+def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(monkeypatch, tmp_path, stub_budget, recovery_kwargs, isolated_prefect_tasks):
     from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
     request_id = str(uuid4())
     config = live_config("fixed-context-e01-v1")
@@ -216,6 +216,11 @@ def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(
     with pytest.raises(FileExistsError):
         run_live(*args)
     assert calls == ["model", "compare"]
+    assert isolated_prefect_tasks == [
+        ("validate-evaluation-inputs", 0),
+        ("claim-evaluation-budget", 0),
+        ("generate-evaluation-responses", 0),
+    ]
     stub_budget.claim.assert_called_once()
     stub_budget.close.assert_called_once()
     marker = json.loads((tmp_path / request_id / "request.json").read_text())
@@ -267,7 +272,7 @@ def test_live_rejects_stale_loaded_evaluator_before_budget_or_model(monkeypatch,
     assert preflight["model_api_calls"] == 0
 
 
-def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_path, stub_budget):
+def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_path, stub_budget, isolated_prefect_tasks):
     from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")
@@ -289,6 +294,11 @@ def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_pa
     with pytest.raises(FileExistsError):
         run_live(*args)
     assert calls == [1]
+    assert isolated_prefect_tasks == [
+        ("validate-evaluation-inputs", 0),
+        ("claim-evaluation-budget", 0),
+        ("generate-evaluation-responses", 0),
+    ]
     assert json.loads((tmp_path / request_id / "capture/capture.json").read_text())["modelApiCalls"] == 1
 
 

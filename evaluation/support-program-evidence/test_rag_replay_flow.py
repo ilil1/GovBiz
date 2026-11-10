@@ -65,7 +65,7 @@ def runner(monkeypatch, tmp_path):
 
 
 def test_ops_entrypoint_replays_three_cases_with_real_report_and_distinct_metrics(
-    runner,
+    runner, isolated_prefect_tasks,
 ):
     root, scores = runner
     params = parameters()
@@ -105,6 +105,12 @@ def test_ops_entrypoint_replays_three_cases_with_real_report_and_distinct_metric
     with pytest.raises(FileExistsError):
         ops_flow.evaluate_saved_capture.fn(**params)
     assert len(scores) == 10
+    assert isolated_prefect_tasks == [
+        ("validate-evaluation-inputs", 0),
+        ("validate-rag-results", 0),
+        ("render-rag-comparison", 0),
+        ("publish-rag-scores", 0),
+    ]
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
