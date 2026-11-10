@@ -687,7 +687,7 @@ describe('React LLMOps 운영 화면', () => {
       ? Promise.resolve(json({ run_id: id, prefect_flow_run_id: flowId, offset: 0, next_offset: null, results: [] }))
       : original(path, options))
     open(`/ops/evaluations/${id}`)
-    fireEvent.click(await screen.findByText('보고서와 실행 기록 보기'))
+    fireEvent.click(await screen.findByText('보고서와 Prefect 실행 로그 보기'))
     fireEvent.click(screen.getByRole('button', { name: '기록 불러오기' }))
     await screen.findByText('저장된 기록이 없습니다.')
     expect(screen.queryByRole('link', { name: '기록 불러오기' })).toBeNull()
@@ -832,7 +832,7 @@ describe('React LLMOps 운영 화면', () => {
     expect(help.getAttribute('aria-expanded')).toBe('true')
     expect(within(result).getByText(/필요하다고 정한 근거를 답변에 표시/)).toBeTruthy()
     expect(screen.getByText('AI 사용량 보기').closest('details')).toHaveProperty('open', false)
-    expect(screen.getByText('보고서와 실행 기록 보기').closest('details')).toHaveProperty('open', false)
+    expect(screen.getByText('보고서와 Prefect 실행 로그 보기').closest('details')).toHaveProperty('open', false)
     expect(result.compareDocumentPosition(await screen.findByRole('region', { name: '응답 검토와 기준 지정' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
@@ -847,7 +847,7 @@ describe('React LLMOps 운영 화면', () => {
       return original(path, options)
     })
     open(`/ops/evaluations/${id}`)
-    const titles = ['AI 사용량 보기', '추가 작업과 처리 기록 보기', '이전 결과와 비교하기', '보고서와 실행 기록 보기']
+    const titles = ['AI 사용량 보기', '이전 결과와 비교하기', '보고서와 Prefect 실행 로그 보기']
     const panels = await Promise.all(titles.map(async (title) => {
       const label = await screen.findByText(title)
       const details = label.closest('details')!
@@ -860,15 +860,19 @@ describe('React LLMOps 운영 화면', () => {
     }))
     expect(fetchMock.mock.calls.some(([path]) => path.includes('/logs?'))).toBe(false)
     fireEvent.click(panels[0].summary)
-    expect(panels.map(({ details }) => details.open)).toEqual([true, false, false, false])
-    fireEvent.click(panels[3].summary)
-    expect(panels.map(({ details }) => details.open)).toEqual([true, false, false, true])
+    expect(panels.map(({ details }) => details.open)).toEqual([true, false, false])
+    fireEvent.click(panels[2].summary)
+    expect(panels.map(({ details }) => details.open)).toEqual([true, false, true])
     expect(fetchMock.mock.calls.some(([path]) => path.includes('/logs?'))).toBe(false)
-    expect(within(panels[3].details).getByRole('link', { name: '평가 보고서 보기' })).toHaveProperty('pathname', `/ops/evaluations/${id}/report`)
-    expect(within(panels[3].details).getByRole('link', { name: '상세 점수 보기' }).getAttribute('href')).toBe(completed.langfuse_url)
-    fireEvent.click(within(panels[3].details).getByRole('button', { name: '기록 불러오기' }))
+    expect(within(panels[2].details).getByRole('link', { name: '평가 보고서 보기' })).toHaveProperty('pathname', `/ops/evaluations/${id}/report`)
+    expect(within(panels[2].details).getByRole('link', { name: '상세 점수 보기' }).getAttribute('href')).toBe(completed.langfuse_url)
+    fireEvent.click(within(panels[2].details).getByRole('button', { name: '기록 불러오기' }))
     await waitFor(() => expect(fetchMock.mock.calls.filter(([path]) => path.includes('/logs?'))).toHaveLength(1))
-    expect(await within(panels[3].details).findByText('저장된 기록이 없습니다.')).toBeTruthy()
+    expect(await within(panels[2].details).findByText('저장된 기록이 없습니다.')).toBeTruthy()
+    const overview = screen.getByRole('region', { name: '이번 평가 한눈에 보기' })
+    expect(within(overview).getByRole('button', { name: '저장 답변 다시 평가' })).toBeTruthy()
+    expect(within(overview).getByText('AI를 추가로 호출하지 않고 별도 기록으로 저장해요.')).toBeTruthy()
+    expect(screen.queryByText('추가 작업과 처리 기록 보기')).toBeNull()
     expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
@@ -877,7 +881,58 @@ describe('React LLMOps 운영 화면', () => {
     await screen.findByText('AI 사용량 보기')
     expect(screen.queryByText('추가 작업과 처리 기록 보기')).toBeNull()
     expect(screen.queryByText('이전 결과와 비교하기')).toBeNull()
-    expect(screen.getByText('보고서와 실행 기록 보기')).toBeTruthy()
+    expect(screen.getByText('보고서와 Prefect 실행 로그 보기')).toBeTruthy()
+  })
+
+  it('완료된 평가의 불필요한 차단 안내는 숨기고 처리 단계는 관리자에게 남긴다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((path, options) => path === `/api/v1/ops/evaluations/${id}`
+      ? Promise.resolve(json({ ...completed, postprocessing: {
+        inputs_ready: false, stage: 'completed', can_recover: false,
+        blocked_reason: '실행 종료 상태를 확인한 뒤 실패한 후처리만 복구할 수 있습니다.',
+        can_reassess: false, reassessment_blocked_reason: '평가가 종료된 후 재평가할 수 있습니다.', attempts: [],
+      } })) : original(path, options))
+    open(`/ops/evaluations/${id}`)
+    const overview = await screen.findByRole('region', { name: '이번 평가 한눈에 보기' })
+    expect(within(overview).queryByText('평가가 끝난 뒤 결과를 다시 정리할 수 있어요.')).toBeNull()
+    expect(within(overview).queryByText('평가가 끝난 뒤 다시 평가할 수 있어요.')).toBeNull()
+    expect(within(overview).queryByRole('region', { name: '관련 평가 기록' })).toBeNull()
+    fireEvent.click(within(overview).getByText('관리자용 기술 정보'))
+    expect(within(overview).getByText('마지막 단계: 완료')).toBeTruthy()
+    expect(within(overview).queryByText(/결과 정리: 실행 종료 상태를 확인한 뒤/)).toBeNull()
+    expect(within(overview).queryByText(/다시 평가: 평가가 종료된 후/)).toBeNull()
+  })
+
+  it('완료된 평가에서 관련 이력과 실제 재평가 제한 사유는 보존한다', async () => {
+    const original = fetchMock.getMockImplementation()!
+    const child = '30000000-0000-4000-8000-000000000003'
+    fetchMock.mockImplementation((path, options) => path === `/api/v1/ops/evaluations/${id}`
+      ? Promise.resolve(json({ ...completed, postprocessing: {
+        inputs_ready: true, stage: 'completed', can_recover: false, blocked_reason: '',
+        can_reassess: false, reassessment_blocked_reason: '같은 평가기로 재평가한 기록이 있습니다. 결과 또는 실패 원인을 확인해 주세요.',
+        attempts: [{ id: child, status: 'FAILED', status_label: '실패', recovery_kind: 'reassessment' }],
+      } })) : original(path, options))
+    open(`/ops/evaluations/${id}`)
+    const overview = await screen.findByRole('region', { name: '이번 평가 한눈에 보기' })
+    expect(within(overview).getByRole('link', { name: '1번째 다시 평가 · 실패' }).getAttribute('href')).toBe(`/ops/evaluations/${child}`)
+    fireEvent.click(within(overview).getByText('관리자용 기술 정보'))
+    expect(within(overview).getByText(/같은 평가기로 재평가한 기록이 있습니다/)).toBeTruthy()
+  })
+
+  it.each([
+    { status_stale: true },
+    { error_code: 'PREFECT_STATUS_UNAVAILABLE' },
+    { can_retry: true },
+  ])('완료된 실행의 재평가 버튼은 기존 표시 조건을 유지한다: %j', async (changes) => {
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((path, options) => path === `/api/v1/ops/evaluations/${id}`
+      ? Promise.resolve(json({ ...completed, ...changes, postprocessing: {
+        inputs_ready: true, stage: 'completed', can_recover: false, blocked_reason: '',
+        can_reassess: true, reassessment_blocked_reason: '', attempts: [],
+      } })) : original(path, options))
+    open(`/ops/evaluations/${id}`)
+    const overview = await screen.findByRole('region', { name: '이번 평가 한눈에 보기' })
+    expect(within(overview).getAllByRole('button', { name: '저장 답변 다시 평가' })).toHaveLength(1)
   })
 
   it('완료 안내는 반복하지 않고 저장된 답변의 평가 정보를 구분한다', async () => {
@@ -1498,7 +1553,7 @@ describe('React LLMOps 운영 화면', () => {
 
   it('완료 결과와 인증 보고서·외부 기록 링크를 표시한다', async () => {
     open(`/ops/evaluations/${id}`)
-    fireEvent.click(await screen.findByText('보고서와 실행 기록 보기'))
+    fireEvent.click(await screen.findByText('보고서와 Prefect 실행 로그 보기'))
     expect(screen.getByRole('link', { name: '평가 보고서 보기' })).toHaveProperty('pathname', `/ops/evaluations/${id}/report`)
     expect(screen.getByRole('link', { name: '상세 점수 보기' }).getAttribute('href')).toBe(completed.langfuse_url)
     expect(screen.getByText('6 / 6개')).toBeTruthy()

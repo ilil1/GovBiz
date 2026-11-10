@@ -119,7 +119,7 @@ export function QualityReviewPanel({ runId, data, busy, onBusy, onDirty, onConfl
     </summary>
     <div className="grid gap-4 border-t border-line p-4">
     <p className="text-sm leading-6">이 평가는 정해진 질문만 확인해요. 모든 답변이 정확하다는 뜻은 아닙니다.</p>
-    <details className="text-xs text-ink-muted"><summary className="cursor-pointer font-semibold">판정 기준 자세히 보기</summary><p className="mt-2">정책: {quality.policy?.definition.version ?? '확인 불가'} · 자동 의미 충실도: 미측정 · 의미 판단: 사례별 사람 검토</p></details>
+    <p className="text-sm leading-6 text-ink-muted">답변 내용은 사람이 검토하며, 의미 충실도는 자동으로 측정하지 않았어요.</p>
     {!quality.is_current && quality.history.length > 0 && <p className="text-sm text-amber-800">자료·정책·검토가 변경됐습니다. 이전 판정은 이력으로 보존되며 다시 판정해야 합니다.</p>}
     {qualityStale && current && current.reasons.length > 0 && <p className="text-sm font-semibold text-ink-muted">이전 결과에서 확인된 내용</p>}
     {current && <ul className="list-disc pl-5 text-sm">{current.reasons.map((reason, index) => <li key={`${reason.code}-${reason.case_id}-${index}`}>{reason.case_id ? `${reason.case_id}: ` : ''}{reason.message}</li>)}</ul>}

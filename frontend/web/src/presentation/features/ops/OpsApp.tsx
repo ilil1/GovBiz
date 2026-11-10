@@ -689,15 +689,24 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
             {run.can_retry && <button className={primaryAction} disabled={busy} onClick={() => void retry()}>{busy ? '확인 중…' : '접수 다시 확인'}</button>}
             {!run.status_stale && run.error_code !== 'PREFECT_STATUS_UNAVAILABLE' && run.postprocessing?.can_recover && <button className={primaryAction} disabled={busy} onClick={() => void recover()}>{busy ? '요청 중…' : '결과 정리 다시 시도'}</button>}
             {!run.status_stale && run.error_code !== 'PREFECT_STATUS_UNAVAILABLE' && run.status !== 'COMPLETED' && !run.can_retry && !run.postprocessing?.can_recover && run.postprocessing?.can_reassess && <button className={primaryAction} disabled={busy} onClick={() => void reassess()}>{busy ? '요청 중…' : '저장 답변 다시 평가'}</button>}
+            {run.status === 'COMPLETED' && run.postprocessing?.can_reassess && <button className={secondaryAction} disabled={busy} onClick={() => void reassess()}>{busy ? '재평가 접수 중…' : '저장 답변 다시 평가'}</button>}
             {!run.status_stale && run.error_code !== 'PREFECT_STATUS_UNAVAILABLE' && !run.can_retry && !run.postprocessing?.can_recover && !run.postprocessing?.can_reassess && ['FAILED', 'CRASHED'].includes(run.status) && <Link className={primaryAction} to={`${listPath}/new`}>새 평가 만들기</Link>}
             {(run.status_stale || run.error_code === 'PREFECT_STATUS_UNAVAILABLE' || run.status === 'RESULT_ERROR' || !!error || !!cancelError || (!terminal && !run.prefect_flow_run_id && run.status !== 'CANCELLING' && !run.can_retry)) && <button className={secondaryAction} onClick={() => setRefresh((value) => value + 1)}>상태 다시 확인</button>}
           </div>
           {run.postprocessing?.can_recover && <p className="text-sm text-ink-muted">이미 만든 답변으로 결과를 정리합니다. 추가 AI 호출은 없습니다.</p>}
+          {run.status === 'COMPLETED' && run.postprocessing?.can_reassess && <p className="text-sm text-ink-muted">AI를 추가로 호출하지 않고 별도 기록으로 저장해요.</p>}
           {run.status !== 'COMPLETED' && !run.can_retry && !run.postprocessing?.can_recover && run.postprocessing?.can_reassess && <p className="text-sm text-ink-muted">저장된 답변을 다시 평가해 별도 기록으로 남겨요. AI를 추가로 호출하지 않아요.</p>}
+          {run.status !== 'COMPLETED' && ['FAILED', 'CRASHED', 'CANCELLED', 'RESULT_ERROR'].includes(run.status) && !run.postprocessing?.can_recover && run.postprocessing?.blocked_reason && <p className="text-sm text-ink-muted">{recoveryBlockedMessage(run.postprocessing.blocked_reason)}</p>}
+          {run.status !== 'COMPLETED' && ['FAILED', 'CRASHED', 'CANCELLED', 'RESULT_ERROR'].includes(run.status) && !run.can_retry && !run.postprocessing?.can_recover && !run.postprocessing?.can_reassess && run.postprocessing?.reassessment_blocked_reason && <p className="text-sm text-ink-muted">{reassessmentBlockedMessage(run.postprocessing.reassessment_blocked_reason)}</p>}
           {(run.prefect_flow_run_id || run.status === 'CANCELLING') && !terminal && !error && <p className="text-xs text-ink-muted">상태를 자동으로 확인하고 있어요.</p>}
           {run.error_message && <details className="text-sm"><summary className="cursor-pointer font-semibold">문제 원인과 해결 방법</summary><p className="mt-2 leading-6">{evaluationProblem(run.error_code)}</p><details className="mt-3 text-ink-muted"><summary className="cursor-pointer">관리자용 원본 메시지</summary><p className="mt-2 whitespace-pre-wrap break-words">{run.error_message}</p></details></details>}
           {run.can_cancel && <details className="text-sm"><summary className="cursor-pointer font-semibold">평가 취소하기</summary><p className="my-2 text-ink-muted">앞으로의 AI 호출을 중단해요. 이미 시작된 호출에는 비용이 생길 수 있고, 확인되지 않은 사용량은 예산에 남아요.</p><button className={secondaryAction} disabled={busy} onClick={() => void cancel()}>평가 취소 요청</button></details>}
           {run.cancel_requested_at && <p role="status" className="text-sm text-ink-muted">취소 요청: {run.cancel_requested_by} · {date(run.cancel_requested_at)}{run.status === 'CANCELLING' ? ' · 종료 확인 중' : ''}</p>}
+          {(run.source_run_id || (run.postprocessing?.attempts.length ?? 0) > 0) && <section aria-label="관련 평가 기록" className="grid gap-2 rounded-xl bg-surface-muted p-4 text-sm">
+            <h3 className="font-semibold">관련 평가 기록</h3>
+            {run.source_run_id && <Link className="font-semibold text-brand-primary underline" to={`${listPath}/${run.source_run_id}`}>원본 실행과 실패 기록 보기</Link>}
+            {(run.postprocessing?.attempts.length ?? 0) > 0 && <ul className="space-y-2">{run.postprocessing!.attempts.map((attempt, index) => <li key={attempt.id}><Link className="text-brand-primary underline" to={`${listPath}/${attempt.id}`}>{index + 1}번째 {attempt.recovery_kind === 'reassessment' ? '다시 평가' : '결과 정리'} · {attempt.status_label}</Link></li>)}</ul>}
+          </section>}
           <div className="grid gap-3">
             <details className="group rounded-xl border border-line">
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
@@ -719,6 +728,10 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
                 <span>관리자용 기술 정보</span><span aria-hidden="true" className="text-xs text-brand-primary"><span className="group-open:hidden">펼치기 +</span><span className="hidden group-open:inline">접기 −</span></span>
               </summary>
               <div className="grid min-w-0 gap-5 border-t border-line p-4 text-sm">
+                {run.postprocessing && <section aria-label="처리 정보">
+                  <h3 className="font-semibold">처리 정보</h3>
+                  <div className="mt-2 grid gap-2 text-ink-muted"><p>자료 확인: {run.postprocessing.inputs_ready ? '완료' : '미확인'}</p><p>마지막 단계: {{ unverified: '미확인', report: '보고서 생성', publish: '결과 등록', completed: '완료' }[run.postprocessing.stage]}</p>{run.postprocessing.blocked_reason && !(run.status === 'COMPLETED' && run.postprocessing.blocked_reason === '실행 종료 상태를 확인한 뒤 실패한 후처리만 복구할 수 있습니다.') && <p>결과 정리: {run.postprocessing.blocked_reason}</p>}{run.postprocessing.reassessment_blocked_reason && !(run.status === 'COMPLETED' && run.postprocessing.reassessment_blocked_reason === '평가가 종료된 후 재평가할 수 있습니다.') && <p>다시 평가: {run.postprocessing.reassessment_blocked_reason}</p>}</div>
+                </section>}
                 <section aria-label="처리 시간">
                   <h3 className="font-semibold">처리 시간</h3>
                   <dl className="mt-2 divide-y divide-line">{([
@@ -766,25 +779,10 @@ function EvaluationDetail({ onExpired, onReviewChanged }: { onExpired: () => voi
         {run.status === 'COMPLETED' && run.evaluation_scope === 'source-chunks-retrieval-answer' && run.comparison?.schema_version === 3 && <RagComparisonResult comparison={run.comparison} />}
         {run.status === 'COMPLETED' && run.evaluation_scope === 'fixed-answer-context-only' && <EvaluationReviewPanel runId={run.id} onExpired={onExpired} onChanged={onReviewChanged} />}
         {run.status === 'COMPLETED' && run.evaluation_scope === 'source-chunks-retrieval-answer' && <RagMaterialPanel runId={run.id} onExpired={onExpired} onReviewChanged={onReviewChanged} />}
-        {run.source_run_id && <Link className="text-sm font-semibold text-brand-primary underline" to={`${listPath}/${run.source_run_id}`}>원본 실행과 실패 기록 보기</Link>}
         <EvaluationDetailSection title="AI 사용량 보기"><RunBudgetPanel runId={run.id} onExpired={onExpired} refreshKey={refresh} /></EvaluationDetailSection>
-        {run.postprocessing && <EvaluationDetailSection title="추가 작업과 처리 기록 보기" label="추가 작업">
-          <details className="group/processing rounded-xl border border-line text-sm">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden"><span>관리자용 처리 정보</span><span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open/processing:hidden">펼치기 +</span><span className="hidden group-open/processing:inline">접기 −</span></span></summary>
-            <div className="grid gap-2 border-t border-line p-4 text-ink-muted"><p>자료 확인: {run.postprocessing.inputs_ready ? '완료' : '미확인'}</p><p>마지막 단계: {{ unverified: '미확인', report: '보고서 생성', publish: '결과 등록', completed: '완료' }[run.postprocessing.stage]}</p>{run.postprocessing.blocked_reason && <p>결과 정리: {run.postprocessing.blocked_reason}</p>}{run.postprocessing.reassessment_blocked_reason && <p>다시 평가: {run.postprocessing.reassessment_blocked_reason}</p>}</div>
-          </details>
-          {!run.postprocessing.can_recover && (run.status !== 'COMPLETED' || !run.postprocessing.inputs_ready) && <p className="text-sm text-ink-muted">{recoveryBlockedMessage(run.postprocessing.blocked_reason)}</p>}
-          {run.status === 'COMPLETED' && run.postprocessing.can_reassess && <div className="space-y-2 rounded-xl bg-surface-muted p-4">
-            <h3 className="font-semibold">저장된 답변 다시 평가</h3>
-            <p className="text-sm leading-6">AI를 추가로 호출하지 않고 별도 기록으로 저장해요.</p>
-            <button className={`${secondaryAction} self-start`} disabled={busy} onClick={() => void reassess()}>{busy ? '재평가 접수 중…' : '저장 답변 다시 평가'}</button>
-          </div>}
-          {!run.postprocessing.can_reassess && run.postprocessing.reassessment_blocked_reason && <p className="text-sm text-ink-muted">{reassessmentBlockedMessage(run.postprocessing.reassessment_blocked_reason)}</p>}
-          {run.postprocessing.attempts.length > 0 && <ul className="space-y-2 text-sm">{run.postprocessing.attempts.map((attempt, index) => <li key={attempt.id}><Link className="text-brand-primary underline" to={`${listPath}/${attempt.id}`}>{index + 1}번째 {attempt.recovery_kind === 'reassessment' ? '다시 평가' : '결과 정리'} · {attempt.status_label}</Link></li>)}</ul>}
-        </EvaluationDetailSection>}
 
         {run.status === 'COMPLETED' && run.comparison && !(run.evaluation_scope === 'source-chunks-retrieval-answer' && run.comparison.schema_version === 3) && <EvaluationDetailSection title="이전 결과와 비교하기"><ComparisonResult comparison={run.comparison} /></EvaluationDetailSection>}
-        <EvaluationDetailSection title="보고서와 실행 기록 보기"><div className="flex flex-wrap items-center gap-3">
+        <EvaluationDetailSection title="보고서와 Prefect 실행 로그 보기"><div className="flex flex-wrap items-center gap-3">
           {run.report_url && <a className={primaryAction} href={`${listPath}/${run.id}/report`} target="_blank" rel="noopener noreferrer">평가 보고서 보기</a>}
           {run.trace_links.map((trace) => {
             const target = new URL(trace.url, window.location.origin)

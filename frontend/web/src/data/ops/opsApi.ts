@@ -651,7 +651,7 @@ const evaluationLogsSchema = z.object({
   next_offset: z.number().int().positive().nullable(),
   results: z.array(z.object({
     id: z.uuid(), timestamp: z.iso.datetime({ offset: true }), level: z.number().int(),
-    name: z.string(), message: z.string(),
+    name: z.string(), message: z.string(), task_name: z.string().nullable().optional(),
   })).max(100),
 })
 export type EvaluationLogs = z.infer<typeof evaluationLogsSchema>

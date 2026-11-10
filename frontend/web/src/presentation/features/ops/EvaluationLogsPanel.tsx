@@ -3,6 +3,21 @@ import { getEvaluationLogs, OpsApiError, type EvaluationLogs } from '../../../da
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 
 const levelName = (level: number) => level >= 40 ? '오류' : level >= 30 ? '주의' : '진행'
+const taskNames: Record<string, string> = {
+  'validate-evaluation-inputs': '평가 입력·설정 확인',
+  'claim-evaluation-budget': '예산 사용 권한 확인',
+  'generate-evaluation-responses': '평가 답변 생성',
+  'validate-capture-and-results': '입력·결과 검증',
+  'evidently-comparison': '비교 보고서 생성',
+  'langfuse-scores-and-readback': '점수 등록·확인',
+  'validate-rag-results': '검색 평가 결과 검증',
+  'render-rag-comparison': '검색 평가 비교 보고서 생성',
+  'publish-rag-scores': '검색 평가 점수 등록·확인',
+}
+const taskLabel = (name?: string | null) => {
+  const label = name && Object.entries(taskNames).find(([key]) => name === key || name.startsWith(`${key}-`))?.[1]
+  return label ? `작업: ${label}` : '일반 실행 로그'
+}
 
 export function EvaluationLogsPanel({ runId, flowId, onExpired }: { runId: string; flowId: string; onExpired: () => void }) {
   const [query, setQuery] = useState<{ offset: number } | null>(null)
@@ -24,8 +39,9 @@ export function EvaluationLogsPanel({ runId, flowId, onExpired }: { runId: strin
     return () => controller.abort()
   }, [runId, flowId, query])
 
-  return <section className="grid min-w-0 gap-3" aria-label="실행 기록">
-    <h3 className="text-sm font-semibold">실행 기록</h3>
+  return <section className="grid min-w-0 gap-3" aria-label="Prefect 실행 로그">
+    <h3 className="text-sm font-semibold">Prefect 실행 로그</h3>
+    <p className="text-sm text-ink-muted">평가 실행과 하위 실행의 로그를 함께 보여줘요.</p>
     <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm self-start`} disabled={busy} onClick={() => setQuery({ offset: 0 })}>
       {query ? '기록 새로고침' : '기록 불러오기'}
     </button>
@@ -38,8 +54,10 @@ export function EvaluationLogsPanel({ runId, flowId, onExpired }: { runId: strin
           {data.results.map((log) => <li key={log.id}>
             <details className="group/log min-w-0 rounded-xl border border-line bg-white">
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary [&::-webkit-details-marker]:hidden">
-                <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"><span className={log.level >= 40 ? 'text-red-700' : log.level >= 30 ? 'text-amber-800' : 'text-ink'}>{levelName(log.level)}</span>
+                <span className="grid min-w-0 gap-1 text-left"><span className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className={log.level >= 40 ? 'text-red-700' : log.level >= 30 ? 'text-amber-800' : 'text-ink'}>{levelName(log.level)}</span>
                 <time className="font-normal text-ink-muted" dateTime={log.timestamp}>{new Date(log.timestamp).toLocaleString('ko-KR')}</time></span>
+                <span className="truncate text-xs font-normal text-ink-muted">{taskLabel(log.task_name)}</span>
+                <span className="truncate font-normal">{log.message.split(/\r?\n/, 1)[0] || '내용 없음'}</span></span>
                 <span aria-hidden="true" className="shrink-0 text-xs text-brand-primary"><span className="group-open/log:hidden">펼치기 +</span><span className="hidden group-open/log:inline">접기 −</span></span>
               </summary>
               <div className="min-w-0 border-t border-line p-4"><pre className="whitespace-pre-wrap break-words font-mono [overflow-wrap:anywhere]">{log.message}</pre><p className="mt-2 break-all text-xs text-ink-muted">기록 출처: {log.name}</p></div>

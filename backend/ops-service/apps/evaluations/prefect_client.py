@@ -12,6 +12,20 @@ from django.utils.dateparse import parse_datetime
 from django.utils.timezone import is_aware
 
 LOG_PAGE_SIZE = 100
+MAX_DESCENDANT_FLOWS = 100
+MAX_FLOW_DEPTH = 10
+MAX_PREFECT_RESPONSE_BYTES = 4 * 1024 * 1024
+KNOWN_LOG_TASK_NAMES = (
+    "validate-evaluation-inputs",
+    "claim-evaluation-budget",
+    "generate-evaluation-responses",
+    "validate-capture-and-results",
+    "evidently-comparison",
+    "langfuse-scores-and-readback",
+    "validate-rag-results",
+    "render-rag-comparison",
+    "publish-rag-scores",
+)
 
 
 class PrefectUnavailable(Exception):
@@ -126,27 +140,90 @@ def read_run(flow_run_id):
     return data
 
 
+def descendant_flow_ids(flow_run_id):
+    """Verify each subflow's parent task before including its logs."""
+    known = {flow_run_id}
+    frontier = {flow_run_id}
+    try:
+        for depth in range(MAX_FLOW_DEPTH + 1):
+            rows = request_json(
+                "/flow_runs/filter",
+                {
+                    "flow_runs": {"parent_flow_run_id": {"any_": sorted(map(str, frontier))}},
+                    "limit": MAX_DESCENDANT_FLOWS + 1,
+                },
+                expected_type=list,
+                max_bytes=MAX_PREFECT_RESPONSE_BYTES,
+            )
+            if not rows:
+                return known
+            if depth == MAX_FLOW_DEPTH or len(rows) + len(known) - 1 > MAX_DESCENDANT_FLOWS:
+                raise ValueError("Too many descendant flows")
+            children = {}
+            for row in rows:
+                child_id = UUID(str(row["id"]))
+                task_id = UUID(str(row["parent_task_run_id"]))
+                if child_id in known or child_id in children:
+                    raise ValueError("Duplicate or cyclic flow")
+                children[child_id] = task_id
+            task_ids = set(children.values())
+            tasks = request_json(
+                "/task_runs/filter",
+                {
+                    "task_runs": {
+                        "id": {"any_": sorted(map(str, task_ids))},
+                        "flow_run_id": {"any_": sorted(map(str, frontier))},
+                    },
+                    "limit": MAX_DESCENDANT_FLOWS + 1,
+                },
+                expected_type=list,
+                max_bytes=MAX_PREFECT_RESPONSE_BYTES,
+            )
+            verified = set()
+            for task in tasks:
+                task_id = UUID(str(task["id"]))
+                if task_id not in task_ids or task_id in verified:
+                    raise ValueError("Unexpected parent task")
+                if UUID(str(task["flow_run_id"])) not in frontier:
+                    raise ValueError("Unexpected parent flow")
+                verified.add(task_id)
+            if verified != task_ids:
+                raise ValueError("Missing parent task")
+            frontier = set(children)
+            known.update(frontier)
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise PrefectUnavailable from exc
+
+
 def read_logs(flow_run_id, offset=0):
-    """Read only this flow's logs; an unavailable/missing flow is not an empty log."""
+    """Read this flow and verified subflow logs as one newest-first page."""
     read_run(flow_run_id)
+    flow_ids = descendant_flow_ids(flow_run_id)
     rows = request_json(
         "/logs/filter",
         {
-            "logs": {"flow_run_id": {"any_": [str(flow_run_id)]}},
+            "logs": {"flow_run_id": {"any_": sorted(map(str, flow_ids))}},
             "sort": "TIMESTAMP_DESC",
             "offset": offset,
             "limit": LOG_PAGE_SIZE + 1,
         },
         expected_type=list,
-        max_bytes=4 * 1024 * 1024,
+        max_bytes=MAX_PREFECT_RESPONSE_BYTES,
     )
     try:
         if len(rows) > LOG_PAGE_SIZE + 1:
             raise ValueError("Unexpected log count")
         results = []
+        task_flows = {}
         for row in rows:
-            if UUID(str(row["flow_run_id"])) != flow_run_id:
+            row_flow_id = UUID(str(row["flow_run_id"]))
+            if row_flow_id not in flow_ids:
                 raise ValueError("Unexpected flow log")
+            task_id = UUID(str(row["task_run_id"])) if row.get("task_run_id") is not None else None
+            if task_id is not None:
+                if task_id in task_flows and task_flows[task_id] != row_flow_id:
+                    raise ValueError("Task log belongs to multiple flows")
+                task_flows[task_id] = row_flow_id
             timestamp = parse_datetime(row["timestamp"])
             if (
                 timestamp is None
@@ -157,18 +234,57 @@ def read_logs(flow_run_id, offset=0):
             ):
                 raise ValueError("Invalid log response")
             results.append(
-                {
-                    "id": str(UUID(str(row["id"]))),
-                    "timestamp": timestamp.isoformat(),
-                    "level": row["level"],
-                    "name": row["name"],
-                    "message": row["message"],
-                }
+                (
+                    {
+                        "id": str(UUID(str(row["id"]))),
+                        "timestamp": timestamp.isoformat(),
+                        "level": row["level"],
+                        "name": row["name"],
+                        "message": row["message"],
+                        "task_name": None,
+                    },
+                    task_id,
+                )
             )
+        task_names = {}
+        if task_flows:
+            tasks = request_json(
+                "/task_runs/filter",
+                {
+                    "task_runs": {
+                        "id": {"any_": sorted(map(str, task_flows))},
+                        "flow_run_id": {"any_": sorted(map(str, flow_ids))},
+                    },
+                    "limit": LOG_PAGE_SIZE + 1,
+                },
+                expected_type=list,
+                max_bytes=MAX_PREFECT_RESPONSE_BYTES,
+            )
+            for task in tasks:
+                task_id = UUID(str(task["id"]))
+                if task_id not in task_flows or task_id in task_names:
+                    raise ValueError("Unexpected log task")
+                if UUID(str(task["flow_run_id"])) != task_flows[task_id]:
+                    raise ValueError("Log task belongs to another flow")
+                if not isinstance(task["name"], str) or not task["name"].strip():
+                    raise ValueError("Invalid log task name")
+                task_names[task_id] = next(
+                    (
+                        name
+                        for name in KNOWN_LOG_TASK_NAMES
+                        if task["name"] == name or task["name"].startswith(f"{name}-")
+                    ),
+                    None,
+                )
+            if set(task_names) != set(task_flows):
+                raise ValueError("Missing log task")
+        for result, task_id in results:
+            if task_id is not None:
+                result["task_name"] = task_names[task_id]
         return {
             "offset": offset,
             "next_offset": offset + LOG_PAGE_SIZE if len(results) > LOG_PAGE_SIZE else None,
-            "results": results[:LOG_PAGE_SIZE],
+            "results": [result for result, _ in results[:LOG_PAGE_SIZE]],
         }
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise PrefectUnavailable from exc

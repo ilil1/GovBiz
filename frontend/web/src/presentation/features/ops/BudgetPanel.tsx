@@ -16,30 +16,21 @@ const message = (error: unknown) => error instanceof Error ? error.message : '�
 function Breakdown({ value }: { value: BudgetBreakdown }) {
   const boundedCalls = value.unbounded_input_calls === 0
   const boundedReservations = value.unbounded_input_reservations === 0
-  return <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-    <caption className="sr-only">예산 할당량 구성</caption>
-    <thead className="border-b border-line text-xs text-ink-muted"><tr><th className="py-3">구분</th><th>호출 수</th><th>출력 토큰</th><th>입력 토큰</th></tr></thead>
-    <tbody>{[
-      ['확정 사용량', count(value.settled_calls), count(value.confirmed_output_tokens), inputCount(value.confirmed_input_tokens)],
-      ...(value.legacy_calls ? [['과거 저장 응답 반영', count(value.legacy_calls), count(value.legacy_output_tokens!), inputCount(value.legacy_input_tokens)]] : []),
-      ['승인 후 사용량 미확인', count(value.unknown_calls), count(value.unknown_output_tokens), inputCount(boundedCalls ? value.unknown_input_tokens : null)],
-      ['아직 승인하지 않은 예약', count(value.unapproved_calls), count(value.unapproved_output_tokens), inputCount(boundedReservations ? value.unapproved_input_tokens : null)],
-      ['종료 전 반환 대기', '—', count(value.pending_release_output_tokens), inputCount(boundedReservations ? value.pending_release_input_tokens : null)],
-      ['현재 할당량 합계', count(value.allocated_calls), count(value.allocated_output_tokens), inputCount(boundedCalls && boundedReservations ? value.allocated_input_tokens : null)],
-    ].map(([label, calls, output, input]) => <tr key={label} className="border-b border-line last:border-0"><th scope="row" className="py-3 font-medium">{label}</th><td>{calls}</td><td>{output}</td><td>{input}</td></tr>)}</tbody>
-  </table><p className="mt-3 text-xs text-ink-muted">입력 상한 기록이 없는 과거 예약의 미확인 몫은 0으로 환산하지 않습니다.</p>
-    <details className="mt-3 text-sm">
-      <summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">장부 항목은 무슨 뜻인가요?</summary>
-      <dl className="grid gap-3 rounded-xl bg-surface-muted p-4 leading-6 sm:grid-cols-2">{[
-        ['확정 사용량', '응답 기록 등으로 사용량을 확인하고 정산한 몫입니다. 실행이 끝나도 누적 장부에 남으며, 제공자의 청구 금액 확정과는 구분합니다.'],
-        ['과거 저장 응답 반영', '예약 기록이 없던 과거 실행의 저장 응답을 검토해 추가한 사용량입니다. 제공자의 청구 확인이나 답변 품질 승인을 뜻하지 않습니다.'],
-        ['승인 후 사용량 미확인', '호출은 승인했지만 전송 여부나 사용량을 확정하지 못한 몫입니다. 무료로 간주하지 않고 최대 예약량을 유지합니다.'],
-        ['아직 승인하지 않은 예약', '접수된 평가를 위해 확보했지만 개별 모델 호출의 전송 승인을 아직 받지 않은 몫입니다. 사람의 답변 검토 승인을 기다린다는 뜻이 아닙니다.'],
-        ['종료 전 반환 대기', '정산 후 남은 토큰 차액 중 아직 예약을 닫지 않아 돌려놓지 않은 몫입니다. 실행 종료 확인과 예약 정리가 필요합니다.'],
-        ['현재 할당량 합계', '확정·과거 반영 사용량과 미확인·미승인·반환 대기 몫을 합한 양입니다. 잔여 한도를 계산할 때 전체 한도에서 차감합니다.'],
-      ].map(([label, explanation]) => <div key={label}><dt className="font-semibold">{label}</dt><dd className="mt-1 text-ink-muted">{explanation}</dd></div>)}</dl>
-    </details>
-  </div>
+  const rows = [
+    { label: '확인된 사용량', help: '응답 기록 등에서 확인한 사용량이에요. 실제 청구 금액과는 다를 수 있어요.', calls: value.settled_calls, input: value.confirmed_input_tokens, output: value.confirmed_output_tokens },
+    ...(value.legacy_calls ? [{ label: '이전 답변에서 확인한 사용량', help: '과거에 저장된 답변에서 확인해 한도에 반영한 양이에요. 제공자의 청구 확인은 아니에요.', calls: value.legacy_calls, input: value.legacy_input_tokens, output: value.legacy_output_tokens! }] : []),
+    { label: '사용량이 확인되지 않은 요청', help: '요청은 승인됐지만 전송 여부나 사용량을 확인하지 못해 최대 한도를 남겨뒀어요.', calls: value.unknown_calls, input: boundedCalls ? value.unknown_input_tokens : null, output: value.unknown_output_tokens },
+    { label: '아직 요청하지 않아 확보한 양', help: '평가를 위해 미리 확보했지만 개별 AI 요청은 아직 승인되지 않은 양이에요.', calls: value.unapproved_calls, input: boundedReservations ? value.unapproved_input_tokens : null, output: value.unapproved_output_tokens },
+    { label: '정리 후 돌려놓을 양', help: '사용량 확인 후 남은 토큰으로, 예약이 정리될 때까지 한도에 포함돼요.', calls: null, input: boundedReservations ? value.pending_release_input_tokens : null, output: value.pending_release_output_tokens },
+    { label: '한도에 반영된 전체', help: '확인된 사용량과 아직 정리되지 않은 양의 합이에요. 실제 사용량이나 남은 한도는 아니에요.', calls: value.allocated_calls, input: boundedCalls && boundedReservations ? value.allocated_input_tokens : null, output: value.allocated_output_tokens },
+  ]
+  return <div className="grid gap-2">{rows.map((row) => <section key={row.label} aria-label={row.label} className="rounded-xl bg-surface-muted p-4 text-sm">
+    <h4 className="font-semibold">{row.label}</h4><p className="mt-1 leading-6 text-ink-muted">{row.help}</p>
+    <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">{[
+      ...(row.calls === null ? [] : [['횟수', `${count(row.calls)}회`]]),
+      ['입력', row.input == null ? '확인할 수 없음' : inputCount(row.input)], ['출력', `${count(row.output)}토큰`],
+    ].map(([label, amount]) => <div key={label} className="min-w-0"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 font-semibold [overflow-wrap:anywhere]">{amount}</dd></div>)}</dl>
+  </section>)}</div>
 }
 
 function OverviewBreakdown({ value }: { value: BudgetBreakdown }) {
@@ -289,9 +280,10 @@ export function RunBudgetPanel({ runId, onExpired, refreshKey }: { runId: string
           {(data.reservation.breakdown.legacy_calls ?? 0) > 0 && <p className="text-xs text-ink-muted">이전 기록에서 반영한 호출: {count(data.reservation.breakdown.legacy_calls ?? 0)}회</p>}
         </div>
         {data.reservation.breakdown.unknown_calls > 0 && <p className="text-sm text-amber-800">사용량을 확인하지 못한 호출이 {count(data.reservation.breakdown.unknown_calls)}회 있어요. 확인될 때까지 해당 예산은 유지됩니다.</p>}
-        <details className={detailClass}><summary className={summaryClass}><span>사용량과 남겨둔 예산</span>{disclosureState}</summary><div className="grid gap-3 border-t border-line p-4">
-          <p className="mt-3 text-sm">예약 상태: {data.reservation.closed_at ? `닫힘 · ${date(data.reservation.closed_at)}` : '열림'} · 실행의 완료·취소 상태와 별도로 관리합니다.</p>
-          <p className="text-sm">실행 내 입력 상한 최댓값: {inputCount(data.reservation.max_input_tokens)}</p>
+        <details className={detailClass}><summary className={summaryClass}><span>사용량과 확보해 둔 한도</span>{disclosureState}</summary><div className="grid gap-3 border-t border-line p-4">
+          <p className="text-sm leading-6">이 평가는 AI 요청 횟수와 토큰을 한도로 관리해요. 입력은 AI에 보내는 글의 양, 출력은 답변 생성에 사용한 양이에요. 금액이나 실제 청구액은 아니에요.</p>
+          <p className="text-sm">예약 상태: {data.reservation.closed_at ? `정리됨 · ${date(data.reservation.closed_at)}` : '정리 전'} · 평가의 완료·취소 상태와는 별개예요.</p>
+          <p className="text-sm">한 번의 요청에 적용할 수 있는 입력 상한 중 최댓값: {inputCount(data.reservation.max_input_tokens)}</p>
           <Breakdown value={data.reservation.breakdown} />
           {data.reservation.breakdown.unknown_calls > 0 && <p className="text-sm text-amber-800">미확인 호출은 전송·사용량을 확정하지 못한 상태입니다. 예약이 닫혀도 해당 호출의 최대 출력 몫은 유지됩니다. 입력 상한이 기록된 호출은 입력 예약도 유지됩니다.</p>}
         </div></details>
@@ -321,13 +313,27 @@ export function RunBudgetPanel({ runId, onExpired, refreshKey }: { runId: string
           </article>)}
           <p className="text-xs text-ink-muted">변경자는 CLI 운영자가 입력한 값입니다. 실행기가 보관한 사용량이며 제공자의 청구 확정이나 실제 결제 환불을 뜻하지 않습니다.</p>
         </section></details>}
-        <details className={detailClass}><summary className={summaryClass}><span>호출별 사용량 · {data.calls.length}건</span>{disclosureState}</summary>
-          <ul className="space-y-3 border-t border-line p-4 text-sm">{data.calls.map((call) => <li key={call.sequence}>
-            <p>승인 상한: 입력 {inputCount(call.max_input_tokens)} / 출력 {inputCount(call.max_output_tokens)}</p>
-            <p>생성 전 입력 계산: {inputCount(call.counted_input_tokens)}</p>
-            <p>{call.operation_id ? `${call.operation_id.startsWith('document_embedding:') ? '문서 임베딩' : call.operation_id.startsWith('query_embedding:') ? '질문 임베딩' : '답변 작업'} · ${call.operation_id}` : '작업 식별 기록 없음 · 과거 승인'}</p>
-            호출 {call.sequence + 1} · 승인 {date(call.authorized_at)} · {call.settled_at ? `정산 ${date(call.settled_at)} · 입력 ${count(call.input_tokens!)} / 출력 ${count(call.output_tokens!)}토큰` : data.corrections?.some((record) => record.sequence === call.sequence) ? '원본 정산 미수신 · 사용량 보정 이력 참조' : '사용량 미확인'}
-          </li>)}</ul>
+        <details className={detailClass}><summary className={summaryClass}><span>AI 요청별 사용량 · {data.calls.length}건</span>{disclosureState}</summary>
+          <div className="space-y-3 border-t border-line p-4 text-sm">
+            <p className="leading-6 text-ink-muted">승인된 각 AI 요청과 확인된 사용량이에요. 일부 요청은 전송 여부나 사용량이 확인되지 않았으며, 확인하지 못한 양은 0으로 계산하지 않아요.</p>
+            {data.calls.length === 0 ? <p>아직 승인된 요청 기록이 없어요.</p> : <ul className="space-y-3">{data.calls.map((call) => {
+              const correction = data.corrections?.find((record) => record.sequence === call.sequence)
+              const input = call.settled_at ? call.input_tokens : correction?.input_tokens
+              const output = call.settled_at ? call.output_tokens : correction?.output_tokens
+              const task = call.operation_id?.startsWith('document_embedding:') ? '문서 검색 준비' : call.operation_id?.startsWith('query_embedding:') ? '질문 검색 준비' : call.operation_id?.startsWith('answer:') ? '답변 생성' : '작업 종류 기록 없음'
+              return <li key={call.sequence} className="rounded-xl border border-line p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">요청 {call.sequence + 1} · {task}</h4><span className={input == null || output == null ? 'text-amber-800' : 'text-ink-muted'}>{call.settled_at ? '사용량 확인됨' : correction ? '보정 기록으로 확인됨' : '사용량 미확인'}</span></div>
+                <dl className="mt-3 grid grid-cols-2 gap-3">{[['입력', input], ['출력', output]].map(([label, amount]) => <div key={label}><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-1 font-semibold">{typeof amount === 'number' ? `${count(amount)}토큰` : '확인할 수 없음'}</dd></div>)}</dl>
+                {correction && !call.settled_at && <p className="mt-2 text-xs text-ink-muted">원본 정산은 받지 못했으며 확인된 보정 기록을 표시해요. 자세한 내용은 사용량 수정 기록에서 확인하세요.</p>}
+                <details className="mt-3 border-t border-line pt-2"><summary className="min-h-11 cursor-pointer py-3 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">요청 {call.sequence + 1} 상세 정보</summary><div className="grid gap-1 leading-6 text-ink-muted">
+                  <p>요청 승인 시각: {date(call.authorized_at)}{call.settled_at ? ` · 사용량 확인 시각: ${date(call.settled_at)}` : ''}</p>
+                  <p>한 번의 요청에 허용한 최대량: 입력 {inputCount(call.max_input_tokens)} / 출력 {inputCount(call.max_output_tokens)}</p>
+                  <p>전송 전 계산한 입력: {inputCount(call.counted_input_tokens)} · 확인된 사용량과 다를 수 있어요.</p>
+                  <p>{call.operation_id ? `작업 식별자: ${call.operation_id}` : '작업 식별 기록 없음 · 과거 승인'}</p>
+                </div></details>
+              </li>
+            })}</ul>}
+          </div>
         </details>
       </>}
     </>}
