@@ -552,6 +552,7 @@ const qualitySchema = z.object({
 })
 const reviewSchema = z.object({
   quality: qualitySchema.nullable().default(null), can_promote: z.boolean().default(false),
+  fixture_review_impact: z.object({ has_active_baseline: z.boolean(), has_quality_assessments: z.boolean() }).nullable().optional(),
   is_baseline: z.boolean(), material_error: z.string(), baseline_version: z.number().int().nonnegative(),
   review_version: z.number().int().nonnegative(), can_approve: z.boolean(), approval_current: z.boolean(), baseline_requires_review: z.boolean(),
   rubric: z.object({ version: z.string(), criteria: z.array(z.string()) }),

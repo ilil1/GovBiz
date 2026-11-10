@@ -195,11 +195,23 @@ def assess(run, user, input_sha256):
         return record
 
 
+def normalize_fixture_review_comment(decision, comment):
+    if decision not in {"APPROVED", "CHANGES_REQUESTED", "DEFERRED"}:
+        raise ValueError("Invalid fixture review decision")
+    if not isinstance(comment, str) or len(comment.strip()) > 3000:
+        raise ValueError("Invalid fixture review comment")
+    comment = comment.strip()
+    if decision != "APPROVED" and not comment:
+        raise ValueError("A reason is required for this decision")
+    return comment
+
+
 def save_fixture_review(
     run, user, decision, comment, fixture_sha256, case_ids, rubric_version, fixture_version
 ):
     from .reviews import review_material
 
+    comment = normalize_fixture_review_comment(decision, comment)
     material = review_material(run)
     if (
         fixture_sha256 != material["fixture_sha256"]
@@ -237,5 +249,8 @@ def save_fixture_review(
             reviewed_by=user,
         )
         if baseline.review_id:
-            change_baseline(baseline, None, user, f"평가 기준 자료 검토 변경: {comment}")
+            reason = (
+                f"평가 기준 자료 검토 변경: {comment}" if comment else "평가 기준 자료 검토 변경"
+            )
+            change_baseline(baseline, None, user, reason)
         return review

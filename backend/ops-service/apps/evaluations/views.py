@@ -20,7 +20,7 @@ from .budget import BudgetUnavailable
 from .catalog import DATASETS, get_dataset, public_datasets, selection
 from .models import EvaluationRun
 from .prefect_client import PrefectUnavailable, read_logs
-from .quality import assess, save_fixture_review
+from .quality import assess, normalize_fixture_review_comment, save_fixture_review
 from .rag_material import read_material as read_rag_material
 from .rag_quality import assess as assess_rag_quality
 from .rag_reference_reviews import save_reference_review as save_rag_reference_review
@@ -528,11 +528,18 @@ class ReviewRequestSerializer(serializers.Serializer):
 
 class FixtureReviewSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=["APPROVED", "CHANGES_REQUESTED", "DEFERRED"])
-    comment = serializers.CharField(max_length=3000, allow_blank=False)
+    comment = serializers.CharField(max_length=3000, allow_blank=True, required=False, default="")
     fixture_sha256 = serializers.RegexField(r"^[a-f0-9]{64}$")
     case_ids = serializers.ListField(child=serializers.CharField(max_length=100), allow_empty=False)
     rubric_version = serializers.CharField(max_length=40)
     fixture_version = serializers.IntegerField(min_value=0)
+
+    def validate(self, attrs):
+        try:
+            attrs["comment"] = normalize_fixture_review_comment(attrs["decision"], attrs["comment"])
+        except ValueError as exc:
+            raise serializers.ValidationError({"comment": "판단 이유를 입력해 주세요."}) from exc
+        return attrs
 
 
 class QualityRequestSerializer(serializers.Serializer):

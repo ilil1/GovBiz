@@ -15,6 +15,8 @@ export function QualityReviewPanel({ runId, data, busy, onBusy, onDirty, onConfl
   const criterionId = useId()
   const [decision, setDecision] = useState<'APPROVED' | 'CHANGES_REQUESTED' | 'DEFERRED' | ''>('')
   const [comment, setComment] = useState('')
+  const commentHelpId = useId()
+  const reasonRequired = decision === 'CHANGES_REQUESTED' || decision === 'DEFERRED'
   const [confirmed, setConfirmed] = useState(false)
   const material = data.material
   const quality = data.quality
@@ -46,9 +48,21 @@ export function QualityReviewPanel({ runId, data, busy, onBusy, onDirty, onConfl
   const qualityStatus = qualityStale ? '다시 확인 필요' : labels[quality.status]
   const fixtureCases = data.material?.cases ?? []
   const fixtureCase = fixtureCases[fixtureCaseIndex] ?? fixtureCases[0]
+  const missingInputs = [
+    ...(!decision ? ['확인 결과를 선택해 주세요.'] : []),
+    ...(reasonRequired && !comment.trim() ? ['판단 이유를 적어 주세요.'] : []),
+    ...(!confirmed ? ['모든 질문 확인란을 선택해 주세요.'] : []),
+  ]
+  const impact = data.fixture_review_impact
+  const impacts = impact == null
+    ? ['기존 비교 기준이 있다면 해제되고, 이전 최종 결과가 있다면 다시 확인해야 해요.']
+    : [
+      ...(impact.has_active_baseline ? ['기존 비교 기준이 해제돼요.'] : []),
+      ...(impact.has_quality_assessments ? ['이전 최종 결과를 다시 확인해야 해요.'] : []),
+    ]
   const save = async (fixture: boolean) => {
     if (active.current || busy || !data.material || !quality.input_sha256) return
-    if (fixture && (!decision || !comment.trim() || !confirmed)) return
+    if (fixture && (!decision || (reasonRequired && !comment.trim()) || !confirmed)) return
     if (!fixture && dirty) return
     active.current = true; onBusy(true); setError(''); setNotice('')
     try {
@@ -102,12 +116,13 @@ export function QualityReviewPanel({ runId, data, busy, onBusy, onDirty, onConfl
         </section>}
         {fixtureCase && <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm justify-self-start`} disabled={busy} onClick={() => onNavigate(`case-review-${fixtureCase.case_id}`)}>이 질문의 답변 보기</button>}
         <div className="grid gap-2"><EvaluationHelp label="평가 기준" title={<label htmlFor={criterionId}>평가 기준이 맞나요?</label>}><p>질문에 필요한 답변과 근거가 공고 내용과 맞는지 확인하는 기준이에요. 답변 자체의 검토와는 별도로 저장합니다.</p></EvaluationHelp><select id={criterionId} className="rounded-xl border border-line p-3" value={decision} disabled={busy} onChange={(event) => setDecision(event.target.value as typeof decision)}><option value="">선택해 주세요</option><option value="APPROVED">문제없어요 (승인)</option><option value="CHANGES_REQUESTED">고쳐야 해요 (수정 필요)</option><option value="DEFERRED">판단하기 어려워요 (보류)</option></select></div>
-        <label className="grid gap-2">기준을 확인한 이유<textarea className="rounded-xl border border-line p-3" rows={2} value={comment} maxLength={3000} disabled={busy} onChange={(event) => setComment(event.target.value)} /></label>
+        <label className="grid gap-2">기준을 확인한 이유<textarea aria-describedby={commentHelpId} required={reasonRequired} className="rounded-xl border border-line p-3" rows={2} value={comment} maxLength={3000} disabled={busy} onChange={(event) => setComment(event.target.value)} /></label>
+        <p id={commentHelpId} className="text-xs text-ink-muted">승인할 때는 선택 사항이에요. 수정이 필요하거나 판단을 보류할 때는 이유를 적어 주세요.</p>
         <label className="flex items-start gap-2"><input type="checkbox" checked={confirmed} disabled={busy} onChange={(event) => setConfirmed(event.target.checked)} />모든 질문의 공고 내용과 평가 기준을 확인했어요.</label>
-        <button className={`${styles.secondaryButton} min-h-11 !text-sm justify-self-start`} disabled={busy || !data.material || !quality.input_sha256 || !confirmed || !decision || !comment.trim()} onClick={() => void save(true)}>평가 기준 확인 저장</button>
-        {(!decision || !comment.trim() || !confirmed) && <p className="text-xs text-ink-muted">확인 결과와 이유를 적고 확인란을 선택해 주세요.</p>}
-        <p className="text-xs text-ink-muted">검토를 변경하면 이 자료의 기존 비교 기준이 해제됩니다. 최종 결과도 다시 확인해야 합니다.</p>
-        {quality.fixture_reviews.map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><p>{fixtureLabels[item.decision]} · {item.reviewed_by} · {new Date(item.created_at).toLocaleString('ko-KR')}</p><p className="whitespace-pre-wrap">{item.comment}</p></div>)}
+        <button className={`${styles.secondaryButton} min-h-11 !text-sm justify-self-start`} disabled={busy || !data.material || !quality.input_sha256 || !confirmed || !decision || (reasonRequired && !comment.trim())} onClick={() => void save(true)}>평가 기준 확인 저장</button>
+        {missingInputs.length > 0 && <p className="text-xs text-ink-muted">{missingInputs.join(' ')}</p>}
+        {impacts.length > 0 && <p className="text-xs text-ink-muted">저장하면 {impacts.join(' ')}</p>}
+        {quality.fixture_reviews.map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><p>{fixtureLabels[item.decision]} · {item.reviewed_by} · {new Date(item.created_at).toLocaleString('ko-KR')}</p><p className="whitespace-pre-wrap">{item.comment.trim() || '이유 입력 없음'}</p></div>)}
       </div>
     </details>
     {notice && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-brand-primary">{notice}</p>}

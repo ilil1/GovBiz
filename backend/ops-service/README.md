@@ -1208,8 +1208,10 @@ Migration `0008_case_reviews`는 사례별 이력과 실행의 검토 버전, �
 
 - `GET .../{id}/review`의 `quality`: 현재 유효 상태·정책, `input_sha256`, 자료 검토 버전·이력과
   판정 이력. `can_promote`는 최신 전체 승인과 유효한 품질 합격이 모두 있는지 나타냅니다.
+  `fixture_review_impact`는 조회 시점에 같은 자료의 활성 비교 기준과 기존 품질 판정이 있는지 알려줍니다.
 - `POST .../{id}/fixture-review`: `decision` (`APPROVED` / `CHANGES_REQUESTED` / `DEFERRED`),
   `comment`, `fixture_sha256`, 순서가 있는 `case_ids`, `rubric_version`, `fixture_version`.
+  `APPROVED`의 의견은 생략하거나 비워 둘 수 있고, 수정 필요·판단 보류는 공백이 아닌 이유가 필요합니다.
   기준 자료의 기대 상태·인용·필수 사실·금지 주장을 사람이 검토했다는 기록입니다.
   후보 답변 검토와 구별하고 원본 `ai-authored` 출처를 유지합니다.
 - `POST .../{id}/quality`: 화면에서 받은 `input_sha256`. Django가 자료·최신 검토를 다시 확인하고

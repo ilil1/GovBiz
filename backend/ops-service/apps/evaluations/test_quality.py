@@ -10,12 +10,13 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import SimpleTestCase, TestCase, TransactionTestCase
 
 from .execution_spec import digest
-from .models import EvaluationBaseline, FixtureReview, QualityAssessment
+from .models import EvaluationBaseline, EvaluationBaselineChange, FixtureReview, QualityAssessment
 from .quality import assess, quality_pass, save_fixture_review
 from .quality_policy import judge
 from .reviews import promote_baseline, review_material
 from .services import RequestConflict
 from .test_reviews import ReviewFixture
+from .views import FixtureReviewSerializer
 
 
 class QualityPolicyTests(SimpleTestCase):
@@ -44,6 +45,40 @@ class QualityPolicyTests(SimpleTestCase):
         self.assertEqual(judge({"fixture_approved": True, "cases": cases})[0], "NEEDS_REVIEW")
         cases[-1]["citation_recall"] = 0
         self.assertEqual(judge({"fixture_approved": True, "cases": cases})[0], "FAIL")
+
+
+class FixtureReviewRequestTests(SimpleTestCase):
+    def test_reason_is_optional_only_for_approval(self):
+        payload = {
+            "fixture_sha256": "a" * 64,
+            "case_ids": ["TC01"],
+            "rubric_version": "fixture-reference-review-v1",
+            "fixture_version": 0,
+        }
+        for value in (None, "", "   "):
+            data = {**payload, "decision": "APPROVED"}
+            if value is not None:
+                data["comment"] = value
+            serializer = FixtureReviewSerializer(data=data)
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            self.assertEqual(serializer.validated_data["comment"], "")
+        for decision in ("CHANGES_REQUESTED", "DEFERRED"):
+            for value in (None, "", "   "):
+                data = {**payload, "decision": decision}
+                if value is not None:
+                    data["comment"] = value
+                serializer = FixtureReviewSerializer(data=data)
+                self.assertFalse(serializer.is_valid())
+                self.assertIn("comment", serializer.errors)
+            serializer = FixtureReviewSerializer(
+                data={**payload, "decision": decision, "comment": "확인 필요"}
+            )
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_direct_service_call_rejects_blank_reason_before_accessing_results(self):
+        for decision in ("CHANGES_REQUESTED", "DEFERRED"):
+            with self.subTest(decision=decision), self.assertRaises(ValueError):
+                save_fixture_review(None, None, decision, "  ", "a" * 64, [], "v1", 0)
 
 
 class QualityTests(ReviewFixture, TestCase):
@@ -158,13 +193,12 @@ class QualityTests(ReviewFixture, TestCase):
             409,
         )
 
-    def test_stale_hash_unknown_cases_and_empty_reason_are_rejected(self):
+    def test_stale_hash_and_unknown_cases_are_rejected(self):
         payload = self.fixture_payload()
         for changes, status in [
             ({"fixture_sha256": "0" * 64}, 409),
             ({"case_ids": ["unknown"]}, 409),
             ({"rubric_version": "future"}, 409),
-            ({"comment": " "}, 400),
         ]:
             self.assertEqual(
                 self.client.post(
@@ -181,6 +215,21 @@ class QualityTests(ReviewFixture, TestCase):
             409,
         )
         self.assertFalse(QualityAssessment.objects.exists())
+
+    def test_empty_approval_preserves_review_and_baseline_change_history(self):
+        self.promote()
+        payload = self.fixture_payload()
+        del payload["comment"]
+        first = self.client.post(self.url + "/fixture-review", payload, format="json")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["quality"]["fixture_reviews"][0]["comment"], "")
+        self.assertIsNone(EvaluationBaseline.objects.get(pk=self.dataset).review_id)
+        self.assertEqual(
+            EvaluationBaselineChange.objects.latest("version").reason, "평가 기준 자료 검토 변경"
+        )
+        repeated = self.client.post(self.url + "/fixture-review", payload, format="json")
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(FixtureReview.objects.count(), 2)
 
     def test_fixture_revocation_invalidates_pass_and_baseline_without_erasing_history(self):
         self.promote()

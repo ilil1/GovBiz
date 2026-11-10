@@ -8,7 +8,13 @@ from django.db import transaction
 from .artifact_store import read_artifact, read_evidence
 from .baselines import change_baseline, lock_baseline
 from .catalog import get_dataset, selection
-from .models import EvaluationBaseline, EvaluationCaseReview, EvaluationReview, EvaluationRun
+from .models import (
+    EvaluationBaseline,
+    EvaluationCaseReview,
+    EvaluationReview,
+    EvaluationRun,
+    QualityAssessment,
+)
 from .quality import quality_pass, quality_state
 from .review_eligibility import (
     RUBRIC_CRITERIA,
@@ -164,6 +170,12 @@ def review_state(run, material=None):
     eligible = approved and quality["is_current"] and quality["status"] == "PASS"
     return {
         "quality": quality,
+        "fixture_review_impact": {
+            "has_active_baseline": bool(baseline and baseline.review_id),
+            "has_quality_assessments": QualityAssessment.objects.filter(
+                run__dataset_id=run.dataset_id
+            ).exists(),
+        },
         "can_promote": bool(eligible),
         "reviews": [review_data(item) for item in reviews],
         "review_version": run.review_version,

@@ -2,18 +2,43 @@ import json
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .catalog import DATASETS, LIVE_CAPTURE_ID, live_config
-from .models import EvaluationBaseline, EvaluationReview, EvaluationRun
-from .reviews import review_material
+from .models import EvaluationBaseline, EvaluationReview, EvaluationRun, QualityAssessment
+from .reviews import review_material, review_state
 from .services import ResultsUnavailable, read_result
+
+
+class FixtureReviewImpactTests(SimpleTestCase):
+    def test_impact_uses_dataset_assessments_and_existing_baseline(self):
+        run = MagicMock()
+        run.dataset_id = "sample-dataset"
+        run.reviews.select_related.return_value = []
+        run.case_reviews.select_related.return_value = []
+        baseline = MagicMock()
+        baseline.review_id = 17
+        baseline.changes.select_related.return_value = []
+        with (
+            patch("apps.evaluations.reviews.EvaluationBaseline.objects.filter") as baseline_filter,
+            patch("apps.evaluations.reviews.QualityAssessment.objects.filter") as assessment_filter,
+            patch(
+                "apps.evaluations.reviews.quality_state",
+                return_value={"is_current": False, "status": "NOT_EVALUATED"},
+            ),
+        ):
+            baseline_filter.return_value.first.return_value = baseline
+            assessment_filter.return_value.exists.return_value = True
+            impact = review_state(run)["fixture_review_impact"]
+        self.assertEqual(impact, {"has_active_baseline": True, "has_quality_assessments": True})
+        baseline_filter.assert_called_once_with(dataset_id="sample-dataset")
+        assessment_filter.assert_called_once_with(run__dataset_id="sample-dataset")
 
 
 class ReviewFixture:
@@ -197,6 +222,52 @@ class ReviewFixture:
 
 
 class ReviewTests(ReviewFixture, TestCase):
+    def test_fixture_review_impact_covers_other_runs_and_cleared_baseline(self):
+        other_dataset = EvaluationRun.objects.create(requested_by=self.user, dataset_id="other")
+        assessment_fields = {
+            "policy": {},
+            "policy_sha256": "a" * 64,
+            "inputs": {},
+            "input_sha256": "b" * 64,
+            "status": "NEEDS_REVIEW",
+            "reasons": [],
+            "assessed_by": self.user,
+        }
+        QualityAssessment.objects.create(run=other_dataset, **assessment_fields)
+        response = self.client.get(self.url + "/review")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["fixture_review_impact"],
+            {"has_active_baseline": False, "has_quality_assessments": False},
+        )
+
+        other = EvaluationRun.objects.create(requested_by=self.user, dataset_id=self.dataset)
+        QualityAssessment.objects.create(run=other, **assessment_fields)
+        review = EvaluationReview.objects.create(
+            run=other,
+            decision="APPROVED",
+            comment="확인",
+            capture_sha256="c" * 64,
+            reviewed_by=self.user,
+        )
+        baseline = EvaluationBaseline.objects.create(
+            dataset_id=self.dataset, version=1, review=review
+        )
+        response = self.client.get(self.url + "/review")
+        self.assertFalse(response.json()["is_baseline"])
+        self.assertEqual(
+            response.json()["fixture_review_impact"],
+            {"has_active_baseline": True, "has_quality_assessments": True},
+        )
+
+        baseline.review = None
+        baseline.save(update_fields=["review"])
+        response = self.client.get(self.url + "/review")
+        self.assertEqual(
+            response.json()["fixture_review_impact"],
+            {"has_active_baseline": False, "has_quality_assessments": True},
+        )
+
     def test_material_review_history_and_baseline_are_separate(self):
         data = self.client.get(self.url + "/review").json()
         self.assertEqual([item["case_id"] for item in data["material"]["cases"]], ["E01"])

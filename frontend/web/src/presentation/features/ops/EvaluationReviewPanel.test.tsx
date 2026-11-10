@@ -261,6 +261,97 @@ it('현재 기준 승인과 최종 합격은 각각의 상태로 표시한다', 
   expect(final.querySelector('summary')!.textContent).toContain('합격')
 })
 
+it('저장 전 빠진 항목만 안내하고 승인에는 이유를 요구하지 않는다', async () => {
+  vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(state)
+  render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
+  const select = await screen.findByLabelText('평가 기준이 맞나요?')
+  const fixture = document.getElementById('fixture-review') as HTMLDetailsElement
+  const confirm = within(fixture).getByRole('checkbox', { name: '모든 질문의 공고 내용과 평가 기준을 확인했어요.' })
+  expect(within(fixture).getByText('확인 결과를 선택해 주세요. 모든 질문 확인란을 선택해 주세요.')).toBeTruthy()
+  fireEvent.change(select, { target: { value: 'APPROVED' } })
+  expect(within(fixture).getByText('모든 질문 확인란을 선택해 주세요.')).toBeTruthy()
+  fireEvent.click(confirm)
+  expect(within(fixture).queryByText(/확인란을 선택해 주세요/)).toBeNull()
+  expect(within(fixture).getByRole('button', { name: '평가 기준 확인 저장' })).toHaveProperty('disabled', false)
+  fireEvent.change(select, { target: { value: 'DEFERRED' } })
+  expect(within(fixture).getByText('판단 이유를 적어 주세요.')).toBeTruthy()
+  expect(within(fixture).getByRole('button', { name: '평가 기준 확인 저장' })).toHaveProperty('disabled', true)
+  fireEvent.change(within(fixture).getByLabelText('기준을 확인한 이유'), { target: { value: '확인 중' } })
+  expect(within(fixture).queryByText('판단 이유를 적어 주세요.')).toBeNull()
+})
+
+it.each([
+  [{ has_active_baseline: false, has_quality_assessments: false }, null],
+  [{ has_active_baseline: true, has_quality_assessments: false }, '저장하면 기존 비교 기준이 해제돼요.'],
+  [{ has_active_baseline: false, has_quality_assessments: true }, '저장하면 이전 최종 결과를 다시 확인해야 해요.'],
+  [{ has_active_baseline: true, has_quality_assessments: true }, '저장하면 기존 비교 기준이 해제돼요. 이전 최종 결과를 다시 확인해야 해요.'],
+  [null, '저장하면 기존 비교 기준이 있다면 해제되고, 이전 최종 결과가 있다면 다시 확인해야 해요.'],
+  [undefined, '저장하면 기존 비교 기준이 있다면 해제되고, 이전 최종 결과가 있다면 다시 확인해야 해요.'],
+])('현재 확인한 영향에 따라 기준 저장 안내를 표시한다: %j', async (impact, expected) => {
+  vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue({ ...state, fixture_review_impact: impact })
+  render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
+  await screen.findByLabelText('평가 기준이 맞나요?')
+  const fixture = document.getElementById('fixture-review') as HTMLDetailsElement
+  if (expected) expect(within(fixture).getByText(expected)).toBeTruthy()
+  else expect(within(fixture).queryByText(/^저장하면 /)).toBeNull()
+})
+
+it('검토 API 응답의 기준 저장 영향 정보를 소비하고 잘못된 형식은 거절한다', async () => {
+  const impact = { has_active_baseline: true, has_quality_assessments: false }
+  const fetch = vi.spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(new Response(JSON.stringify({ ...state, fixture_review_impact: impact }), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ ...state, fixture_review_impact: { ...impact, has_active_baseline: 'yes' } }), { status: 200 }))
+  expect((await opsApi.getEvaluationReview('run')).fixture_review_impact).toEqual(impact)
+  await expect(opsApi.getEvaluationReview('run')).rejects.toBeInstanceOf(opsApi.OpsApiError)
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+it('기준을 승인할 때는 확인란 선택 후 이유 없이 저장할 수 있다', async () => {
+  vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(state)
+  const save = vi.spyOn(opsApi, 'saveFixtureReview').mockResolvedValue(structuredClone(state))
+  render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
+  const select = await screen.findByLabelText('평가 기준이 맞나요?')
+  const reason = screen.getByLabelText('기준을 확인한 이유')
+  const submit = screen.getByRole('button', { name: '평가 기준 확인 저장' })
+  fireEvent.change(select, { target: { value: 'APPROVED' } })
+  expect(reason).toHaveProperty('required', false)
+  expect(submit).toHaveProperty('disabled', true)
+  fireEvent.click(screen.getByRole('checkbox', { name: '모든 질문의 공고 내용과 평가 기준을 확인했어요.' }))
+  fireEvent.change(reason, { target: { value: '   ' } })
+  expect(submit).toHaveProperty('disabled', false)
+  fireEvent.click(submit)
+  await waitFor(() => expect(save).toHaveBeenCalledWith('run', expect.objectContaining({ decision: 'APPROVED', comment: '' })))
+})
+
+it.each(['DEFERRED', 'CHANGES_REQUESTED'] as const)('기준을 %s로 판단할 때 이유가 필요하다', async (decision) => {
+  vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(state)
+  render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
+  const select = await screen.findByLabelText('평가 기준이 맞나요?')
+  const reason = screen.getByLabelText('기준을 확인한 이유')
+  const submit = screen.getByRole('button', { name: '평가 기준 확인 저장' })
+  fireEvent.click(screen.getByRole('checkbox', { name: '모든 질문의 공고 내용과 평가 기준을 확인했어요.' }))
+  fireEvent.change(select, { target: { value: decision } })
+  expect(reason).toHaveProperty('required', true)
+  fireEvent.change(reason, { target: { value: '   ' } })
+  expect(submit).toHaveProperty('disabled', true)
+  fireEvent.change(select, { target: { value: 'APPROVED' } })
+  expect(submit).toHaveProperty('disabled', false)
+  fireEvent.change(select, { target: { value: decision } })
+  expect(submit).toHaveProperty('disabled', true)
+  fireEvent.change(reason, { target: { value: '공고 내용을 더 확인해야 해요' } })
+  expect(submit).toHaveProperty('disabled', false)
+})
+
+it('이유 없이 승인한 기록에도 검토자와 이유 없음이 표시된다', async () => {
+  const value = readyForOverall()
+  value.quality!.fixture_reviews[0].comment = ''
+  vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(value)
+  render(<EvaluationReviewPanel runId="run" onExpired={vi.fn()} onChanged={vi.fn()} />)
+  fireEvent.click(await screen.findByText('평가 기준 확인'))
+  expect(screen.getByText('이유 입력 없음')).toBeTruthy()
+  expect(screen.getByText(/기준 자료 검토 승인 · admin/)).toBeTruthy()
+})
+
 it.each(['DEFERRED', 'CHANGES_REQUESTED'] as const)('기준을 %s로 저장해도 승인된 것처럼 안내하지 않는다', async (decision) => {
   vi.spyOn(opsApi, 'getEvaluationReview').mockResolvedValue(state)
   const save = vi.spyOn(opsApi, 'saveFixtureReview').mockResolvedValue(structuredClone(state))
