@@ -132,10 +132,10 @@ services:
     profiles: [evaluation]
     restart: unless-stopped
     command: ["prefect", "server", "start", "--host", "0.0.0.0"]
-    ports: ["127.0.0.1:14200:4200"]
+    ports: ["${PREFECT_BIND_ADDRESS:-127.0.0.1}:14200:4200"]
     environment:
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
-      PREFECT_UI_API_URL: http://localhost:14200/api
+      PREFECT_UI_API_URL: ${PREFECT_UI_API_URL:-http://localhost:14200/api}
       PREFECT_HOME: /var/lib/prefect
     volumes: ["prefect-data:/var/lib/prefect"]
     healthcheck:

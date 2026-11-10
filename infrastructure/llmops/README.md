@@ -159,6 +159,34 @@ Langfuse는 [localhost:13000](http://localhost:13000), Prefect는 [localhost:142
 Langfuse 이메일은 `llmops@localhost.test`, 비밀번호는 생성한 파일의 `LANGFUSE_ADMIN_PASSWORD`다.
 두 UI는 loopback에만 공개한다. Prefect의 이 개발 구성에는 별도 인증을 설정하지 않는다.
 
+#### 같은 Wi-Fi에서 Prefect 접속
+
+필요할 때만 서버 PC의 Wi-Fi IPv4 주소로 Prefect를 공개할 수 있다. 예를 들어 주소가
+`192.168.1.10`인 경우, 서버 PC의 PowerShell에서 다음을 실행한다. 주소는 실제 서버 PC의
+Wi-Fi 주소로 바꾸고, 기존 환경이라면 먼저 `docker compose ls`와 사용 중인 프로젝트·Compose
+파일·환경 파일을 확인하여 아래 명령에 같은 프로젝트 이름과 파일을 지정한다. 변경은 Prefect
+컨테이너 재생성 시 적용되므로 진행 중인 작업에 영향을 줄 수 있다.
+
+```powershell
+$env:PREFECT_BIND_ADDRESS = '192.168.1.10'
+$env:PREFECT_UI_API_URL = 'http://192.168.1.10:14200/api'
+$env:PREFECT_UI_URL = 'http://192.168.1.10:14200' # Ops 화면의 Prefect 링크용
+docker compose --env-file infrastructure/llmops/.env `
+  -f infrastructure/llmops/compose.yaml --profile evaluation up -d --no-deps prefect
+```
+
+다른 PC에서는 `http://192.168.1.10:14200`으로 접속한다. `PREFECT_UI_API_URL`은 브라우저가
+접근할 주소이며, `PREFECT_UI_URL`은 `compose.ops.yaml`을 함께 사용할 때 Ops가 제공하는
+링크다. Ops 링크 변경은 같은 변수와 원래의 Compose 파일·환경 파일·프로젝트를 사용하여
+`ops-service`를 재생성해야 적용된다. 방화벽에서 해당 포트와 접근할 Wi-Fi 대역을 허용해야
+할 수 있으며, 서버의 IP가 바뀌면 주소와 설정도 바꿔야 한다.
+
+**이 개발용 Prefect는 인증 없이 HTTP로 제공된다.** 같은 네트워크의 접속 가능한 기기가
+실행 내역을 조회하고 작업을 조작할 수 있으므로 신뢰할 수 있는 네트워크에서만 공개한다.
+변수를 지정하지 않으면 기본값은 기존 loopback 주소다. 공개를 중지하려면 변수를 제거하고
+같은 Compose 프로젝트의 Prefect를 다시 생성한다. Ops 링크도 되돌릴 때는 `PREFECT_UI_URL`을
+제거하고 Ops 컨테이너를 다시 생성한다.
+
 Prefect는 자체 `prefect-data` 볼륨의 SQLite를 사용하며 위 PostgreSQL은 Langfuse 저장소다.
 Prefect의 `restart: unless-stopped`는 Docker 재시작 후 서버 복귀를 지원하고 명시적인 수동 중지는
 유지한다. `/api/health` 검사 성공 후 평가 실행기와 Ops sync를 시작하도록 Compose 의존성을 설정했다.

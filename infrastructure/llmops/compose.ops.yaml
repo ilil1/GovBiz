@@ -32,7 +32,7 @@ services:
       DB_HOST: ops-mysql
       DB_PORT: "3306"
       PREFECT_API_URL: http://prefect:4200/api
-      PREFECT_UI_URL: http://localhost:14200
+      PREFECT_UI_URL: ${PREFECT_UI_URL:-http://localhost:14200}
       LLMOPS_RESULTS_DIR: /results
       LLMOPS_EVIDENCE_DIR: /evaluation-data
       LLMOPS_BUDGET_TOKEN: ${LLMOPS_BUDGET_TOKEN:-}
