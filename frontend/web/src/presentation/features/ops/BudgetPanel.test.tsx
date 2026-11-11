@@ -171,7 +171,15 @@ describe('관리자 예산 장부', () => {
     vi.stubGlobal('fetch', fetch)
     render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
     const dailyCard = within(await screen.findByRole('region', { name: '하루 예산 요약' }))
+    const help = dailyCard.getByLabelText('하루 평가 한도 도움말')
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(dailyCard.queryByText('매일 서울 시간 자정 기준')).toBeNull()
+    fireEvent.click(help)
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(dailyCard.getByText(/서울 시간 자정부터 다음 날 자정까지 적용됩니다/)).toBeTruthy()
+    expect(dailyCard.getByText(/정리되지 않은 이전 예약은 다음 날 한도에 포함될 수 있습니다/)).toBeTruthy()
     expect(within(dailyCard.getByRole('region', { name: '하루 남은 사용량' })).getByText('8회')).toBeTruthy()
+    expect(fetch).toHaveBeenCalledTimes(1)
     fireEvent.click(dailyCard.getByText('일별 예산 상세 보기'))
     expect(dailyCard.queryByText('잔여 8회')).toBeNull()
     fireEvent.click(dailyCard.getByText('오늘 접수와 이월 상세'))
@@ -179,7 +187,7 @@ describe('관리자 예산 장부', () => {
     expect(within(table).getByRole('row', { name: '호출 10 1 1 8' })).toBeTruthy()
     fireEvent.click(dailyCard.getByText('일별 정책 변경 이력 · 최근 1건'))
     expect(dailyCard.getByText(/김 운영자 · CLI/)).toBeTruthy()
-    expect(dailyCard.getByText('사유: 하루 한도 조정')).toBeTruthy()
+    expect(dailyCard.getByText('변경 이유: 하루 한도 조정')).toBeTruthy()
     expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
   })
 
@@ -200,7 +208,7 @@ describe('관리자 예산 장부', () => {
       fireEvent.click(dailyCard.getByText('일별 예산 상세 보기'))
       fireEvent.click(dailyCard.getByText('일별 정책 변경 이력 · 최근 1건'))
       expect(dailyCard.getByText(/김 운영자 · CLI/)).toBeTruthy()
-      expect(dailyCard.getByText('사유: 하루 한도 해제')).toBeTruthy()
+      expect(dailyCard.getByText('변경 이유: 하루 한도 해제')).toBeTruthy()
     } else {
       expect(dailyCard.queryByText('일별 예산 상세 보기')).toBeNull()
     }
@@ -403,6 +411,18 @@ describe('관리자 예산 장부', () => {
   })
 
   it.each([
+    ['CORE_ADMIN', '변경 이유: 별도 입력 없음'],
+    ['CLI', '변경 이유: 자동 생성: AI 평가 사용량 한도 설정'],
+  ])('%s에서 저장된 기본 사유를 출처에 맞게 표시한다', async (source, expected) => {
+    const change = { ...page.summary.recent_changes[0], source, reason: '자동 생성: AI 평가 사용량 한도 설정' }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...page, summary: { ...page.summary, recent_changes: [change] } })))
+    render(<MemoryRouter><BudgetOverview onExpired={vi.fn()} refreshKey={0} /></MemoryRouter>)
+    fireEvent.click(await screen.findByText('한도 변경 이력 · 최근 1 / 전체 1건'))
+    fireEvent.click(screen.getByText('변경 상세 보기'))
+    expect(screen.getByText(expected)).toBeTruthy()
+  })
+
+  it.each([
     { legacy_usage: undefined },
     { state: 'missing' },
     { reservation },
@@ -495,7 +515,7 @@ describe('관리자 예산 장부', () => {
     expect(within(detail.closest('details')!).getByText('미확인·미설정 → 미확인·미설정')).toBeTruthy()
     expect(change.getByText(/관리자 로그인으로 인증된 신원이 아닙니다/)).toBeTruthy()
     expect(change.getByText('원본 출처: CLI')).toBeTruthy()
-    expect(change.getByText('사유: 검토한 수동 평가 한도')).toBeTruthy()
+    expect(change.getByText('변경 이유: 검토한 수동 평가 한도')).toBeTruthy()
     expect(change.getByText(`요청 ID: ${id}`)).toBeTruthy()
     expect(fetch).toHaveBeenCalledWith('/api/v1/ops/budget/reservations?page=1', expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }))
     expect(fetch.mock.calls.every(([, options]) => !options.method || options.method === 'GET')).toBe(true)
@@ -521,7 +541,7 @@ describe('관리자 예산 장부', () => {
     const details = record.getByText('변경 상세 보기')
     expect(details.closest('details')).toHaveProperty('open', false)
     fireEvent.click(details)
-    expect(record.getByText('사유: 평가 범위 조정')).toBeTruthy()
+    expect(record.getByText('변경 이유: 평가 범위 조정')).toBeTruthy()
     expect(record.getByText(`요청 ID: ${id}`)).toBeTruthy()
     expect(record.getByText(/관리자 세션을 확인한 기록입니다/)).toBeTruthy()
     expect(record.getByText('원본 출처: CORE_ADMIN')).toBeTruthy()

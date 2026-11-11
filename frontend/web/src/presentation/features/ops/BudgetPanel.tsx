@@ -6,6 +6,7 @@ import { UnaccountedRunsPanel } from './UnaccountedRunsPanel'
 import { BudgetLimitsForm } from './BudgetLimitsForm'
 import { DailyBudgetPanel } from './DailyBudgetPanel'
 import { DailyBudgetLimitsForm } from './DailyBudgetLimitsForm'
+import { displayBudgetChangeReason } from './budgetChangeReason'
 import { EvaluationHelp } from './EvaluationHelp'
 
 const date = (value: string) => new Date(value).toLocaleString('ko-KR')
@@ -132,7 +133,7 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
           {operatorId && <BudgetLimitsForm summary={summary} owner={operatorId} onExpired={onExpired} onSaved={() => { setSaved('누적 한도 변경 이력을 저장했습니다.'); setRefresh((value) => value + 1); onBudgetChanged?.() }} />}
         </section>
         <section aria-label="하루 예산 요약" className="space-y-4 rounded-xl border border-line bg-white p-4 sm:p-5">
-          <div><h3 className="text-base font-bold text-ink">하루 평가 한도</h3><p className="mt-1 text-sm text-ink-muted">매일 서울 시간 자정 기준</p></div>
+          <EvaluationHelp label="하루 평가 한도" title={<h3 className="text-base font-bold text-ink">하루 평가 한도</h3>}><p>서울 시간 자정부터 다음 날 자정까지 적용됩니다. 정리되지 않은 이전 예약은 다음 날 한도에 포함될 수 있습니다.</p></EvaluationHelp>
           {!summary.daily ? <p className="text-sm">일별 예산 정보를 확인할 수 없습니다.</p>
             : summary.daily.state === 'disabled' ? <p className="text-sm">하루 한도 미설정 · 정기 평가에 필요</p>
             : summary.daily.state === 'unknown' ? <p role="alert" className="text-sm text-red-700">일별 사용량 미확인 · 신규 예약이 차단됩니다.</p>
@@ -195,7 +196,7 @@ export function BudgetOverview({ onExpired, refreshKey, operatorId, onBudgetChan
                 <details><summary className="min-h-10 cursor-pointer py-2 font-semibold focus-visible:outline-2 focus-visible:outline-brand-primary">변경 상세 보기</summary>
                   <div className="space-y-2 pb-2 text-xs text-ink-muted">
                     <dl className="grid gap-2 sm:grid-cols-3">{amounts.map(([label, before, after, unit]) => <div key={label}><dt>{label}</dt><dd className="mt-1 break-words">{amount(before, unit, label)} → {amount(after, unit, label)}</dd></div>)}</dl>
-                    <p className="break-words">사유: {change.reason}</p><p className="break-all">요청 ID: {change.request_id}</p><p>원본 출처: {change.source}</p><p>{change.source === 'CLI' ? 'CLI 변경자는 운영자가 직접 입력했으며 관리자 로그인으로 인증된 신원이 아닙니다.' : '기존 프로젝트의 관리자 세션을 확인한 기록입니다.'}</p>
+                    <p className="break-words">{displayBudgetChangeReason(change.reason, change.source)}</p><p className="break-all">요청 ID: {change.request_id}</p><p>원본 출처: {change.source}</p><p>{change.source === 'CLI' ? 'CLI 변경자는 운영자가 직접 입력했으며 관리자 로그인으로 인증된 신원이 아닙니다.' : '기존 프로젝트의 관리자 세션을 확인한 기록입니다.'}</p>
                   </div>
                 </details>
               </li>

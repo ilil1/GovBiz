@@ -49,8 +49,24 @@ describe('일별 평가 예산', () => {
     expect(screen.getByRole('row', { name: '입력 토큰 400,000 196,608 32,768 170,624' })).toBeTruthy()
     fireEvent.click(screen.getByText('일별 정책 변경 이력 · 최근 1건'))
     expect(screen.getByText(/관리자 · CORE_ADMIN/)).toBeTruthy()
-    expect(screen.getByText('사유: 설정')).toBeTruthy()
+    expect(screen.getByText('변경 이유: 설정')).toBeTruthy()
     expect(screen.getByText('일별 항목과 이월량 설명')).toBeTruthy()
+  })
+
+  it.each([
+    ['CORE_ADMIN', '자동 생성: AI 평가 사용량 한도 설정', '변경 이유: 별도 입력 없음'],
+    ['CORE_ADMIN', '자동 생성: 하루 한도 설정', '변경 이유: 별도 입력 없음'],
+    ['CORE_ADMIN', '자동 생성: 하루 한도 해제', '변경 이유: 별도 입력 없음'],
+    ['CLI', '자동 생성: 하루 한도 설정', '변경 이유: 자동 생성: 하루 한도 설정'],
+    ['CORE_ADMIN', '하루 평가 범위 조정', '변경 이유: 하루 평가 범위 조정'],
+  ] as const)('변경 이력의 이유를 출처와 내용에 맞게 표시한다: %s %s', (source, reason, expected) => {
+    const value: DailyBudget = { ...day, recent_changes: [{
+      request_id: '10000000-0000-4000-8000-000000000001', source, actor: '관리자', reason,
+      expected_revision: 'a'.repeat(64), previous: null, policy: { enabled: true, limits: day.limits! }, created_at: day.period_start,
+    }] }
+    render(<DailyBudgetPanel value={value} hideSummary />)
+    fireEvent.click(screen.getByText('일별 정책 변경 이력 · 최근 1건'))
+    expect(screen.getByText(expected)).toBeTruthy()
   })
 
   it.each(['unknown', 'exceeded'] as const)('중복 요약을 숨겨도 %s 기록은 0으로 표시하지 않는다', (state) => {

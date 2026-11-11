@@ -2,6 +2,7 @@ import { createRequestId } from './requestId'
 import { useId, useRef, useState } from 'react'
 import { OpsApiError, setDailyBudgetLimits, type DailyBudget, type DailyBudgetLimitsInput } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
+import { displayBudgetChangeReason } from './budgetChangeReason'
 
 export function DailyBudgetLimitsForm({ daily, owner, onSaved, onExpired }: {
   daily: DailyBudget | undefined; owner: string; onSaved: () => void; onExpired: () => void
@@ -75,7 +76,7 @@ export function DailyBudgetLimitsForm({ daily, owner, onSaved, onExpired }: {
         <details className="rounded-lg bg-surface-muted p-3 text-sm sm:col-span-2">
           <summary className="cursor-pointer font-semibold">변경 이유 직접 적기 (선택)</summary>
           <label className="mt-3 grid gap-1">일별 한도 변경 사유<textarea className="min-h-20 rounded-lg border border-line px-3 py-2 focus:outline-2 focus:outline-brand-primary" placeholder="예: 하루 공고 답변 평가 1회 진행" value={reason} disabled={stale || conflict} onChange={(event) => setReason(event.target.value)} aria-describedby={`${helpId}-reason`} maxLength={1000} /></label>
-          <p id={`${helpId}-reason`} className="mt-2 text-xs text-ink-muted">비워 두면 자동 생성된 사유가 변경 이력에 기록됩니다.</p>
+          <p id={`${helpId}-reason`} className="mt-2 text-xs text-ink-muted">비워 두면 별도 변경 이유 없이 기록됩니다.</p>
         </details>
         <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
           <button className={styles.secondaryButton} type="button" onClick={() => setOpened(false)}>일별 설정 닫기</button>
@@ -86,7 +87,7 @@ export function DailyBudgetLimitsForm({ daily, owner, onSaved, onExpired }: {
         <p>일별 제한: {previous?.state === 'disabled' ? '미적용' : '적용 중'} → {proposal.disable ? '해제' : '적용'}</p>
         {proposal.disable ? <p>일별 제한을 해제하면 누적 한도만 적용됩니다. 기존 예약·미확정 사용량·변경 이력은 유지되며, 정기 평가에 필요한 일별 예산 조건은 충족하지 못합니다.</p>
           : (['calls', 'input_tokens', 'output_tokens'] as const).map((key) => <p key={key}>{({ calls: '호출', input_tokens: '입력 토큰', output_tokens: '출력 토큰' })[key]}: {amount(previous?.limits?.[key])} → {amount(proposal[key])}{key === 'calls' ? '회' : '토큰'}</p>)}
-        <p>사유: {proposal.reason}</p>
+        <p>{reason.trim() ? `변경 이유: ${proposal.reason}` : displayBudgetChangeReason(proposal.reason)}</p>
         <p className="sr-only">로그인한 관리자 계정으로 기록하며, 저장 시 최신 정책과 오늘 할당량·전날 이월량을 다시 검사합니다.</p>
         <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => setOpened(false)}>일별 설정 닫기</button><button type="button" className={styles.secondaryButton} disabled={busy || attempted} onClick={() => { setProposal(null); setError('') }}>입력 수정</button></div>

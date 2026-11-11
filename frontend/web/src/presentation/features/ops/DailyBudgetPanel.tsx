@@ -1,4 +1,5 @@
 import type { DailyBudget } from '../../../data/ops/opsApi'
+import { displayBudgetChangeReason } from './budgetChangeReason'
 
 export function DailyBudgetPanel({ value, hideSummary = false }: { value: DailyBudget | undefined; hideSummary?: boolean }) {
   return <section aria-label="일별 평가 예산" className="space-y-4 rounded-xl bg-surface-muted p-4 text-sm sm:p-5">
@@ -37,7 +38,7 @@ export function DailyBudgetPanel({ value, hideSummary = false }: { value: DailyB
         <ol className="space-y-2">{value.recent_changes.map((change) => <li key={change.request_id}>
           <p>{new Date(change.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} · {change.actor} · {change.source}</p>
           <p>{change.policy.enabled ? '적용' : '해제'} · 호출 {change.policy.limits.calls.toLocaleString()} / 입력 {change.policy.limits.input_tokens.toLocaleString()} / 출력 {change.policy.limits.output_tokens.toLocaleString()}</p>
-          <p>사유: {change.reason}</p>
+          <p>{displayBudgetChangeReason(change.reason, change.source)}</p>
         </li>)}</ol>
       </details>}
     </>}

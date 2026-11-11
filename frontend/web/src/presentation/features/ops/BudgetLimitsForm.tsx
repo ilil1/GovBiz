@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { getBudgetSummary, OpsApiError, setBudgetLimits, type BudgetLimitsInput, type BudgetSummary } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 import { BudgetPlanningPanel } from './BudgetPlanningPanel'
+import { displayBudgetChangeReason } from './budgetChangeReason'
 
 const amount = (value: number | null | undefined, unit: string) => value == null ? '미설정' : `${value.toLocaleString('ko-KR')}${unit}`
 type AmountParts = { confirmed: number; unknown: number; reserved: number }
@@ -175,7 +176,7 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
     if (canCalculateInput) setInput(String(required.input_tokens))
     else setInput(summary.limits?.input_tokens?.toString() ?? '')
     setError('')
-    setFillNotice(canCalculateInput ? '이번 평가에 확보할 최대량입니다. 저장 전 전체 한도를 확인할 수 있습니다.' : '요청 횟수와 답변에 확보할 양을 입력했습니다. 입력 사용량은 확인할 수 없어 전체 한도를 자동 계산하지 않았습니다.')
+    setFillNotice(canCalculateInput ? '' : '요청 횟수와 답변에 확보할 양을 입력했습니다. 입력 사용량은 확인할 수 없어 전체 한도를 자동 계산하지 않았습니다.')
   }
 
   const clearCalculation = () => {
@@ -256,7 +257,7 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
         <details className="rounded-lg bg-surface-muted p-3 text-sm sm:col-span-2">
           <summary className="cursor-pointer font-semibold">변경 이유 직접 적기 (선택)</summary>
           <label className="mt-3 grid gap-2 font-semibold text-ink">한도 변경 사유<textarea className="min-h-20 rounded-lg border border-line bg-white px-3 py-2 focus:outline-2 focus:outline-brand-primary" placeholder="예: 공고 답변 평가 1회 진행" value={reason} onChange={(event) => setReason(event.target.value)} aria-describedby={`${helpId}-reason`} maxLength={1000} /></label>
-          <p id={`${helpId}-reason`} className="mt-2 text-xs leading-5 text-ink-muted">비워 두면 ‘자동 생성: AI 평가 사용량 한도 설정’으로 변경 이력에 기록됩니다.</p>
+          <p id={`${helpId}-reason`} className="mt-2 text-xs leading-5 text-ink-muted">비워 두면 별도 변경 이유가 없는 것으로 표시됩니다.</p>
         </details>
         <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col-reverse gap-2 sm:flex-row"><button className={styles.secondaryButton} type="button" onClick={() => setOpened(false)}>닫기</button><button className={styles.secondaryButton} type="button" onClick={() => setInputOpen(false)}>이전: 필요한 양 확인</button>{checkedNeeds && <button className={styles.secondaryButton} type="button" onClick={clearCalculation}>계산 지우기</button>}</div>
@@ -268,7 +269,7 @@ export function BudgetLimitsForm({ summary, owner, onSaved, onExpired }: {
         <h3 ref={reviewHeading} tabIndex={-1} className="text-base font-bold text-ink focus-visible:outline-2 focus-visible:outline-brand-primary">3. 입력 내용 확인 후 저장</h3><p>한도는 모든 평가가 함께 사용합니다. 저장해도 평가가 실행되지는 않으며, 실행할 때 사용 가능 여부를 다시 확인합니다.</p><p>호출: {amount(previous?.calls, '회')} → {amount(proposal.calls, '회')}</p>
         <p>입력: {amount(previous?.input_tokens, '토큰')} → {amount(proposal.input_tokens, '토큰')}</p>
         <p>출력: {amount(previous?.output_tokens, '토큰')} → {amount(proposal.output_tokens, '토큰')}</p>
-        <p>사유: {proposal.reason}</p>
+        <p>{reason.trim() ? `변경 이유: ${proposal.reason}` : displayBudgetChangeReason(proposal.reason)}</p>
         <p className="sr-only">로그인한 관리자 계정으로 변경 이력이 저장됩니다. 다른 운영자의 변경과 이미 할당된 사용량은 저장 시 다시 확인합니다.</p>
         <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col-reverse gap-2 sm:flex-row"><button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => setOpened(false)}>닫기</button><button type="button" className={styles.secondaryButton} disabled={busy || attempted} onClick={() => { setProposal(null); setError('') }}>입력 수정</button></div>

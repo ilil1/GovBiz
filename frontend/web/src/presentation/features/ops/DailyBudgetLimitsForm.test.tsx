@@ -45,7 +45,7 @@ describe('관리자 일별 한도 변경', () => {
     expect(screen.getByRole('textbox', { name: 'AI에 보내는 내용 (입력 토큰)', description: /0은 제한 해제가 아닌 사용 불가/ })).toHaveProperty('value', '400000')
     expect(screen.getByRole('textbox', { name: 'AI 답변 (출력 토큰)', description: /0은 제한 해제가 아닌 사용 불가/ })).toHaveProperty('value', '24000')
     fireEvent.click(screen.getByText('변경 이유 직접 적기 (선택)'))
-    expect(screen.getByRole('textbox', { name: '일별 한도 변경 사유', description: /자동 생성된 사유/ })).toHaveProperty('value', '')
+    expect(screen.getByRole('textbox', { name: '일별 한도 변경 사유', description: /별도 변경 이유 없이/ })).toHaveProperty('value', '')
     fireEvent.click(screen.getByRole('button', { name: '일별 설정 닫기' }))
     fireEvent.click(screen.getByRole('button', { name: '하루 한도 해제하기' }))
     expect(screen.getByRole('heading', { name: '하루 한도 해제' })).toBeTruthy()
@@ -85,6 +85,15 @@ describe('관리자 일별 한도 변경', () => {
     expect(JSON.parse(fetch.mock.calls[1][1]!.body as string)).toMatchObject({ ...limits, expected_revision: daily.limits_revision, disable: false, reason: '승인한 일별 한도' })
   })
 
+  it('자동 문구와 같은 이유를 직접 입력하면 확인 단계에 입력한 내용을 보여준다', () => {
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch)
+    mount(); fill()
+    fireEvent.change(screen.getByLabelText('일별 한도 변경 사유'), { target: { value: '자동 생성: 하루 한도 설정' } })
+    confirm()
+    expect(screen.getByText('변경 이유: 자동 생성: 하루 한도 설정')).toBeTruthy()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it.each([false, true])('일별 한도 변경 사유를 생략하면 자동으로 기록한다: 해제=%s', async (disable) => {
     const fetch = vi.fn(async (url: string, options?: RequestInit) => json(url.endsWith('/session') ? session : success(JSON.parse(options!.body as string))))
     vi.stubGlobal('fetch', fetch)
@@ -98,7 +107,7 @@ describe('관리자 일별 한도 변경', () => {
     if (disable) fireEvent.click(screen.getByRole('button', { name: '해제 내용 확인' }))
     else confirm()
     const expected = disable ? '자동 생성: 하루 한도 해제' : '자동 생성: 하루 한도 설정'
-    expect(screen.getByText(`사유: ${expected}`)).toBeTruthy()
+    expect(screen.getByText('변경 이유: 별도 입력 없음')).toBeTruthy()
     expect(fetch).not.toHaveBeenCalled()
     save()
     await waitFor(() => expect(props.onSaved).toHaveBeenCalledOnce())
@@ -162,7 +171,7 @@ describe('관리자 일별 한도 변경', () => {
     save()
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(props.onSaved).not.toHaveBeenCalled()
-    expect(screen.getByText('사유: 승인한 일별 한도')).toBeTruthy()
+    expect(screen.getByText('변경 이유: 승인한 일별 한도')).toBeTruthy()
   })
 
   it.each([null, { id: 'core:82', username: '다른 관리자' }])('세션 만료·소유자 변경은 정책 전송 전에 중단한다: %j', async (user) => {
