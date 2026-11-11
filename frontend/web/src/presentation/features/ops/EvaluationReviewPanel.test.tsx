@@ -756,7 +756,7 @@ it('전체 답변 결과는 전체 비교 안에 있고 별도 결과 탭은 없
   expect(result.closest('[hidden]')).not.toBeNull()
   fireEvent.click(overall)
   expect(result.closest('[hidden]')).toBeNull()
-  expect(result.compareDocumentPosition(screen.getByRole('heading', { name: '전체 검토', exact: true })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(result.compareDocumentPosition(screen.getByRole('heading', { name: /^전체 검토$/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it('기준 확인과 결과 판정은 각각 별도의 저장을 실행한다', async () => {
