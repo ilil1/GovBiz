@@ -1141,7 +1141,8 @@ Ops는 결과의 명세·평가기·선택 사례·입력 해시를 확인한 �
 ## 응답 검토와 비교 기준
 
 완료 상세의 **응답 검토와 기준 지정**에서 선택된 모든 사례의 질문·제공 근거·후보 답변·기존 기준 답변을
-확인합니다. 각 사례를 **적합 / 부적합 / 판단 보류**로 판단하고 사유를 저장합니다. 필수 사례 전체에
+확인합니다. 각 사례를 **적합 / 부적합 / 판단 보류**로 판단합니다. 적합은 사유를 생략할 수 있고,
+부적합과 판단 보류에는 사유가 필요합니다. 필수 사례 전체에
 현재 자료·응답 해시와 검토 기준 버전이 일치하는 적합 기록이 있어야 전체 승인할 수 있습니다.
 전체 승인과 비교 기준 지정은 별도 동작입니다. 새 기준 지정에는 아래의 유효한 품질 합격도 필요합니다.
 기준은 데이터셋별 하나이며 사례별 검토 또는 전체
@@ -1151,7 +1152,7 @@ AI 작성 참조 자료의 출처와 미측정 의미 충실도는 검토 승인
 - `GET /api/v1/ops/evaluations/{id}/review`: 해시 검증을 거친 사례·근거, 전체/사례 검토 이력, `review_version`,
   `rubric`, `can_approve`, `approval_current`, `baseline_requires_review`, 현재 기준 여부
 - `POST .../{id}/case-review`: `case_id`, `decision` (`SUITABLE` / `UNSUITABLE` / `DEFERRED`),
-  `comment` (1~3000자), `capture_sha256`, `fixture_sha256`, `rubric_version`, `review_version`
+  `comment` (적합은 생략 가능, 부적합·판단 보류는 공백 제외 1~3000자), `capture_sha256`, `fixture_sha256`, `rubric_version`, `review_version`
 - `POST .../{id}/review`: `decision` (`APPROVED` / `CHANGES_REQUESTED`), `comment` (1~3000자),
   `capture_sha256`, `fixture_sha256`, `rubric_version`, `review_version`
 - `POST .../{id}/baseline`: `review_id`, `baseline_version`(검토 GET에서 확인한 현재 버전); 완료 파일·최신 승인 기록·버전이 일치해야 지정 가능

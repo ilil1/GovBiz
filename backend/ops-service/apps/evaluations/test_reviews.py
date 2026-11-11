@@ -12,8 +12,54 @@ from rest_framework.test import APIClient
 
 from .catalog import DATASETS, LIVE_CAPTURE_ID, live_config
 from .models import EvaluationBaseline, EvaluationReview, EvaluationRun, QualityAssessment
-from .reviews import review_material, review_state
+from .reviews import review_material, review_state, save_case_review
 from .services import ResultsUnavailable, read_result
+from .views import CaseReviewRequestSerializer
+
+
+class CaseReviewCommentTests(SimpleTestCase):
+    def payload(self, decision, **changes):
+        return {
+            "case_id": "E01",
+            "decision": decision,
+            "capture_sha256": "a" * 64,
+            "fixture_sha256": "b" * 64,
+            "rubric_version": "v1",
+            "review_version": 0,
+            **changes,
+        }
+
+    def test_suitable_accepts_missing_or_blank_comment_without_inventing_a_reason(self):
+        for changes in ({}, {"comment": "  "}, {"comment": "확인한 내용"}):
+            with self.subTest(changes=changes):
+                serializer = CaseReviewRequestSerializer(data=self.payload("SUITABLE", **changes))
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+                self.assertEqual(
+                    serializer.validated_data["comment"], changes.get("comment", "").strip()
+                )
+
+    def test_unsuitable_and_deferred_require_a_nonblank_reason(self):
+        for decision in ("UNSUITABLE", "DEFERRED"):
+            for comment in (None, "", "  "):
+                with self.subTest(decision=decision, comment=comment):
+                    changes = {} if comment is None else {"comment": comment}
+                    serializer = CaseReviewRequestSerializer(data=self.payload(decision, **changes))
+                    self.assertFalse(serializer.is_valid())
+                    self.assertIn("comment", serializer.errors)
+            serializer = CaseReviewRequestSerializer(
+                data=self.payload(decision, comment="확인 필요")
+            )
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_service_rejects_a_missing_reason_before_accessing_material(self):
+        for decision in ("UNSUITABLE", "DEFERRED"):
+            with (
+                self.subTest(decision=decision),
+                patch("apps.evaluations.reviews.review_material") as material,
+            ):
+                with self.assertRaises(ValueError):
+                    save_case_review(None, None, "E01", decision, "  ", "a", "b", "v1", 0)
+                material.assert_not_called()
 
 
 class FixtureReviewImpactTests(SimpleTestCase):
@@ -222,6 +268,30 @@ class ReviewFixture:
 
 
 class ReviewTests(ReviewFixture, TestCase):
+    def test_suitable_without_reason_is_saved_and_retry_preserves_the_same_record(self):
+        data = self.client.get(self.url + "/review").json()
+        payload = {
+            "case_id": data["material"]["cases"][0]["case_id"],
+            "decision": "SUITABLE",
+            "capture_sha256": data["material"]["capture_sha256"],
+            "fixture_sha256": data["material"]["fixture_sha256"],
+            "rubric_version": data["rubric"]["version"],
+            "review_version": data["review_version"],
+        }
+        for decision in ("UNSUITABLE", "DEFERRED"):
+            response = self.client.post(
+                self.url + "/case-review", {**payload, "decision": decision}, format="json"
+            )
+            self.assertEqual(response.status_code, 400)
+        response = self.client.post(self.url + "/case-review", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        record = response.json()["case_reviews"][0]
+        self.assertEqual(record["comment"], "")
+        self.assertEqual(record["reviewed_by"], self.user.email)
+        retry = self.client.post(self.url + "/case-review", payload, format="json")
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual([item["id"] for item in retry.json()["case_reviews"]], [record["id"]])
+
     def test_fixture_review_impact_covers_other_runs_and_cleared_baseline(self):
         other_dataset = EvaluationRun.objects.create(requested_by=self.user, dataset_id="other")
         assessment_fields = {

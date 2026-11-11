@@ -27,14 +27,17 @@ export function RagReferenceReviewPanel({ runId, state, disabled, onDirty, onBus
   const current = reference.history.find((row) => row.id === reference.current_id)
   const cases = state.material.cases
   const selected = cases[selectedCase]
+  const reasonLabel = decision === 'CHANGES_REQUESTED' ? '어떤 점을 고쳐야 하나요?'
+    : decision === 'DEFERRED' ? '판단하기 어려운 이유'
+      : decision === 'REVOKED' ? '이전 승인을 취소하는 이유' : ''
   const markDirty = () => { setDirty(true); onDirty(true) }
   const discard = () => { setDecision(''); setComment(''); setConfirmed(false); setDirty(false); onDirty(false); setError('') }
   const save = async () => {
-    if (disabled || inFlight.current || conflict || !decision || !comment.trim() || !confirmed) return
+    if (disabled || inFlight.current || conflict || !decision || (reasonLabel && !comment.trim()) || !confirmed) return
     inFlight.current = true; setBusy(true); onBusy(true); setError('')
     try {
       const value = await saveRagReferenceReview(runId, {
-        decision, comment: comment.trim(), confirmed_all_cases: confirmed,
+        decision, comment: reasonLabel ? comment.trim() : '', confirmed_all_cases: confirmed,
         fixture_sha256: reference.fixture_sha256, case_ids: reference.case_ids,
         rubric_version: reference.rubric.version, review_version: state.review_version,
       }, state.reviewer_id)
@@ -81,14 +84,14 @@ export function RagReferenceReviewPanel({ runId, state, disabled, onDirty, onBus
           {(Object.keys(labels) as Decision[]).filter((value) => value !== 'REVOKED' || reference.can_revoke).map((value) => <option key={value} value={value}>{options[value]}</option>)}
         </select>
       </label>
-      <label className="block text-sm font-semibold">확인한 이유
-        <textarea className="mt-1 w-full rounded-lg border border-line p-2" value={comment} maxLength={3000} rows={3} required disabled={disabled || busy || conflict} onChange={(event) => { setComment(event.target.value); markDirty() }} placeholder="확인한 내용과 판단 이유를 적어 주세요." />
-      </label>
+      {reasonLabel && <label className="block text-sm font-semibold">{reasonLabel}
+        <textarea className="mt-1 w-full rounded-lg border border-line p-2" value={comment} maxLength={3000} rows={3} required disabled={disabled || busy || conflict} onChange={(event) => { setComment(event.target.value); markDirty() }} />
+      </label>}
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} disabled={disabled || busy || conflict} onChange={(event) => { setConfirmed(event.target.checked); markDirty() }} />모든 질문의 공고 내용, 답변 가능 여부와 필요한 근거를 확인했습니다.</label>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {conflict && <p className="text-sm">다른 검토나 자료 변경이 있습니다. ‘입력 지우기’ 후 검토 자료를 새로고침하고 다시 판단하세요.</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className={`${styles.primaryButton} min-h-11 !text-sm justify-center`} disabled={disabled || busy || conflict || !decision || !comment.trim() || !confirmed}>{busy ? '저장 중…' : '기준 확인 저장'}</button>
+        <button type="submit" className={`${styles.primaryButton} min-h-11 !text-sm justify-center`} disabled={disabled || busy || conflict || !decision || (!!reasonLabel && !comment.trim()) || !confirmed}>{busy ? '저장 중…' : '기준 확인 저장'}</button>
         <button type="button" className={`${styles.secondaryButton} min-h-11 !text-sm justify-center`} disabled={disabled || busy || !dirty} onClick={discard}>입력 지우기</button>
       </div>
       {dirty && <p className="text-xs">다른 질문도 확인할 수 있어요. 다음 단계로 가기 전 이 내용을 저장하거나 취소해 주세요.</p>}
@@ -97,7 +100,7 @@ export function RagReferenceReviewPanel({ runId, state, disabled, onDirty, onBus
       {reference.history.map((row) => <article key={row.id} className="my-2 rounded-lg bg-surface-muted p-3 text-sm" aria-label={`참조 검토 이력 ${row.version}`}>
         <p>#{row.version} · {labels[row.decision]} · {row.is_current ? '현재 자료의 최신 검토' : '이전 검토'}</p>
         <p>{row.reviewed_by} · {new Date(row.created_at).toLocaleString('ko-KR')}</p>
-        <p className="whitespace-pre-wrap break-words">{row.comment}</p>
+        {row.comment.trim() && <p className="whitespace-pre-wrap break-words">{row.comment}</p>}
         {row.revoked_review_id !== null && <p>철회 대상 기록: #{row.revoked_review_id}</p>}
         <details className="break-all text-xs"><summary>참조 검토 당시 자료 정보</summary>
           <p>대상: {row.case_ids.join(', ')}</p><p>기준: {row.rubric_version}</p><p>평가 자료: {row.fixture_sha256}</p><p>실행 명세: {row.execution_spec_sha256}</p>

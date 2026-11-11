@@ -284,6 +284,17 @@ def save_review(
         return review
 
 
+def normalize_case_review_comment(decision, comment):
+    if decision not in {"SUITABLE", "UNSUITABLE", "DEFERRED"}:
+        raise ValueError("Invalid case review decision")
+    if not isinstance(comment, str) or len(comment.strip()) > 3000:
+        raise ValueError("Invalid case review comment")
+    comment = comment.strip()
+    if decision != "SUITABLE" and not comment:
+        raise ValueError("A reason is required for this decision")
+    return comment
+
+
 def save_case_review(
     run,
     user,
@@ -295,6 +306,7 @@ def save_case_review(
     rubric_version,
     review_version,
 ):
+    comment = normalize_case_review_comment(decision, comment)
     material = review_material(run)
     if case_id not in {item["case_id"] for item in material["cases"]}:
         raise ValueError("평가에 포함된 사례만 검토할 수 있습니다.")

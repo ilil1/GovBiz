@@ -30,6 +30,7 @@ from .recovery import ReassessmentAlreadyExists, recovery_state, submit_recovery
 from .reviews import (
     baseline_choices,
     clear_baseline,
+    normalize_case_review_comment,
     promote_baseline,
     review_material,
     review_state,
@@ -377,7 +378,7 @@ class RagReferenceRequestSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(
         choices=["APPROVED", "CHANGES_REQUESTED", "DEFERRED", "REVOKED"]
     )
-    comment = serializers.CharField(max_length=3000, allow_blank=False)
+    comment = serializers.CharField(max_length=3000, allow_blank=True)
     fixture_sha256 = serializers.RegexField(r"^[a-f0-9]{64}$")
     case_ids = serializers.ListField(child=serializers.CharField(max_length=100), allow_empty=False)
     rubric_version = serializers.CharField(max_length=40)
@@ -597,11 +598,18 @@ def api_quality(request, run_id):
 class CaseReviewRequestSerializer(serializers.Serializer):
     case_id = serializers.CharField(max_length=100)
     decision = serializers.ChoiceField(choices=["SUITABLE", "UNSUITABLE", "DEFERRED"])
-    comment = serializers.CharField(max_length=3000, allow_blank=False)
+    comment = serializers.CharField(max_length=3000, allow_blank=True, required=False, default="")
     capture_sha256 = serializers.RegexField(r"^[a-f0-9]{64}$")
     fixture_sha256 = serializers.RegexField(r"^[a-f0-9]{64}$")
     rubric_version = serializers.CharField(max_length=40)
     review_version = serializers.IntegerField(min_value=0)
+
+    def validate(self, attrs):
+        try:
+            attrs["comment"] = normalize_case_review_comment(attrs["decision"], attrs["comment"])
+        except ValueError as exc:
+            raise serializers.ValidationError({"comment": "판단 이유를 입력해 주세요."}) from exc
+        return attrs
 
 
 @never_cache

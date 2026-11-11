@@ -72,10 +72,13 @@ def save_reference_review(
         or rubric_version != RUBRIC["version"]
     ):
         raise RequestConflict
+    if not isinstance(comment, str):
+        raise ValueError("모든 대상 자료와 검토 근거를 확인하세요.")
     comment = comment.strip()
     if (
         decision not in RagReferenceReview.Decision.values
-        or not 1 <= len(comment) <= 3000
+        or len(comment) > 3000
+        or (decision != RagReferenceReview.Decision.APPROVED and not comment)
         or type(review_version) is not int
         or review_version < 0
         or confirmed_all_cases is not True

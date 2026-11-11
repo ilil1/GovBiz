@@ -1,15 +1,16 @@
 """실행별 참조 승인·철회와 후보 검토·품질 판정의 동시성 경계를 검증한다."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from copy import deepcopy
 from threading import Barrier
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, close_old_connections, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIClient
 
@@ -25,6 +26,67 @@ from .rag_reference_reviews import RUBRIC, save_reference_review
 from .rag_reviews import review_state, save_review
 from .services import RequestConflict, ResultsUnavailable
 from .test_rag_reviews import RagReviewFixture
+from .views import RagReferenceRequestSerializer
+
+
+class RagReferenceReasonValidationTests(SimpleTestCase):
+    def setUp(self):
+        self.run = MagicMock(execution_spec_sha256="a" * 64, dataset_id="dataset")
+        self.user = MagicMock(pk=1)
+        self.material = {"fixture_sha256": "b" * 64, "cases": [{"case_id": "R01"}]}
+        self.payload = {
+            "decision": "APPROVED",
+            "comment": "",
+            "fixture_sha256": "b" * 64,
+            "case_ids": ["R01"],
+            "rubric_version": RUBRIC["version"],
+            "review_version": 0,
+            "confirmed_all_cases": True,
+        }
+
+    def test_serializer_accepts_empty_comment_but_requires_string_field_and_limit(self):
+        self.assertTrue(RagReferenceRequestSerializer(data=self.payload).is_valid())
+        missing = dict(self.payload)
+        del missing["comment"]
+        self.assertFalse(RagReferenceRequestSerializer(data=missing).is_valid())
+        self.assertFalse(
+            RagReferenceRequestSerializer(data={**self.payload, "comment": "a" * 3001}).is_valid()
+        )
+
+    def test_non_approval_requires_reason_before_writing(self):
+        with patch(
+            "apps.evaluations.rag_reference_reviews.read_material", return_value=self.material
+        ):
+            for decision in ("CHANGES_REQUESTED", "DEFERRED", "REVOKED"):
+                with self.subTest(decision=decision), self.assertRaises(ValueError):
+                    save_reference_review(
+                        self.run,
+                        self.user,
+                        **(self.payload | {"decision": decision, "comment": " "}),
+                    )
+
+    def test_approval_stores_blank_reason_without_inventing_text(self):
+        locked = MagicMock(review_version=0)
+        locked.rag_reference_reviews.filter.return_value.first.return_value = None
+        locked.rag_reference_reviews.first.return_value = None
+        with (
+            patch(
+                "apps.evaluations.rag_reference_reviews.read_material", return_value=self.material
+            ),
+            patch(
+                "apps.evaluations.rag_reference_reviews.transaction.atomic",
+                return_value=nullcontext(),
+            ),
+            patch("apps.evaluations.rag_reference_reviews.locked_run", return_value=locked),
+            patch("apps.evaluations.rag_baselines.lock_existing"),
+            patch("apps.evaluations.rag_baselines.invalidate"),
+            patch(
+                "apps.evaluations.rag_reference_reviews.RagReferenceReview.objects.create"
+            ) as create,
+        ):
+            save_reference_review(self.run, self.user, **(self.payload | {"comment": "  "}))
+        self.assertEqual(create.call_args.kwargs["comment"], "")
+        self.assertEqual(create.call_args.kwargs["decision"], "APPROVED")
 
 
 class ReferenceFixture(RagReviewFixture):
@@ -106,7 +168,9 @@ class RagReferenceReviewTests(ReferenceFixture, TestCase):
             ({"rubric_version": "future"}, 409),
             ({"review_version": 1}, 409),
             ({"review_version": -1}, 400),
-            ({"comment": " "}, 400),
+            ({"decision": "CHANGES_REQUESTED", "comment": " "}, 400),
+            ({"decision": "DEFERRED", "comment": ""}, 400),
+            ({"decision": "REVOKED", "comment": " "}, 400),
             ({"comment": "a" * 3001}, 400),
             ({"decision": "PASS"}, 400),
         ):
@@ -120,6 +184,20 @@ class RagReferenceReviewTests(ReferenceFixture, TestCase):
         self.run.refresh_from_db()
         self.assertEqual(self.run.review_version, 0)
         self.assertFalse(RagReferenceReview.objects.exists())
+
+    def test_approval_without_comment_is_recorded_and_retry_is_idempotent(self):
+        response = self.reference_post(comment="  ")
+        self.assertEqual(response.status_code, 200)
+        value = response.json()
+        self.assertTrue(value["reference_review"]["approved"])
+        self.assertEqual(value["reference_review"]["history"][0]["comment"], "")
+        self.assertEqual(value["review_version"], 1)
+        self.assertEqual(self.state()["reference_review"]["history"][0]["comment"], "")
+        self.assertEqual(self.reference_post(comment="").status_code, 200)
+        self.assertEqual(RagReferenceReview.objects.count(), 1)
+        self.assertEqual(self.reference_post(comment="다른 사유").status_code, 409)
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.review_version, 1)
 
     def test_revocation_is_append_only_and_old_retry_cannot_restore_approval(self):
         first = self.reference_post().json()["reference_review"]["history"][0]
