@@ -66,7 +66,10 @@ class CaseReviewTests(ReviewFixture, TestCase):
     def test_invalid_case_hash_rubric_and_blank_reason_are_rejected(self):
         for values, status in [
             ({"case_id": "UNKNOWN"}, 400),
-            ({"comment": " "}, 400),
+            ({"decision": "UNSUITABLE", "comment": ""}, 400),
+            ({"decision": "UNSUITABLE", "comment": " "}, 400),
+            ({"decision": "DEFERRED", "comment": ""}, 400),
+            ({"decision": "DEFERRED", "comment": " "}, 400),
             ({"capture_sha256": "0" * 64}, 409),
             ({"fixture_sha256": "0" * 64}, 409),
             ({"rubric_version": "future-version"}, 409),
@@ -77,6 +80,25 @@ class CaseReviewTests(ReviewFixture, TestCase):
         self.assertEqual(EvaluationCaseReview.objects.count(), 0)
         self.run.refresh_from_db()
         self.assertEqual(self.run.review_version, 0)
+
+    def test_suitable_case_saves_blank_reason(self):
+        response = self.save(comment=" ")
+        self.assertEqual(response.status_code, 200)
+        review = EvaluationCaseReview.objects.get(run=self.run, case_id="E01")
+        self.assertEqual(review.decision, "SUITABLE")
+        self.assertEqual(review.comment, "")
+        self.assertEqual(response.json()["case_reviews"][0]["comment"], "")
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.review_version, 1)
+
+    def test_suitable_case_saves_when_reason_is_omitted(self):
+        payload = self.payload()
+        del payload["comment"]
+        response = self.client.post(self.url + "/case-review", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        review = EvaluationCaseReview.objects.get(run=self.run, case_id="E01")
+        self.assertEqual(review.decision, "SUITABLE")
+        self.assertEqual(review.comment, "")
 
     def test_retry_is_idempotent_and_another_admin_cannot_reuse_stale_version(self):
         payload = self.payload()
