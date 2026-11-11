@@ -13,34 +13,34 @@
     "code_sha256": "b2715707819f120f677aba684790f3f68d6c27c17c1613db455d162d89823b84"
   },
   "evaluation": {
-    "sha256": "c1816fcebb79ceb93cac334c39606a044e3f6c8862544c5e3f83f66617eafba5",
+    "sha256": "cde8ff7a052b29043b42312a0794ade4bf5abe22dff5c47f430a7d5ab2797d7f",
     "files": {
       "evaluation/support-program-evidence/evaluate.py": "f46ca0cd54050d49b9e4daa6ae6c46d7a89f00fcc38a885f2af14a7b4a3fdb02",
       "evaluation/support-program-evidence/official_snapshot.py": "1b97e2d2aa15ca02b50e2a999203c7f685de08afc735bb8456b880041c37abf4",
       "evaluation/support-program-evidence/verify_flow.py": "828ff0faa4c2871dd6a880742184e5700a754a5d5307f7fc95a3c45212ade0ed",
-      "evaluation/support-program-evidence/llmops.py": "9197042d7ae51161565de3bb1bc5fee027371f67d1e6d56cfe7a7d8710379de2",
+      "evaluation/support-program-evidence/llmops.py": "644be91df216cd57a9a4beff32e0d2405175e2a979f7a401d65c8e9bbc80011d",
       "backend/ops-service/apps/evaluations/managed_materials.py": "113173f008eb2b1aab5ce5fd7f354342b7f50692b341f22798dbd6b597ab8f31",
       "backend/ai-service/app/support_program_evidence/models.py": "01e8da480d9ede6a976220a1a3bb6607ec8329783455d6c25c84a245a64b29b6",
       "backend/ai-service/app/support_program_identity.py": "aa706697f294fd4846263e73cd281c4a9d660a7939feb7e2e4e3d60fd5393fb1",
       "backend/ai-service/pyproject.toml": "50ef0fc8c53c9af3e1bb31fafed5200732725ea43691be538d90840d2168037c",
       "backend/ai-service/uv.lock": "349ecdd9152eb2f5479a3db41d39e9d1bf7a8f5a16103426c2cd78207add1fe3"
     },
-    "version": "c1816fcebb79ceb93cac334c39606a044e3f6c8862544c5e3f83f66617eafba5",
+    "version": "cde8ff7a052b29043b42312a0794ade4bf5abe22dff5c47f430a7d5ab2797d7f",
     "scope": "fixed-answer-context-only"
   },
   "rag_evaluation": {
-    "sha256": "975ab45d8deecdb4d1c0f5b8a3ce4f1a5280ae5be12bf08457441c0e111a6aa3",
+    "sha256": "410466ed1680b7a7b064f4edbd6d6e5dcdadd125ede9f49891257af3f563a037",
     "files": {
       "evaluation/support-program-evidence/rag_evaluate.py": "4426b8cc927e2e95e945c1785c3470d1e366281e4c0380f4da85e482991a8b44",
-      "evaluation/support-program-evidence/rag_replay_flow.py": "a215ac8058c7b17b11961bd7f6ff6729def00730e286416efa1fd7f6120b2df7",
-      "evaluation/support-program-evidence/llmops.py": "9197042d7ae51161565de3bb1bc5fee027371f67d1e6d56cfe7a7d8710379de2",
+      "evaluation/support-program-evidence/rag_replay_flow.py": "e1d85f8f2d8a7ce0f867766fa20f097d84dbd06d5c02c28ad53f37d0a66d4417",
+      "evaluation/support-program-evidence/llmops.py": "644be91df216cd57a9a4beff32e0d2405175e2a979f7a401d65c8e9bbc80011d",
       "backend/ops-service/apps/evaluations/rag_replay.py": "6cd2f97303a4465930db736e8e82092cd9c2ed5763bda42f365ac527efff1333",
       "backend/ai-service/app/support_program_evidence/models.py": "01e8da480d9ede6a976220a1a3bb6607ec8329783455d6c25c84a245a64b29b6",
       "backend/ai-service/app/support_program_identity.py": "aa706697f294fd4846263e73cd281c4a9d660a7939feb7e2e4e3d60fd5393fb1",
       "backend/ai-service/pyproject.toml": "50ef0fc8c53c9af3e1bb31fafed5200732725ea43691be538d90840d2168037c",
       "backend/ai-service/uv.lock": "349ecdd9152eb2f5479a3db41d39e9d1bf7a8f5a16103426c2cd78207add1fe3"
     },
-    "version": "975ab45d8deecdb4d1c0f5b8a3ce4f1a5280ae5be12bf08457441c0e111a6aa3",
+    "version": "410466ed1680b7a7b064f4edbd6d6e5dcdadd125ede9f49891257af3f563a037",
     "scope": "source-chunks-retrieval-answer"
   },
   "generation": {

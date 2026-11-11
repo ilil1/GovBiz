@@ -22,6 +22,7 @@ import pandera.pandas as pa
 import httpx
 from evidently import Report
 from evidently.metrics import MeanValue, RowCount
+from evidently.legacy.renderers.html_widgets import WidgetSize
 from filelock import FileLock
 from langfuse.api.client import LangfuseAPI
 from prefect import flow, task
@@ -136,6 +137,42 @@ def write_json(path: Path, value) -> None:
     temporary.replace(path)
 
 
+def add_paired_change_metrics(current: pd.DataFrame, reference: pd.DataFrame, columns: list[str]):
+    """동일 사례의 후보−비교 대상과 쌍으로 측정된 비율을 Evidently에 전달한다."""
+    current = current.copy()
+    reference = reference.copy()
+    if (not current.case_id.is_unique or not reference.case_id.is_unique
+            or set(current.case_id) != set(reference.case_id)):
+        raise ValueError("comparison cases differ")
+    before = reference.set_index("case_id")
+    after = current.set_index("case_id")
+    metrics = []
+    for column in columns:
+        delta = after[column] - before[column].reindex(after.index)
+        paired = delta.notna().astype(float)
+        available_name = f"paired_available_{column}"
+        delta_name = f"paired_delta_{column}"
+        current[available_name] = current.case_id.map(paired)
+        reference[available_name] = reference.case_id.map(paired)
+        metrics.append(MeanValue(column=available_name))
+        if paired.any():
+            current[delta_name] = current.case_id.map(delta)
+            # 차이가 없는 경우를 0으로 표시한다. 실제 비교 대상의 측정값이 아니다.
+            reference[delta_name] = reference.case_id.map(delta.where(delta.isna(), 0.0))
+            metrics.append(MeanValue(column=delta_name))
+    return current, reference, metrics
+
+
+def compact_report_charts(snapshot, expected_charts: int) -> None:
+    """Evidently 0.7.23 내부 위젯을 두 열로 배치하며 변경된 구조는 명시적으로 거부한다."""
+    widgets = snapshot._widgets  # 잠긴 0.7.23은 차트 크기를 설정하는 공개 API가 없다.
+    charts = [widget for widget in widgets if widget.type == "big_graph"]
+    if len(charts) != expected_charts or any(widget.size != WidgetSize.FULL for widget in charts):
+        raise RuntimeError("Unexpected Evidently report widget layout")
+    for chart in charts:
+        chart.size = WidgetSize.HALF.value
+
+
 def create_report(current: dict, reference: dict, output: Path) -> dict:
     evaluate.require(current["summary"].get("scope") == reference["summary"].get("scope") == "fixed-answer-context-only",
                      "comparison scopes differ or are unsupported")
@@ -155,11 +192,22 @@ def create_report(current: dict, reference: dict, output: Path) -> dict:
                 "reference_source": current["summary"]["referenceSource"], "semantic_faithfulness": "unmeasured",
                 "data_type": current["summary"]["dataType"],
                 "comparison": "self-replay" if current["run_id"] == reference["run_id"] else "candidate-reference"}
-    snapshot = Report([RowCount(), *[MeanValue(column=name) for name in columns]],
-                      metadata=metadata, include_tests=False).run(
-        current_data=current["frame"][["case_id", "outcome", *columns]],
-        reference_data=reference["frame"][["case_id", "outcome", *columns]], name="GovBiz evidence evaluation",
+    paired_columns = (["status_match", "citation_recall"]
+                      if current["summary"]["completed"] and reference["summary"]["completed"] else [])
+    chart_columns = list(dict.fromkeys([*columns, *paired_columns]))
+    chart_current, chart_reference, paired_metrics = add_paired_change_metrics(
+        current["frame"][["case_id", "outcome", *chart_columns]],
+        reference["frame"][["case_id", "outcome", *chart_columns]], paired_columns,
     )
+    unused_columns = [name for name in chart_columns if name not in columns]
+    chart_current = chart_current.drop(columns=unused_columns)
+    chart_reference = chart_reference.drop(columns=unused_columns)
+    snapshot = Report([RowCount(), *[MeanValue(column=name) for name in columns], *paired_metrics],
+                      metadata=metadata, include_tests=False).run(
+        current_data=chart_current,
+        reference_data=chart_reference, name="GovBiz evidence evaluation",
+    )
+    compact_report_charts(snapshot, len(columns) + len(paired_metrics))
     snapshot.save_html(str(output / "report.html.partial"))
     (output / "report.html.partial").replace(output / "report.html")
     snapshot.save_json(str(output / "evidently.json.partial"))

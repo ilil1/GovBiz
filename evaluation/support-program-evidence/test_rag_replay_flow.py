@@ -114,8 +114,21 @@ def test_ops_entrypoint_replays_three_cases_with_real_report_and_distinct_metric
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
-def test_official_preparation_can_render_unmeasured_report_without_model_calls(runner, version):
+def test_official_preparation_can_render_unmeasured_report_without_model_calls(runner, version, monkeypatch):
     root, scores = runner
+    real_report = rag_replay_flow.Report
+    snapshots = []
+
+    class CapturedReport:
+        def __init__(self, *args, **kwargs):
+            self.report = real_report(*args, **kwargs)
+
+        def run(self, *args, **kwargs):
+            snapshot = self.report.run(*args, **kwargs)
+            snapshots.append(snapshot.dict())
+            return snapshot
+
+    monkeypatch.setattr(rag_replay_flow, "Report", CapturedReport)
     params = parameters(dataset=f"official-rag-20261006-{version}", capture=f"official-rag-not-started-{version}")
     manifest = ops_flow.evaluate_saved_capture.fn(**params)
     folder = root / params["request_id"] / "evaluation"
@@ -127,6 +140,9 @@ def test_official_preparation_can_render_unmeasured_report_without_model_calls(r
     assert not result[1]["completed"] and not result[1]["baselineEligible"]
     assert all(m["value"] is None for m in result[1]["metrics"].values())
     assert all(p["name"] == "ragSourceCaseFailed" for p in scores)
+    metrics = {item["metric_name"]: item["value"] for item in snapshots[0]["metrics"]}
+    assert metrics["MeanValue(column=paired_available_retrieval_recall)"] == 0
+    assert "MeanValue(column=paired_delta_retrieval_recall)" not in metrics
 
 
 @pytest.mark.parametrize("kind", ["synthetic", "integration-stub", "recorded"])

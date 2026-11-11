@@ -1678,7 +1678,9 @@ describe('React LLMOps 운영 화면', () => {
   it('보고서 경로는 관리자 세션으로 열고 과거 비교 기록이 없으면 원본을 안내한다', async () => {
     open(`/ops/evaluations/${id}/report`)
     expect(await screen.findByRole('heading', { name: 'Evidently 평가 보고서' })).toBeTruthy()
-    expect(await screen.findByRole('link', { name: '원본 차트 새 탭에서 보기 ↗' })).toHaveProperty('pathname', completed.report_url)
+    const chart = await screen.findByRole('link', { name: '원본 차트 새 탭에서 보기 ↗' })
+    expect(chart).toHaveProperty('pathname', completed.report_url)
+    expect(chart).toHaveProperty('search', '?view=compact')
     expect(screen.getByText(/비교 기록이 없습니다/)).toBeTruthy()
     expect(fetchMock.mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true)
   })

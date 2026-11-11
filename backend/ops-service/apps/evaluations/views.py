@@ -27,6 +27,7 @@ from .rag_reference_reviews import save_reference_review as save_rag_reference_r
 from .rag_reviews import review_state as rag_review_state
 from .rag_reviews import save_review as save_rag_review
 from .recovery import ReassessmentAlreadyExists, recovery_state, submit_recovery
+from .report_layout import ReportLayoutUnavailable, compact_report
 from .reviews import (
     baseline_choices,
     clear_baseline,
@@ -722,7 +723,19 @@ def evaluation_report(request, run_id):
     run = get_object_or_404(EvaluationRun, pk=run_id, status="COMPLETED")
     try:
         _, _, report, _ = read_result(run)
-        response = HttpResponse(report, content_type="text/html; charset=utf-8")
+        status = 200
+        if request.query_params.get("view") == "compact":
+            try:
+                report = compact_report(report)
+            except ReportLayoutUnavailable:
+                status = 422
+                report = (
+                    '<!doctype html><html lang="ko"><meta charset="utf-8">'
+                    "<title>보고서 보기</title><body>"
+                    "<p>이 보고서는 두 열 보기를 지원하지 않습니다.</p>"
+                    '<a href="?">저장된 원본 보고서 보기</a></body></html>'
+                )
+        response = HttpResponse(report, status=status, content_type="text/html; charset=utf-8")
     except (ResultsUnavailable, OSError) as exc:
         raise Http404("보고서를 확인할 수 없습니다.") from exc
     # 생성 HTML의 스크립트가 Ops 쿠키·DOM·API를 읽을 수 없는 별도 origin sandbox.

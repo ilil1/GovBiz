@@ -48,6 +48,40 @@ function metrics(comparison: Comparison): Metric[] {
   })
 }
 
+type CaseChange = { id: string; index: number; change: 'improved' | 'worse' | 'same' | 'unavailable' }
+
+function caseChanges(comparison: Comparison): Array<{ label: string; cases: CaseChange[] }> {
+  const definitions = comparison.schema_version === 3
+    ? [
+        { label: '근거 검색 재현율', key: 'retrievalRecallAtK' as const },
+        { label: '답변 인용 재현율', key: 'answerCitationRecall' as const },
+        { label: '답변 상태 일치율', key: 'answerStatusMatches' as const },
+      ]
+    : [
+        { label: '답변 인용 재현율', key: 'citation_recall' as const },
+        { label: '답변 상태 일치율', key: 'status_match' as const },
+      ]
+  return definitions.map(({ label, key }) => ({
+    label,
+    cases: comparison.case_ids.map((id, index) => {
+      let candidate: number | boolean | null | undefined = undefined
+      let reference: number | boolean | null | undefined = undefined
+      if (comparison.schema_version === 3 && (key === 'retrievalRecallAtK' || key === 'answerCitationRecall' || key === 'answerStatusMatches')) {
+        candidate = comparison.current.cases.find((item) => item.caseId === id)?.[key]
+        reference = comparison.reference.cases.find((item) => item.caseId === id)?.[key]
+      } else if (comparison.schema_version === 2 && (key === 'citation_recall' || key === 'status_match')) {
+        const item = comparison.cases.find((entry) => entry.case_id === id)
+        candidate = item?.candidate.outcome === 'success' ? item.candidate[key] : null
+        reference = item?.reference.outcome === 'success' ? item.reference[key] : null
+      }
+      const change = candidate == null || reference == null ? 'unavailable'
+        : Number(candidate) > Number(reference) ? 'improved'
+          : Number(candidate) < Number(reference) ? 'worse' : 'same'
+      return { id, index, change }
+    }),
+  }))
+}
+
 export function EvaluationReport({ onExpired }: { onExpired: () => void }) {
   const { runId = '' } = useParams()
   const [run, setRun] = useState<EvaluationRun | null>(null)
@@ -93,6 +127,7 @@ export function EvaluationReport({ onExpired }: { onExpired: () => void }) {
     return () => controller.abort()
   }, [runId, reload])
   const comparison = run?.status === 'COMPLETED' ? run.comparison : null
+  const changes = comparison ? caseChanges(comparison) : []
   const detailPath = `/ops/evaluations/${runId}`
   return <>
     <WorkspacePageHeader title="Evidently 평가 보고서" parent={{ to: detailPath, label: '평가 상세' }}
@@ -112,6 +147,18 @@ export function EvaluationReport({ onExpired }: { onExpired: () => void }) {
           <p className="text-xs break-all text-ink-muted">실행 ID: {run.id}</p>
         </section>
         {comparison ? <>
+          <section aria-label="지표 해설" className={styles.card}>
+            <h2 className={styles.cardTitle}>지표 한눈에 보기</h2>
+            {comparison.comparison === 'self-replay' && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">동일한 저장 기록끼리의 재현 확인입니다. 모델 개선 전후의 비교가 아닙니다.</p>}
+            {comparison.schema_version === 3 && [comparison.current, comparison.reference].some((value) => ['synthetic-contract-check', 'integration-stub-replay'].includes(value.measurementKind)) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">합성 데이터 또는 테스트 대역이 포함되어 있습니다. 실패율이나 점수 차이를 실제 모델의 성능 개선으로 해석할 수 없습니다.</p>}
+            <p className="text-sm text-ink-muted">후보와 비교 대상을 나란히 표시합니다. 사례 변화는 같은 질문에서 양쪽 모두 측정된 점수만 비교하며, 점수가 높아지면 개선·낮아지면 악화로 표시합니다. 미측정은 0점이 아닙니다. 사례 번호를 눌러 질문과 답변을 확인하세요.</p>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {metrics(comparison).map((item) => <MetricCard key={item.label} metric={item} changes={changes.find((value) => value.label === item.label)?.cases} />)}
+              {changes.filter((item) => !metrics(comparison).some((metric) => metric.label === item.label)).map((item) => <div key={item.label} className="min-w-0 rounded-xl border border-line p-4"><h3 className="font-bold">{item.label}</h3><CaseChangeCard label={item.label} cases={item.cases} /></div>)}
+            </div>
+            {comparison.schema_version === 3 ? <RagExecution comparison={comparison} /> : <p className="text-xs text-ink-muted">이 형식의 기록에는 지표별 측정 건수가 없습니다. 전체 사례 수를 모든 지표의 표본 수로 해석하지 마세요.</p>}
+            <p className="text-xs text-ink-muted">점수 변화는 답변의 사실성이나 품질 합격을 뜻하지 않습니다. 사람 검토는 평가 상세에서 별도로 확인하세요.</p>
+          </section>
           <section aria-label="비교 데이터 안내" className={styles.card}>
             <h2 className={styles.cardTitle}>무엇을 비교하나요?</h2>
             <p className="text-sm">후보(Current)는 이번에 확인할 답변 기록, 비교 대상(Reference)은 함께 선택한 기록입니다. 비교 대상이라는 이유만으로 사람이 승인한 정답이나 운영 기준이 되지는 않습니다.</p>
@@ -129,30 +176,22 @@ export function EvaluationReport({ onExpired }: { onExpired: () => void }) {
                 </div>
               })}
             </div>
-            {comparison.comparison === 'self-replay' && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">동일한 저장 기록끼리의 재현 확인입니다. 모델 개선 전후의 비교가 아닙니다.</p>}
-            {comparison.schema_version === 3 && [comparison.current, comparison.reference].some((value) => ['synthetic-contract-check', 'integration-stub-replay'].includes(value.measurementKind)) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">합성 데이터 또는 테스트 대역이 포함되어 있습니다. 실패율이나 점수 차이를 실제 모델의 성능 개선으로 해석할 수 없습니다.</p>}
-          </section>
-          <section aria-label="지표 해설" className={styles.card}>
-            <h2 className={styles.cardTitle}>점수는 무엇을 뜻하나요?</h2>
-            <p className="text-sm text-ink-muted">미측정은 0점이 아닙니다. 점수는 측정된 사례의 평균이므로 측정 건수와 실행 실패를 함께 확인하세요. 품질 합격과 사람 검토는 평가 상세에서 별도로 확인합니다.</p>
-            <div className="grid gap-4 md:grid-cols-3">{metrics(comparison).map((item) => <MetricCard key={item.label} metric={item} />)}</div>
-            {comparison.schema_version === 3 ? <RagExecution comparison={comparison} /> : <p className="text-xs text-ink-muted">이 형식의 기록에는 지표별 측정 건수가 없습니다. 전체 사례 수를 모든 지표의 표본 수로 해석하지 마세요.</p>}
           </section>
           <section aria-label="평가 질문과 답변" className={styles.card}>
             <h2 className={styles.cardTitle}>어떤 질문으로 평가했나요?</h2>
             <p className="text-sm text-ink-muted">사례를 펼치면 저장된 답변을 볼 수 있습니다. 참조 조건과의 일치가 사실성에 대한 사람의 승인을 뜻하지는 않습니다.</p>
             {materialError && <p role="alert" className="text-sm text-red-700">질문·답변 조회 실패: {materialError} 위 지표는 별도로 조회된 기록입니다. 보고서 새로고침으로 다시 확인할 수 있습니다.</p>}
             {!material && !materialError && <p role="status">질문·답변을 불러오고 있습니다.</p>}
-            {comparison.case_ids.map((id) => {
+            {comparison.case_ids.map((id, index) => {
               const source = material?.find((item) => item.id === id)
-              const rag = comparison.schema_version === 3 ? comparison.current.cases.find((item) => item.caseId === id) : null
-              const fixed = comparison.schema_version === 2 ? comparison.cases.find((item) => item.case_id === id)?.candidate : null
-              return <details key={id} className="rounded-xl border border-line p-4">
+              const rag = comparison.schema_version === 3 ? [comparison.current, comparison.reference].map((side) => side.cases.find((item) => item.caseId === id)) : null
+              const fixed = comparison.schema_version === 2 ? comparison.cases.find((item) => item.case_id === id) : null
+              return <details key={id} id={`evaluation-case-${index}`} className="rounded-xl border border-line p-4">
                 <summary className="cursor-pointer text-sm font-semibold leading-6"><span className="mr-2 text-brand-primary">{id}</span>{source?.question ?? '질문 자료 확인 필요'}</summary>
                 <div className="mt-3 space-y-3 text-sm leading-6">
                   {source && <p className="text-ink-muted">공고: {source.document} · 예상 판단: {statusLabel(source.expected)}</p>}
-                  {rag && <p>후보 검색 재현율 {percent(rag.retrievalRecallAtK)} · 인용 재현율 {percent(rag.answerCitationRecall)} · 상태 판단 {rag.answerStatusMatches === null ? '미측정' : rag.answerStatusMatches ? '참조와 일치' : '참조와 불일치'}<br />실행: {rag.failure ? `실패 (${rag.failure.stage} · ${rag.failure.code})` : '실패 기록 없음'}</p>}
-                  {fixed && <p>후보 실행: {({ success: '응답 기록 있음', error: '실행 오류', missing: '응답 누락' })[fixed.outcome]} · 상태 일치 {percent(fixed.status_match)} · 인용 재현율 {percent(fixed.citation_recall)}</p>}
+                  {rag && rag.map((item, side) => <p key={side}>{side === 0 ? '후보' : '비교 대상'}: {item ? <>검색 재현율 {percent(item.retrievalRecallAtK)} · 인용 재현율 {percent(item.answerCitationRecall)} · 상태 판단 {item.answerStatusMatches === null ? '미측정' : item.answerStatusMatches ? '참조와 일치' : '참조와 불일치'}<br />실행: {item.failure ? `실패 (${item.failure.stage} · ${item.failure.code})` : '실패 기록 없음'}</> : '사례 기록 없음'}</p>)}
+                  {fixed && ([['후보', fixed.candidate], ['비교 대상', fixed.reference]] as const).map(([label, item]) => <p key={label}>{label} 실행: {({ success: '응답 기록 있음', error: '실행 오류', missing: '응답 누락' })[item.outcome]} · 상태 일치 {percent(item.status_match)} · 인용 재현율 {percent(item.citation_recall)}</p>)}
                   {source && <div className="grid gap-3 xl:grid-cols-2">{([['후보 답변', source.candidate], ['비교 대상 답변', source.reference]] as const).map(([label, answer]) => <div key={label} className="rounded-lg bg-surface-muted p-3"><h3 className="mb-2 font-bold">{label}</h3><p className="whitespace-pre-wrap break-words">{answer || '저장된 답변 없음'}</p></div>)}</div>}
                 </div>
               </details>
@@ -163,21 +202,42 @@ export function EvaluationReport({ onExpired }: { onExpired: () => void }) {
         {run.status === 'COMPLETED' && run.report_url && <section className={styles.card} aria-label="Evidently 원본 차트">
           <h2 className={styles.cardTitle}>Evidently 원본 차트</h2>
           <p className="text-sm">Current는 후보, Reference는 비교 대상이며 Row count는 평가 사례 수입니다. Mean은 해당 지표의 평균입니다.</p>
+          <p className="text-sm">새로 생성된 원본의 paired_available 지표는 같은 사례에서 양쪽이 모두 측정된 비율입니다. paired_delta 지표는 그 사례들의 후보 점수에서 비교 대상 점수를 뺀 값입니다. paired_delta 차트의 Current는 이 점수 차이이고 Reference는 변화 없음(0) 기준선입니다. 양수는 후보 점수가 높고 음수는 낮습니다. 이전에 생성된 원본에는 이 지표가 없을 수 있습니다.</p>
+          <p className="text-sm">지표 이름에서 retrieval_recall은 근거 검색 재현율, citation_recall은 답변 인용 재현율, status_match는 답변 상태 일치를 뜻합니다. 예를 들어 paired_available_citation_recall의 Mean이 0.5라면 전체 사례 중 절반에서 양쪽 점수를 비교할 수 있다는 뜻입니다.</p>
           {comparison?.schema_version === 3 && <p className="text-sm">failed의 0은 실패 없음, 1은 실행 실패입니다. Mean이 0이면 실패율 0%이며 답변 정확도 100%를 뜻하지 않습니다. 양쪽 모두 측정값이 있는 지표만 담긴 원본에는 일부 점수 차트가 없을 수 있습니다. 위 해설에서는 후보만 측정된 점수도 표시합니다.</p>}
-          <div><a className={styles.secondaryButton} href={run.report_url} target="_blank" rel="noopener noreferrer">원본 차트 새 탭에서 보기 ↗</a></div>
+          <p className="text-sm">두 열 보기는 저장된 원본을 검증한 뒤 배치만 바꿔 표시합니다. 저장된 보고서 파일과 점수는 바뀌지 않습니다.</p>
+          <div><a className={styles.secondaryButton} href={`${run.report_url}?view=compact`} target="_blank" rel="noopener noreferrer">원본 차트 새 탭에서 보기 ↗</a></div>
         </section>}
       </>}
     </div>
   </>
 }
 
-function MetricCard({ metric }: { metric: Metric }) {
+function MetricCard({ metric, changes }: { metric: Metric; changes?: CaseChange[] }) {
   const format = (value: number | null) => value === null ? '미측정' : metric.unit ? `${value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })} ${metric.unit === 'tokens' ? '토큰' : 'ms'}` : percent(value)
-  return <article aria-label={metric.label} className="flex flex-col gap-3 rounded-xl border border-line p-4">
-    <h3 className="font-bold">{metric.label}</h3>
-    <p className="min-h-16 text-sm leading-6 text-ink-muted">{metric.description}</p>
-    <div className="mt-auto rounded-lg bg-brand-soft p-3"><span className="text-xs font-semibold">후보</span><p className="mt-1 text-3xl font-bold tabular-nums text-brand-primary">{format(metric.candidate)}</p>{metric.candidateCoverage && <p className="mt-1 text-xs">{metric.candidateCoverage}</p>}</div>
-    <p className="text-sm text-ink-muted">비교 대상 <strong className="ml-1 text-ink">{format(metric.reference)}</strong>{metric.referenceCoverage && <span className="mt-1 block text-xs">{metric.referenceCoverage}</span>}</p>
+  return <article aria-label={metric.label} className="min-w-0 rounded-xl border border-line p-4">
+    <div className="flex items-start justify-between gap-2"><h3 className="font-bold">{metric.label}</h3><details className="text-xs text-ink-muted"><summary className="cursor-pointer whitespace-nowrap">지표 설명</summary><p className="mt-2 leading-5">{metric.description}</p></details></div>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      {([['후보', metric.candidate, metric.candidateCoverage], ['비교 대상', metric.reference, metric.referenceCoverage]] as const).map(([label, value, coverage]) => <div key={label} className="min-w-0 rounded-lg bg-surface-muted p-2">
+        <span className="text-xs font-semibold text-ink-muted">{label}</span><p className="mt-1 break-words text-xl font-bold tabular-nums">{format(value)}</p>{coverage && <p className="mt-1 text-xs">{coverage}</p>}
+      </div>)}
+    </div>
+    {changes && <CaseChangeCard label={metric.label} cases={changes} />}
+  </article>
+}
+
+function CaseChangeCard({ label, cases }: { label: string; cases: CaseChange[] }) {
+  return <article aria-label={`${label} 사례별 변화`} className="mt-3 border-t border-line pt-2">
+    <h4 className="text-xs font-semibold text-ink-muted">같은 질문의 점수 변화</h4>
+    <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+      {([['improved', '개선'], ['worse', '악화'], ['same', '동일'], ['unavailable', '비교 불가']] as const).map(([key, title]) => {
+        const items = cases.filter((item) => item.change === key)
+        return <div key={key} className="min-w-0 break-words text-xs leading-5"><span className="font-semibold">{title} {items.length}건</span>{items.length > 0 && <> · {items.map((item, index) => <span key={item.id}>{index > 0 && ', '}<a className={styles.quietLink} href={`#evaluation-case-${item.index}`} onClick={() => {
+          const details = document.getElementById(`evaluation-case-${item.index}`)
+          if (details instanceof HTMLDetailsElement) details.open = true
+        }}>{item.id}</a></span>)}</>}</div>
+      })}
+    </div>
   </article>
 }
 

@@ -10,6 +10,7 @@ import pandas as pd
 import pandera.pandas as pa
 import pytest
 from filelock import FileLock, Timeout
+from plotly.utils import PlotlyJSONEncoder
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -95,6 +96,57 @@ def test_report_detects_known_change_and_preserves_run_ids(tmp_path):
     assert (tmp_path / "report.html").stat().st_size > 1000
     snapshot = json.loads((tmp_path / "evidently.json").read_text())
     assert "0.8333333333333334" in json.dumps(snapshot)
+    metrics = {item["metric_name"]: item["value"] for item in snapshot["metrics"]}
+    assert metrics["MeanValue(column=paired_available_status_match)"] == 1
+    assert metrics["MeanValue(column=paired_delta_status_match)"] == pytest.approx(-1 / 6)
+
+
+def test_paired_report_aligns_case_ids_and_keeps_unmeasured_values():
+    current = pd.DataFrame({"case_id": ["A", "B", "C"], "score": [0.8, None, 0.2]})
+    reference = pd.DataFrame({"case_id": ["C", "A", "B"], "score": [None, 0.5, 0.4]})
+    after, before, metrics = llmops.add_paired_change_metrics(current, reference, ["score"])
+    assert after.paired_available_score.tolist() == [1, 0, 0]
+    assert before.paired_available_score.tolist() == [0, 1, 0]
+    assert after.paired_delta_score.iloc[0] == pytest.approx(0.3)
+    assert after.paired_delta_score.iloc[1:].isna().all()
+    assert before.paired_delta_score.iloc[1] == 0
+    assert before.paired_delta_score.iloc[[0, 2]].isna().all()
+    snapshot = llmops.Report(metrics, include_tests=False).run(current_data=after, reference_data=before).dict()
+    values = {item["metric_name"]: item["value"] for item in snapshot["metrics"]}
+    assert values["MeanValue(column=paired_available_score)"] == pytest.approx(1 / 3)
+    assert values["MeanValue(column=paired_delta_score)"] == pytest.approx(0.3)
+
+
+def test_paired_report_with_no_measured_pair_has_only_zero_availability():
+    current = pd.DataFrame({"case_id": ["A", "B"], "score": [0.5, None]})
+    reference = pd.DataFrame({"case_id": ["B", "A"], "score": [0.4, None]})
+    after, before, metrics = llmops.add_paired_change_metrics(current, reference, ["score"])
+    assert "paired_delta_score" not in after.columns
+    assert after.paired_available_score.tolist() == [0, 0]
+    snapshot = llmops.Report(metrics, include_tests=False).run(
+        current_data=after.drop(columns="score"), reference_data=before.drop(columns="score")
+    ).dict()
+    assert snapshot["metrics"][0]["value"] == 0
+
+
+def test_compact_charts_preserve_metrics_and_reject_unexpected_layout():
+    current = pd.DataFrame({"score": [0.0, 0.5, 1.0], "other": [0.0, 1.0, 1.0]})
+    reference = pd.DataFrame({"score": [1.0, 0.5, 1.0], "other": [0.0, 0.0, 1.0]})
+    snapshot = llmops.Report(
+        [llmops.RowCount(), llmops.MeanValue(column="score"), llmops.MeanValue(column="other")],
+        include_tests=False,
+    ).run(current_data=current, reference_data=reference)
+    metrics = deepcopy(snapshot.dict())
+    graphs = [widget for widget in snapshot._widgets if widget.type == "big_graph"]
+    payloads = [deepcopy(widget.params) for widget in graphs]
+    llmops.compact_report_charts(snapshot, 2)
+    assert [widget.size for widget in graphs] == [1, 1]
+    assert json.dumps([widget.params for widget in graphs], cls=PlotlyJSONEncoder, sort_keys=True) == json.dumps(
+        payloads, cls=PlotlyJSONEncoder, sort_keys=True
+    )
+    assert snapshot.dict() == metrics
+    with pytest.raises(RuntimeError, match="Unexpected Evidently report widget layout"):
+        llmops.compact_report_charts(snapshot, 2)
 
 
 def test_comparison_rejects_different_cases_before_writing(tmp_path):

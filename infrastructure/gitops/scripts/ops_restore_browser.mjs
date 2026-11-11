@@ -68,7 +68,7 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
         seen.add(row.id)
         locations.set(row.id, number)
       }
-      assert.equal(await history.locator('tbody tr').count(), rows.length)
+      assert.equal(await history.getByRole('list', { name: '평가 실행 목록' }).locator(':scope > li').count(), rows.length)
       if (number < pages) await history.getByRole('button', { name: '다음', exact: true }).click()
     }
     assert.equal(seen.size, count)
@@ -76,10 +76,15 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
     assert.equal(await page.title(), 'GovBiz · 평가 이력')
     const menu = page.getByRole('navigation', { name: 'LLMOps 작업 메뉴' })
     onStage('BUDGET')
-    await menu.getByRole('link', { name: '예산 관리', exact: true }).click()
+    const [budgetReply] = await Promise.all([
+      page.waitForResponse((reply) => reply.url() === origin + '/api/v1/ops/budget/reservations?page=1'),
+      menu.getByRole('link', { name: '예산 관리', exact: true }).click(),
+    ])
+    assert.equal(budgetReply.status(), 200)
+    assert.equal((await budgetReply.json()).as_of, responses['/api/v1/ops/budget/reservations?page=1'].as_of)
     await page.getByRole('heading', { name: '예산 관리', exact: true }).waitFor()
     assert.equal(new URL(page.url()).pathname, '/ops/budget')
-    await page.locator('#evaluation-budget').getByText('조회 시각:', { exact: false }).waitFor()
+    await page.getByRole('region', { name: '전체 사용 한도' }).waitFor()
     assert.equal(await page.getByRole('alert').count(), 0, 'Management view contains an error')
     assert.equal(await history.count(), 0, 'List must not remain on the budget page')
     assert.equal(await page.title(), 'GovBiz · 예산 관리')
@@ -111,10 +116,11 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
       }
       await history.locator(`a[href="/ops/evaluations/${id}"]`).click()
       await page.getByRole('heading', { name: '평가 실행 상세', exact: true }).waitFor()
-      await page.locator('summary').getByText('실행 정보·버전 자세히 보기', { exact: true }).click()
+      await page.locator('summary').getByText('관리자용 기술 정보', { exact: true }).click()
       await page.locator('dd').getByText(id, { exact: true }).waitFor()
       await page.locator('dd').getByText(expected[id].execution_spec_sha256, { exact: true }).waitFor()
-      await page.getByRole('region', { name: '실행 예산 장부' }).getByText('새 모델 호출을 예약하는 실행이 아닙니다.', { exact: false }).waitFor()
+      await page.locator('summary').getByText('AI 사용량 보기', { exact: true }).click()
+      await page.getByRole('region', { name: '실행 예산 장부' }).getByText('이번 실행은 AI를 새로 호출하지 않았어요.', { exact: false }).waitFor()
       const route = `/api/v1/ops/evaluations/${id}`
       if (responses[route].evaluation_scope === 'fixed-answer-context-only') {
         await page.getByRole('region', { name: '응답 검토와 기준 지정' }).getByRole('region', { name: '검토 진행 안내' }).waitFor()
@@ -124,7 +130,8 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
         await checkRagMaterial(page, responses[route])
       }
       assert.equal(await page.getByRole('alert').count(), 0, 'Detail view contains an error')
-      const link = page.getByRole('link', { name: 'Evidently 보고서', exact: true })
+      await page.locator('summary').getByText('보고서와 Prefect 실행 로그 보기', { exact: true }).click()
+      const link = page.getByRole('link', { name: '평가 보고서 보기', exact: true })
       onStage('REPORT')
       const viewPath = `/ops/evaluations/${id}/report`
       assert.equal(await link.getAttribute('href'), viewPath)
@@ -137,22 +144,31 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
         assert.equal(view.url(), origin + viewPath)
         assert.equal(await view.evaluate(() => window.opener === null), true)
         const rawLink = view.getByRole('link', { name: '원본 차트 새 탭에서 보기 ↗', exact: true })
-        assert.equal(await rawLink.getAttribute('href'), route + '/report')
+        assert.equal(await rawLink.getAttribute('href'), route + '/report?view=compact')
         assert.equal(await rawLink.getAttribute('target'), '_blank')
         assert.deepEqual((await rawLink.getAttribute('rel')).split(' ').sort(), ['noopener', 'noreferrer'])
-        // Follow the real explanation -> raw document path. The app page is
-        // authenticated; only the original HTML document has an opaque origin.
+        // Verify the unmodified API artifact separately; the default UI link
+        // opens a derived compact view, whose bytes need not match this hash.
+        const raw = await view.evaluate(async (path) => {
+          const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store' })
+          const bytes = await response.arrayBuffer()
+          const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (value) => value.toString(16).padStart(2, '0')).join('')
+          return { status: response.status, hash }
+        }, route + '/report')
+        assert.deepEqual(raw, { status: 200, hash: expected[id].report_sha256 }, 'Original report bytes differ')
+        // The fixture proxy simulates the compact response and preserves the
+        // real sandbox headers; layout transformation is tested separately.
         const [report, reply] = await Promise.all([
           context.waitForEvent('page'),
-          context.waitForEvent('response', { predicate: (reply) => reply.url() === origin + route + '/report' }),
+          context.waitForEvent('response', { predicate: (reply) => reply.url() === origin + route + '/report?view=compact' }),
           rawLink.click(),
         ])
         try {
           assert.equal(reply.status(), 200)
           for (const [name, value] of Object.entries(reports[route + '/report'].headers)) assert.equal(await reply.headerValue(name), value)
-          assert.equal(createHash('sha256').update(await reply.body()).digest('hex'), expected[id].report_sha256, 'Browser received different report bytes')
+          assert.equal((await reply.body()).toString(), reports[route + '/report'].body + '\n<!-- compact fixture -->', 'Browser received different compact fixture bytes')
           await report.waitForLoadState('load')
-          assert.equal(report.url(), origin + route + '/report')
+          assert.equal(report.url(), origin + route + '/report?view=compact')
           await report.waitForFunction(() => Boolean(document.body?.innerText.trim()), null, { timeout: 30000 })
           const isolation = await report.evaluate(() => {
             const blocked = (read) => { try { read(); return false } catch (error) { return error.name === 'SecurityError' } }
@@ -178,7 +194,7 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
     await page.getByRole('alert').getByText('관리자 계정만 운영 화면을 이용할 수 있습니다.', { exact: false }).waitFor()
     await page.getByRole('button', { name: '연결 다시 확인' }).waitFor()
     assert.equal(await page.getByRole('region', { name: '평가 실행 이력' }).count(), 0)
-    assert.equal(await page.getByRole('link', { name: 'Evidently 보고서', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('link', { name: '평가 보고서 보기', exact: true }).count(), 0)
     for (const id of ids) {
       await page.goto(origin + `/ops/evaluations/${id}/report`, { waitUntil: 'domcontentloaded' })
       await page.getByRole('alert').getByText('관리자 계정만 운영 화면을 이용할 수 있습니다.', { exact: false }).waitFor()
@@ -189,6 +205,11 @@ export async function checkRestoreBrowser(origin, responses, expected, reports, 
         return { status: reply.status, cache: reply.headers.get('cache-control'), body: await reply.text() }
       }, `/api/v1/ops/evaluations/${id}/report`)
       assert.deepEqual(denied, { status: 403, cache: 'private, no-store', body: '{}' })
+      const deniedCompact = await page.evaluate(async (route) => {
+        const reply = await fetch(route, { credentials: 'same-origin' })
+        return { status: reply.status, cache: reply.headers.get('cache-control'), body: await reply.text() }
+      }, `/api/v1/ops/evaluations/${id}/report?view=compact`)
+      assert.deepEqual(deniedCompact, { status: 403, cache: 'private, no-store', body: '{}' })
     }
     assert.deepEqual(failures, [])
   } finally {

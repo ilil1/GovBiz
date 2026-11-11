@@ -79,6 +79,11 @@ describe('평가 보고서 해설', () => {
     expect(retrieval.getByText('1건 측정 / 대상 1건')).toBeTruthy()
     expect(retrieval.getByText('미측정')).toBeTruthy()
     expect(retrieval.getByText('0건 측정 / 대상 1건')).toBeTruthy()
+    expect(retrieval.getByRole('article', { name: '근거 검색 재현율 사례별 변화' })).toBeTruthy()
+    expect(retrieval.getByText('비교 불가 1건')).toBeTruthy()
+    const summary = screen.getByRole('region', { name: '지표 해설' })
+    const comparisonInfo = screen.getByRole('region', { name: '비교 데이터 안내' })
+    expect(summary.compareDocumentPosition(comparisonInfo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(within(screen.getByRole('article', { name: '답변 인용 재현율' })).getByText('0%')).toBeTruthy()
     fireEvent.click(screen.getByText(materialCase.question))
     expect(screen.getByText('저장된 후보 답변')).toBeTruthy()
@@ -88,14 +93,72 @@ describe('평가 보고서 해설', () => {
     expect(getEvaluationReview).not.toHaveBeenCalled()
   })
 
-  it('원본은 내부 삽입하지 않고 기존 인증 URL의 새 탭으로 연결한다', async () => {
+  it('원본 차트 링크 하나로 인증된 두 열 보기를 새 탭에서 연다', async () => {
     mount()
     await screen.findByText(materialCase.question)
     expect(document.querySelector('iframe')).toBeNull()
     const link = screen.getByRole('link', { name: '원본 차트 새 탭에서 보기 ↗' })
-    expect(link.getAttribute('href')).toBe(reportUrl)
+    expect(link.getAttribute('href')).toBe(`${reportUrl}?view=compact`)
     expect(link.getAttribute('target')).toBe('_blank')
     expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(within(screen.getByRole('region', { name: 'Evidently 원본 차트' })).getAllByRole('link')).toHaveLength(1)
+    expect(screen.getByText(/변화 없음\(0\) 기준선/)).toBeTruthy()
+    expect(screen.getByText(/이전에 생성된 원본에는 이 지표가 없을 수 있습니다/)).toBeTruthy()
+  })
+
+  it('RAG의 같은 사례를 짝지어 개선·악화·동일·미측정을 구분하고 사례를 연다', async () => {
+    const ids = ['H01', 'H02', 'H03', 'H04']
+    const changes: RagComparison = {
+      ...rag, case_ids: ids,
+      current: { ...current, cases: ids.map((caseId, i) => ({ ...ragCase, caseId,
+        retrievalRecallAtK: [1, 0, 1, null][i],
+        answerCitationRecall: [0, 1, null, 1][i],
+        answerStatusMatches: [true, false, true, null][i],
+        failure: i === 0 || i === 3 ? { stage: 'answer', code: 'FAILED' } : null,
+      })) },
+      reference: { ...current, cases: ids.map((caseId, i) => ({ ...ragCase, caseId,
+        retrievalRecallAtK: [0, 1, 1, 0][i],
+        answerCitationRecall: [1, 0, 0, null][i],
+        answerStatusMatches: [false, true, true, false][i],
+      })) },
+    }
+    vi.mocked(getEvaluation).mockResolvedValue(run(changes))
+    mount()
+    await screen.findByText(materialCase.question)
+    const section = within(screen.getByRole('article', { name: '근거 검색 재현율 사례별 변화' }))
+    expect(section.getByText('개선 1건')).toBeTruthy()
+    expect(section.getByText('악화 1건')).toBeTruthy()
+    expect(section.getByText('동일 1건')).toBeTruthy()
+    expect(section.getByText('비교 불가 1건')).toBeTruthy()
+    expect(section.getByRole('link', { name: 'H01' }).parentElement?.textContent).toBe('H01')
+    const target = document.getElementById('evaluation-case-1') as HTMLDetailsElement
+    expect(target.open).toBe(false)
+    fireEvent.click(section.getByRole('link', { name: 'H02' }))
+    expect(target.open).toBe(true)
+    expect(within(target).getByText(/후보: 검색 재현율 0%/)).toBeTruthy()
+    expect(within(target).getByText(/비교 대상: 검색 재현율 100%/)).toBeTruthy()
+    const citations = within(screen.getByRole('article', { name: '답변 인용 재현율 사례별 변화' }))
+    expect(citations.getByText('비교 불가 2건')).toBeTruthy()
+  })
+
+  it('고정 근거의 실패·누락은 점수 0으로 간주하지 않는다', async () => {
+    const cases = fixed.schema_version === 2 ? fixed.cases : []
+    const legacy = { ...fixed, case_ids: ['H01', 'H02'], cases: [cases[0], {
+      case_id: 'H02', candidate: { outcome: 'error' as const, status_match: null, citation_recall: null },
+      reference: { outcome: 'success' as const, status_match: 1, citation_recall: 1 },
+    }] } as NonNullable<EvaluationRun['comparison']>
+    vi.mocked(getEvaluation).mockResolvedValue(run(legacy))
+    vi.mocked(getEvaluationReview).mockResolvedValue({ material: null, material_error: '자료 없음' } as EvaluationReview)
+    mount()
+    const status = within(await screen.findByRole('article', { name: '답변 상태 일치율 사례별 변화' }))
+    expect(status.getByText('동일 1건')).toBeTruthy()
+    expect(status.getByText('비교 불가 1건')).toBeTruthy()
+    expect(status.getByText('악화 0건')).toBeTruthy()
+    expect(screen.queryByRole('article', { name: '근거 검색 재현율 사례별 변화' })).toBeNull()
+    fireEvent.click(status.getByRole('link', { name: 'H02' }))
+    const detail = within(document.getElementById('evaluation-case-1') as HTMLElement)
+    expect(detail.getByText(/후보 실행: 실행 오류 · 상태 일치 미측정/)).toBeTruthy()
+    expect(detail.getByText(/비교 대상 실행: 응답 기록 있음 · 상태 일치 100%/)).toBeTruthy()
   })
 
   it('고정 답변 평가는 검색 평가와 구분하고 응답 시간·토큰을 퍼센트로 표시하지 않는다', async () => {
@@ -130,7 +193,7 @@ describe('평가 보고서 해설', () => {
     expect(getRagMaterial).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '보고서 새로고침' }))
     await screen.findByText(/비교 기록이 없습니다/)
-    expect(screen.getByRole('link', { name: '원본 차트 새 탭에서 보기 ↗' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '원본 차트 새 탭에서 보기 ↗' }).getAttribute('href')).toBe(`${reportUrl}?view=compact`)
   })
 
   it.each([401, 403])('자료 조회의 인증 오류 %s는 기존 인증 흐름으로 돌린다', async (status) => {

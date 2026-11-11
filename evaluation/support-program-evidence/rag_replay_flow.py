@@ -11,7 +11,7 @@ from apps.evaluations import rag_replay
 from evidently import Report
 from evidently.metrics import MeanValue, RowCount
 from filelock import FileLock
-from llmops import ROOT, LangfuseSettings, publish_payloads, write_json
+from llmops import ROOT, LangfuseSettings, add_paired_change_metrics, compact_report_charts, publish_payloads, write_json
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.runtime import flow_run
@@ -69,15 +69,24 @@ def render(value, output):
         "current_coverage": value["current"]["coverage"],
         "reference_coverage": value["reference"]["coverage"],
     }
+    paired_columns = ["retrieval_recall", "citation_recall", "status_match"]
+    chart_columns = list(dict.fromkeys([*columns, *paired_columns]))
+    chart_current, chart_reference, paired_metrics = add_paired_change_metrics(
+        current[["case_id", *chart_columns]], reference[["case_id", *chart_columns]], paired_columns,
+    )
+    unused_columns = [name for name in chart_columns if name not in columns]
+    chart_current = chart_current.drop(columns=unused_columns)
+    chart_reference = chart_reference.drop(columns=unused_columns)
     snapshot = Report(
-        [RowCount(), *[MeanValue(column=name) for name in columns]],
+        [RowCount(), *[MeanValue(column=name) for name in columns], *paired_metrics],
         metadata=metadata,
         include_tests=False,
     ).run(
-        current_data=current[["case_id", *columns]],
-        reference_data=reference[["case_id", *columns]],
+        current_data=chart_current,
+        reference_data=chart_reference,
         name="GovBiz RAG evaluation comparison",
     )
+    compact_report_charts(snapshot, len(columns) + len(paired_metrics))
     snapshot.save_html(str(output / "report.html.partial"))
     (output / "report.html.partial").replace(output / "report.html")
     current.to_json(

@@ -1496,10 +1496,15 @@ Prefect 등록 상태를 표시합니다. 정상 진단 응답의 `503 / FAIL`�
 | `GET /api/v1/ops/traces` | Langfuse의 실행 시작 단계 목록; `name`, `from_time`, `to_time`, `cursor` 조회 조건 | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·설정 누락 `503` |
 | `GET /api/v1/ops/trace-metrics` | 수집된 네 기능의 실행 건수·오류·지연 집계; `from_time`, `to_time`, 최대 30일, `environment=all/production/development/unknown/other` (생략 시 all) | 인증·권한 오류 `401/403`, 조회 조건 `400`, 추적 서버 장애·페이지 또는 시간 제한 초과 `503` |
 | `GET /api/v1/ops/traces/{trace_id}` | 같은 trace ID의 단계·입출력·사용량; `cursor`로 다음 페이지 조회 | 인증·권한 오류 `401/403`, 없음 `404`, 추적 서버 장애 `503` |
-| `GET /api/v1/ops/evaluations/{UUID}/report` | `200`, CSP sandbox가 적용된 HTML | 미인증 `401`, 비관리자 `403`, Core 장애 `503`, 없거나 훼손된 보고서 `404` |
+| `GET /api/v1/ops/evaluations/{UUID}/report` | `200`, CSP sandbox가 적용된 원본 HTML; `?view=compact`는 같은 검증을 거친 두 열 표시용 HTML | 미인증 `401`, 비관리자 `403`, Core 장애 `503`, 없거나 훼손된 보고서 `404`, 지원하지 않는 compact 형식 `422` |
 | `POST /api/v1/ops/evaluations` | 최초 `202`, 재전송 `200`; 실행 메타데이터 | 자료/UUID 오류 `400`, 미인증 `401`, 권한·CSRF `403`, 요청 충돌 `409`, 인증 서버 장애·접수 미확인 `503` |
 | `GET /api/v1/ops/evaluations` | `200`, 25건 페이지 (`count`, `next`, `previous`, `results`) | 미인증 `401`, 비관리자 `403`, Core 장애 `503` |
 | `GET /api/v1/ops/evaluations/{UUID}` | `200`, 최신 상태와 요약·상세 링크 | 미인증 `401`, 비관리자 `403`, Core 장애 `503`, 없는 실행 `404`; Prefect 장애는 `error_code`로 구별 |
+
+보고서의 기본 GET은 해시 검증된 저장 바이트를 그대로 반환합니다. `?view=compact`는 검증된
+원본의 차트 크기만 응답 시 변경하며 저장 파일은 수정하지 않고 동일한 CSP sandbox를 적용합니다.
+차트가 없는 지원 형식은 원본 그대로 보여주며, 지원하지 않는 형식에는 원본 보고서 링크가 있는
+오류 화면을 반환합니다.
 
 로그인·로그아웃은 기존 Core `/api/v1/auth/login`, `/api/v1/auth/logout`을 사용합니다.
 별도 `/api/v1/ops/login`, `/logout`은 제공하지 않습니다. 먼저 Ops session API에서

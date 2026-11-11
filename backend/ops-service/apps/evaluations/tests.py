@@ -480,6 +480,12 @@ class EvaluationTests(TestCase):
             self.assertEqual(
                 self.client.get(f"/api/v1/ops/evaluations/{run.id}/report").status_code, 404
             )
+            self.assertEqual(
+                self.client.get(
+                    f"/api/v1/ops/evaluations/{run.id}/report?view=compact"
+                ).status_code,
+                404,
+            )
 
     @patch("apps.evaluations.prefect_client.read_run", return_value={"state_type": "COMPLETED"})
     def test_another_runs_artifacts_are_not_accepted(self, read):

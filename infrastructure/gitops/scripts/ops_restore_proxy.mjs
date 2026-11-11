@@ -68,9 +68,14 @@ export async function withRestoreProxy(responses, verify, reports = {}) {
     response.setHeader('Cache-Control', 'private, no-store')
     if (code !== 200) {
       response.writeHead(code).end('{}')
-    } else if (Object.hasOwn(reports, request.url)) {
-      reportReads.add(request.url)
-      response.writeHead(200, reports[request.url].headers).end(reports[request.url].body)
+    } else if (Object.hasOwn(reports, request.url) || (request.url.endsWith('?view=compact') && Object.hasOwn(reports, request.url.slice(0, -13)))) {
+      const compact = request.url.endsWith('?view=compact')
+      const path = compact ? request.url.slice(0, -13) : request.url
+      reportReads.add(path)
+      // This isolated replay tests navigation and sandboxing, not the Django
+      // layout transformation; real Evidently layout has a separate test.
+      const body = reports[path].body + (compact ? '\n<!-- compact fixture -->' : '')
+      response.writeHead(200, reports[path].headers).end(body)
     } else if (!Object.hasOwn(responses, request.url)) {
       violations.push('Uncaptured Ops route requested')
       response.writeHead(404).end('{}')
