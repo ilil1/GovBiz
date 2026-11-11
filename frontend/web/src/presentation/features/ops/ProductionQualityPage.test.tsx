@@ -37,6 +37,23 @@ const fillReview = () => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('운영 표본 품질', () => {
+  it('표본과 일별 결과의 해석 안내를 도움말에서 확인한다', async () => {
+    setup(); mount()
+    await screen.findByRole('region', { name: '일별 표본 검토' })
+    const help = screen.getByRole('button', { name: '운영 표본 품질 도움말' })
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText(/전체 서비스 정확도를 의미하지 않습니다/)).toBeNull()
+    fireEvent.click(help)
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText(/전체 서비스 정확도를 의미하지 않습니다/)).toBeTruthy()
+    fireEvent.click(help)
+    expect(screen.queryByText(/전체 서비스 정확도를 의미하지 않습니다/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '저장·검토 범위 도움말' }))
+    expect(screen.getByText(/현재 보존 중인 기록만 집계합니다/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '일별 표본 검토 결과 도움말' }))
+    expect(screen.getByText(/날짜별 차이를 모델 변경 효과로 단정하지 않습니다/)).toBeTruthy()
+  })
+
   it('저장 표본과 미검토를 명시하고 조회만으로 모델 호출이나 쓰기를 하지 않는다', async () => {
     const fetch = setup(); mount()
     expect(await screen.findByRole('region', { name: '운영 표본 수집 범위' })).toHaveProperty('textContent', expect.stringContaining('Ops 표본 접수 비활성'))

@@ -39,6 +39,43 @@ function mount(onExpired = vi.fn(), path = '/ops/dashboard') {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('성능 대시보드', () => {
+  it('조회 범위 설명은 도움말에서 열고 닫을 수 있다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(data())))
+    mount()
+    const help = await screen.findByRole('button', { name: '조회 범위 도움말' })
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText(/실시간 서비스 전체의 품질을 의미하지 않습니다/)).toBeNull()
+    fireEvent.click(help)
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText(/실시간 서비스 전체의 품질을 의미하지 않습니다/)).toBeTruthy()
+    fireEvent.click(help)
+    expect(screen.queryByText(/실시간 서비스 전체의 품질을 의미하지 않습니다/)).toBeNull()
+  })
+
+  it('도움말은 화면 배치 밖에 표시되고 다른 도움말이나 Escape로 닫힌다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(data())))
+    mount()
+    const range = await screen.findByRole('button', { name: '조회 범위 도움말' })
+    const latency = screen.getByRole('button', { name: '평균 답변 지연 도움말' })
+    fireEvent.click(range)
+    const explanation = screen.getByText(/실시간 서비스 전체의 품질을 의미하지 않습니다/)
+    expect(explanation.closest('[id]')?.parentElement).toBe(document.body)
+    expect(range.getAttribute('aria-describedby')).toBe(explanation.closest('[id]')?.id)
+    fireEvent.pointerDown(latency)
+    fireEvent.click(latency)
+    expect(range.getAttribute('aria-expanded')).toBe('false')
+    expect(latency.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(latency.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(latency)
+    fireEvent.click(range)
+    fireEvent.pointerDown(document.body)
+    expect(range.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(range)
+    fireEvent.focusIn(screen.getByLabelText('측정 모델'))
+    expect(range.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('RAG 답변 지연을 초 단위와 측정 표본으로 표시하고 과거 미측정 사유를 안내한다', async () => {
     const payload = data()
     payload.series[0].scope = 'source-chunks-retrieval-answer'
@@ -51,7 +88,8 @@ describe('성능 대시보드', () => {
     const card = within(cards).getByRole('heading', { name: '평균 답변 지연' }).closest('article')!
     expect(within(card).getByText('1.23')).toBeTruthy()
     expect(within(card).getByText('4개 답변 측정 / 전체 6개')).toBeTruthy()
-    expect(card.textContent).toContain('임베딩·검색을 제외한 답변 생성 단계')
+    fireEvent.click(within(card).getByRole('button', { name: '평균 답변 지연 도움말' }))
+    expect(screen.getByText(/임베딩·검색을 제외한 답변 생성 단계/)).toBeTruthy()
     fireEvent.change(screen.getByLabelText('평가 자료 · 채점 버전'), { target: { value: 'legacy-rag' } })
     expect(within(card).getByText('미측정')).toBeTruthy()
     expect(within(card).getByText('이 평가에는 답변 생성 시간이 저장되지 않았습니다.')).toBeTruthy()

@@ -5,6 +5,7 @@ import type { PerformanceDashboard as Dashboard, PerformancePoint, PerformanceSe
 import { WorkspacePageHeader } from '../../shared/workspace/WorkspacePageHeader'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 import { DashboardReviewStatus } from './DashboardReviewStatus'
+import { MonitoringHelp } from './MonitoringHelp'
 
 const metrics = [
   { key: 'status', label: '답변 상태 일치율', color: '#13795b', description: '답변 가능·근거 부족 상태가 참조 조건과 일치한 비율' },
@@ -84,18 +85,19 @@ export function PerformanceDashboard({ onExpired }: { onExpired: () => void }) {
   return <>
     <WorkspacePageHeader title="성능 대시보드" actions={<button className={styles.secondaryButton} disabled={loading} onClick={() => setRevision((value) => value + 1)}>{loading ? '불러오는 중…' : '지표 새로고침'}</button>} />
     <div className={styles.content}>
-      <p className="text-sm leading-6 text-ink-muted">평가 자료로 실행한 모델의 저장된 테스트 결과를 바탕으로 성능과 변화를 확인합니다. 실시간 서비스 전체의 품질을 의미하지 않습니다.</p>
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}{data && ' 마지막 조회 결과를 표시하고 있습니다.'}</p>}
       {loading && !data && <p role="status">저장된 평가 지표를 불러오고 있습니다.</p>}
       {data && <>
         <section aria-label="조회 범위" className="rounded-xl border border-line bg-white p-4 sm:p-5">
+          <MonitoringHelp compact label="조회 범위" title={<h2 className="font-semibold text-ink">조회 범위</h2>}>
+            <p>저장된 평가 결과를 보여주며 실시간 서비스 전체의 품질을 의미하지 않습니다. 실측 결과가 없는 모델은 ‘미측정’으로 표시하고, 선택만으로 평가가 실행되지는 않습니다.</p>
+          </MonitoringHelp>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><p><span className="text-ink-muted">Ops 평가 설정 모델</span> <strong className="ml-2 text-ink">{data.configured_model}</strong></p><p className="text-xs text-ink-muted">조회 {date(data.as_of)} · 서울 시간</p></div>
           <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_2fr_1fr]">
             <label className="min-w-0 text-sm font-medium">측정 모델<select className={`${field} mt-2`} value={model} onChange={(event) => filter('model', event.target.value)}>{models.map((name) => <option key={name} value={name}>{name}{name === data.configured_model ? ' · 현재 평가 설정' : ''}{!measuredModels.has(name) ? ' · 미측정' : ''}</option>)}</select></label>
             <label className="min-w-0 text-sm font-medium">평가 자료 · 채점 버전<select className={`${field} mt-2`} value={selected?.id ?? ''} onChange={(event) => filter('series', event.target.value)} disabled={!groups.length}>{!groups.length && <option value="">비교할 실측 없음</option>}{groups.map((series) => <option key={series.id} value={series.id}>{series.dataset_label} · {series.evaluator_version.slice(0, 7)} · {series.points.length}회</option>)}</select></label>
             <label className="text-sm font-medium">측정 기간<select className={`${field} mt-2`} value={days} onChange={(event) => filter('days', event.target.value)}><option value="all">조회 범위 전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>
           </div>
-          <p className="mt-3 text-xs leading-5 text-ink-muted">평가 가능한 모델도 선택할 수 있습니다. 조회 범위에 실측 결과가 없는 모델은 ‘미측정’으로 표시하며, 선택만으로 평가가 실행되지는 않습니다.</p>
           <p aria-label="선택 조건의 실측" className="mt-3 text-sm font-semibold text-ink">{model} · 선택한 자료·기간의 저장된 실측 {points.length}건</p>
         </section>
         {latest && selected ? <>
@@ -104,12 +106,11 @@ export function PerformanceDashboard({ onExpired }: { onExpired: () => void }) {
             <p className="mt-4 border-t border-white/20 pt-3 text-xs leading-5 text-[#e0eee8]">자동 지표가 높아도 사실 정확성이나 사람 검토 합격을 보장하지 않습니다. 답변과 근거는 상세 평가에서 확인하세요.</p>
           </section>
           <section aria-label="최근 성능 지표" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {metrics.map((metric) => <article key={metric.key} className="rounded-xl border border-line bg-white p-4 sm:p-5"><h3 className="text-sm font-medium text-ink-muted">{metric.label}</h3><p className="mt-3 text-2xl font-bold tabular-nums sm:text-3xl text-ink">{percent(latest.values[metric.key])}</p><p className="mt-2 text-xs font-medium text-ink">{change(latest, points.at(-2), metric.key)}</p><p className="mt-3 text-xs leading-5 text-ink-muted">{latest.values[metric.key] !== null ? `${latest.samples[metric.key] ?? '미확인'}개 사례 측정 / 전체 ${selected.case_ids.length}개` : metric.key === 'retrieval' && selected.scope === 'fixed-answer-context-only' ? '이 평가에는 검색 단계가 없습니다.' : '저장된 측정값이 없습니다.'}</p></article>)}
+            {metrics.map((metric) => <article key={metric.key} className="rounded-xl border border-line bg-white p-4 sm:p-5"><h3 className="flex min-h-11 items-center text-sm font-medium text-ink-muted">{metric.label}</h3><p className="mt-3 text-2xl font-bold tabular-nums sm:text-3xl text-ink">{percent(latest.values[metric.key])}</p><p className="mt-2 text-xs font-medium text-ink">{change(latest, points.at(-2), metric.key)}</p><p className="mt-3 text-xs leading-5 text-ink-muted">{latest.values[metric.key] !== null ? `${latest.samples[metric.key] ?? '미확인'}개 사례 측정 / 전체 ${selected.case_ids.length}개` : metric.key === 'retrieval' && selected.scope === 'fixed-answer-context-only' ? '이 평가에는 검색 단계가 없습니다.' : '저장된 측정값이 없습니다.'}</p></article>)}
             <article className="rounded-xl border border-line bg-white p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-ink-muted">평균 답변 지연</h3>
+              <MonitoringHelp compact label="평균 답변 지연" title={<h3 className="text-sm font-medium text-ink-muted">평균 답변 지연</h3>}><p>{selected.scope === 'source-chunks-retrieval-answer' && '임베딩·검색을 제외한 답변 생성 단계의 시간입니다. '}전체 API 응답 시간과 다릅니다.</p></MonitoringHelp>
               <p className="mt-3 text-2xl font-bold tabular-nums sm:text-3xl text-ink">{latest.values.latency === null ? '미측정' : <>{(latest.values.latency / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}<span className="ml-1 text-base font-medium">초</span></>}</p>
               <p className="mt-2 text-xs text-ink">{latest.values.latency === null ? '이 평가에는 답변 생성 시간이 저장되지 않았습니다.' : latest.samples.latency !== null ? `${latest.samples.latency}개 답변 측정 / 전체 ${selected.case_ids.length}개` : '저장된 답변 생성 시간'}</p>
-              <p className="mt-3 text-xs leading-5 text-ink-muted">{selected.scope === 'source-chunks-retrieval-answer' && '임베딩·검색을 제외한 답변 생성 단계의 시간입니다. '}전체 API 응답 시간과 다릅니다.</p>
             </article>
           </section>
           <ModelComparison series={data.series} selected={selected} reference={latest} cutoff={cutoff} />
@@ -122,10 +123,9 @@ export function PerformanceDashboard({ onExpired }: { onExpired: () => void }) {
           </section>
         </> : <section className={`${styles.card} py-10 text-center`} aria-label="실측 없음"><h2 className={styles.cardTitle}>이 조건의 실측 결과가 없습니다</h2>{!measuredModels.has(model) && <p className="mt-3 font-semibold text-ink">{model} · 미측정</p>}<p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-ink-muted">측정 모델·자료·기간을 바꾸거나 평가 이력을 확인하세요. 저장 응답 재평가는 새 모델 측정으로 집계하지 않습니다.</p><Link to="/ops/evaluations" className={`${styles.secondaryButton} mt-5`}>평가 이력 확인</Link></section>}
         <section className="rounded-xl border border-line bg-white p-5" aria-label="집계 기준">
-          <h2 className="font-semibold text-ink">전체 저장 평가 이력</h2>
+          <MonitoringHelp compact label="전체 저장 평가 이력" title={<h2 className="font-semibold text-ink">전체 저장 평가 이력</h2>}><p>‘처리 완료’는 저장 기록의 처리 상태이며, 이 PC에서 새로 모델을 호출한 횟수를 뜻하지 않습니다.</p></MonitoringHelp>
           <p className="mt-2 text-sm leading-6 text-ink-muted">모든 모델의 최근 저장 이력 {data.window.loaded}건 / 전체 {data.window.total}건입니다. 모델·자료·기간 필터를 적용하기 전의 기록이며, 복원한 과거 기록과 저장 답변 재평가도 포함합니다.{data.window.truncated && ` 최근 ${data.window.limit}건까지만 조회하므로 전체 기간 통계가 아닙니다.`}</p>
           <p className="mt-2 text-sm leading-6 text-ink-muted">이 조회 범위에서 실측으로 집계한 기록 {measuredCount}건 · 저장 답변 재평가 이력 {data.excluded.replay}건</p>
-          <p className="mt-2 text-xs leading-5 text-ink-muted">아래 ‘처리 완료’는 저장 기록의 처리 상태입니다. 이 PC에서 새로 모델을 호출한 횟수를 뜻하지 않습니다.</p>
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">{([['처리 완료', data.states.completed], ['실패·결과 오류', data.states.failed], ['진행 중', data.states.active], ['취소', data.states.cancelled]] as const).map(([label, count]) => <div key={label} className="rounded-lg bg-surface-muted p-3"><dt className="text-ink-muted">{label}</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{count}<span className="ml-1 text-xs font-normal">건</span></dd></div>)}</dl>
           <details className="mt-4 text-sm"><summary className="cursor-pointer py-2 font-medium text-ink focus-visible:outline-2 focus-visible:outline-brand-primary">통계에 포함하는 기준</summary><div className="mt-2 space-y-2 text-xs leading-6 text-ink-muted"><p>새 모델 실행의 완료 결과와 그 실행의 후처리 복구 결과를 사용합니다. 동일 응답은 조건별로 한 번만 집계하며 복구는 원본 실행 시각을 사용합니다.</p><p>실측 제외: 저장 응답 재평가 {data.excluded.replay}건 · 미완료 {data.excluded.incomplete}건 · 실측 근거 확인 불가 {data.excluded.unverifiable}건 · 동일 응답 중복 {data.excluded.duplicate}건.</p><p>자료·사례·모델·채점 버전·검색 K가 같을 때만 추이를 묶습니다. %p 차이는 측정 사례도 같은 이전 결과에 한해 표시합니다. 미측정 값은 0으로 환산하지 않습니다.</p>{selected && <p className="break-all">자료 해시: {selected.fixture_sha256}<br />채점 버전: {selected.evaluator_version}</p>}</div></details>
         </section>
@@ -140,7 +140,7 @@ function ModelComparison({ series, selected, reference, cutoff }: { series: Perf
     .filter((row): row is { model: string; point: PerformancePoint } => row.point !== undefined)
     .sort((left, right) => left.model === selected.model ? -1 : right.model === selected.model ? 1 : left.model.localeCompare(right.model))
   return <section className={styles.card} aria-label="모델별 결과 비교">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className={styles.cardTitle}>모델별 결과 비교</h2><p className={styles.cardDescription}>선택한 자료·사례·평가 범위·채점 버전·검색 K가 같은 모델의 기간 내 최신 실측입니다.</p></div><Link className={styles.secondaryButton} to="/ops/evaluations/new">다른 모델 평가하기</Link></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><MonitoringHelp compact label="모델별 결과 비교" title={<h2 className={styles.cardTitle}>모델별 결과 비교</h2>}><p>선택한 자료·사례·평가 범위·채점 버전·검색 K가 같은 모델의 기간 내 최신 실측입니다.</p></MonitoringHelp><Link className={styles.secondaryButton} to="/ops/evaluations/new">다른 모델 평가하기</Link></div>
     <p className="mt-4 text-sm text-ink">차이 기준: <strong>{selected.model}</strong> · 위의 측정 모델을 바꾸면 차이 기준도 바뀝니다.</p>
     {rows.length < 2 && <p className="mt-3 rounded-lg bg-surface-muted p-3 text-sm leading-6 text-ink-muted">아직 같은 조건으로 측정한 다른 모델이 없습니다. 새 평가에서 같은 자료와 다른 모델을 선택해 실행한 뒤 지표를 새로고침하세요.</p>}
     <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm">

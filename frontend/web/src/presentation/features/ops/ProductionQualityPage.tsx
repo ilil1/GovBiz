@@ -5,6 +5,7 @@ import { getProductionQuality, getProductionRegressionCandidate, getProductionSa
 import type { ProductionQuality, ProductionReviewInput, ProductionSample, ProductionScope } from '../../../data/ops/opsApi'
 import { workspacePageStyles as styles } from '../../shared/workspace/WorkspacePage.styles'
 import { WorkspacePageHeader } from '../../shared/workspace/WorkspacePageHeader'
+import { EvaluationHelp } from './EvaluationHelp'
 
 const field = 'min-h-11 w-full rounded-xl border border-line bg-white px-3 py-2 text-sm focus:outline-2 focus:outline-brand-primary'
 const date = (value: string) => new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
@@ -53,23 +54,27 @@ export function ProductionQualityPage({ owner, onExpired }: { owner: string; onE
   return <>
     <WorkspacePageHeader title="운영 표본 품질" actions={<button className={styles.secondaryButton} onClick={() => setRevision((value) => value + 1)}>표본 목록 새로고침</button>} />
     <div className={styles.content}>
-      <p className="text-sm leading-6 text-ink-muted">상세 공고 근거 답변·통합 도우미·공고 검색·신청 문서 생성·중복 검토의 저장 표본을 기능별 기준으로 검토합니다. 전체 서비스 정확도를 의미하지 않습니다. 구조 검사는 사실 정확성 판단과 다르며, 의미적 품질은 사람이 저장된 입력·근거·결과를 대조해 검토합니다.</p>
       <section className={styles.card} aria-label="운영 표본 기능 선택">
-        <label className="block text-sm font-semibold">검토할 기능<select className={`${field} mt-2 max-w-md`} value={scope} onChange={(event) => setParams({ page: '1', ...(event.target.value ? { scope: event.target.value } : {}) })}><option value="">전체 기능</option>{productionScopes.map((value) => <option key={value} value={value}>{scopeLabels[value]}</option>)}</select></label>
-        <p className="text-xs leading-6 text-ink-muted">저장·검토 건수와 일별 결과는 선택한 기능의 표본만 집계합니다. 기능별 입력과 검토 기준이 달라 전체 기능의 적합 비율을 모델 성능 점수로 해석하지 않습니다.</p>
+        <EvaluationHelp label="운영 표본 품질" title={<label htmlFor="production-quality-scope" className="block text-sm font-semibold">검토할 기능</label>}>
+          <p>상세 공고 근거 답변·통합 도우미·공고 검색·신청 문서 생성·중복 검토의 저장 표본을 기능별 기준으로 검토합니다. 전체 서비스 정확도를 의미하지 않습니다. 구조 검사는 사실 정확성 판단과 다르며, 의미적 품질은 사람이 저장된 입력·근거·결과를 대조해 검토합니다.</p>
+          <p>저장·검토 건수와 일별 결과는 선택한 기능의 표본만 집계합니다. 기능별 입력과 검토 기준이 달라 전체 기능의 적합 비율을 모델 성능 점수로 해석하지 않습니다.</p>
+        </EvaluationHelp>
+        <select id="production-quality-scope" className={`${field} max-w-md`} value={scope} onChange={(event) => setParams({ page: '1', ...(event.target.value ? { scope: event.target.value } : {}) })}><option value="">전체 기능</option>{productionScopes.map((value) => <option key={value} value={value}>{scopeLabels[value]}</option>)}</select>
       </section>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {!data && !error && <p role="status">운영 표본을 불러오고 있습니다.</p>}
       {data && <>
         <section className={styles.card} aria-label="운영 표본 수집 범위">
-          <h2 className={styles.cardTitle}>저장·검토 범위 · {data.scope === 'all' ? '전체 기능' : scopeLabels[data.scope]}</h2>
+          <EvaluationHelp label="저장·검토 범위" title={<h2 className={styles.cardTitle}>저장·검토 범위 · {data.scope === 'all' ? '전체 기능' : scopeLabels[data.scope]}</h2>}>
+            <p>접수 상태는 Ops 서버 기준이며 서비스의 표본 수집 설정은 별도입니다. 현재 보존 중인 기록만 집계합니다. 수집에서 제외되거나 저장에 실패한 요청은 포함하지 않으므로 전체 요청 대비 수집률은 계산하지 않습니다. 이 화면의 조회·검토·후보 저장은 모델을 호출하지 않습니다.</p>
+          </EvaluationHelp>
           <p className="text-sm">Ops 표본 접수 {data.enabled ? '활성' : '비활성'} · 일별 저장 한도 {data.daily_limit.toLocaleString('ko-KR')}건 · 보존 기간 {data.retention_days}일</p>
-          <p className="text-xs leading-6 text-ink-muted">접수 상태는 Ops 서버 기준이며 서비스의 표본 수집 설정은 별도입니다. 현재 보존 중인 기록만 집계합니다. 수집에서 제외되거나 저장에 실패한 요청은 포함하지 않으므로 전체 요청 대비 수집률은 계산하지 않습니다. 이 화면의 조회·검토·후보 저장은 모델을 호출하지 않습니다.</p>
           <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">{([['저장 표본', data.summary.stored], ['구조 검사 완료', data.summary.checked], ['구조 검사 대기', data.summary.pending], ['사람 검토', data.summary.reviewed], ['문제 있음', data.summary.issues], ['판단 보류', data.summary.unassessable]] as const).map(([label, count]) => <div key={label} className="rounded-lg bg-surface-muted p-3"><dt className="text-xs text-ink-muted">{label}</dt><dd className="mt-2 text-xl font-semibold">{count.toLocaleString('ko-KR')}건</dd></div>)}</dl>
         </section>
         <section className={styles.card} aria-label="일별 표본 검토">
-          <h2 className={styles.cardTitle}>일별 표본 검토 결과</h2>
-          <p className="text-xs leading-6 text-ink-muted">각 날짜에 저장된 표본의 현재 검토 결과입니다. 검토 건수에는 판단 보류도 포함합니다. 질문·근거·검토 대상이 달라질 수 있어 날짜별 차이를 모델 변경 효과로 단정하지 않습니다.</p>
+          <EvaluationHelp label="일별 표본 검토 결과" title={<h2 className={styles.cardTitle}>일별 표본 검토 결과</h2>}>
+            <p>각 날짜에 저장된 표본의 현재 검토 결과입니다. 검토 건수에는 판단 보류도 포함합니다. 질문·근거·검토 대상이 달라질 수 있어 날짜별 차이를 모델 변경 효과로 단정하지 않습니다.</p>
+          </EvaluationHelp>
           {!data.days.length ? <p className="text-sm">아직 저장된 운영 표본이 없습니다.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[550px] text-left text-sm"><thead><tr>{['저장일', '표본', '검토', '적합 / 검토', '문제 / 검토', '보류 / 검토'].map((label) => <th className="p-2" key={label} scope="col">{label}</th>)}</tr></thead><tbody>{data.days.map((day) => <tr key={day.date} className="border-t border-line"><th scope="row" className="p-2 font-normal">{day.date}</th><td className="p-2">{day.samples}건</td><td className="p-2">{day.reviewed}건</td>{[day.acceptable, day.issues, day.unassessable].map((count, index) => <td key={index} className="p-2">{day.reviewed ? `${count} / ${day.reviewed}건 (${Math.round(count / day.reviewed * 100)}%)` : '미검토'}</td>)}</tr>)}</tbody></table></div>}
         </section>
         <section className={styles.card} aria-label="운영 표본 목록">

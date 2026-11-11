@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 /** 모니터링 설명을 주변 지표의 배치를 바꾸지 않고 표시합니다. */
-export function MonitoringHelp({ label, title, children }: { label: string; title: ReactNode; children: ReactNode }) {
+export function MonitoringHelp({ label, title, children, compact = false }: { label: string; title: ReactNode; children: ReactNode; compact?: boolean }) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -54,7 +54,7 @@ export function MonitoringHelp({ label, title, children }: { label: string; titl
 
   return <div className="min-w-0">
     <div className="flex min-w-0 items-center gap-1">
-      <div className="min-w-0 flex-1">{title}</div>
+      <div className={compact ? 'min-w-0' : 'min-w-0 flex-1'}>{title}</div>
       <button ref={(node) => { buttonRef.current = node; refs.setReference(node) }} type="button" aria-label={`${label} 도움말`} aria-expanded={open}
         aria-controls={open ? id : undefined} aria-describedby={open ? id : undefined}
         onClick={() => setOpen((value) => !value)}
