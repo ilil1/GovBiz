@@ -1,5 +1,6 @@
 """Ensure adding/skipping a CI job cannot silently weaken the merge summaries."""
 
+import shlex
 import sys
 import unittest
 from pathlib import Path
@@ -233,7 +234,16 @@ class WorkflowPolicyTests(unittest.TestCase):
             steps = jobs[identity]["steps"]
             self.assertEqual(jobs[identity]["needs"], "changes")
             self.assertTrue(steps[0]["uses"].startswith("actions/checkout@"))
-            self.assertTrue(any(step.get("run") == "uv sync --locked --extra dev" for step in steps))
+            installs = [step for step in steps if step.get("run", "").startswith("uv sync ")]
+            self.assertEqual(len(installs), 1, identity)
+            self.assertEqual(installs[0].get("working-directory"), "pipelines")
+            arguments = shlex.split(installs[0]["run"])
+            self.assertIn("--locked", arguments)
+            options = set(zip(arguments, arguments[1:]))
+            self.assertIn(("--extra", "dev"), options)
+            self.assertIn(("--group", "integration"), options)
+            self.assertNotIn("--no-dev", arguments)
+            self.assertNotIn(("--no-group", "integration"), options)
             for command in commands:
                 matched = [step for step in steps if command in step.get("run", "")]
                 self.assertTrue(matched, (identity, command))

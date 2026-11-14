@@ -22,8 +22,16 @@ class DevTests(unittest.TestCase):
         self.context = self.root / "backend/ai-service"
         (self.context / "app").mkdir(parents=True)
         (self.context / "app/main.py").write_text("print('initial')\n")
-        (self.context / "Dockerfile").write_text("FROM scratch\nCOPY app /app\n")
-        (self.context / ".dockerignore").write_text("**\n!app/\n!app/**\n!uv.lock\n!pyproject.toml\n**/.env*\n**/__pycache__\n")
+        (self.context / "Dockerfile").write_text(
+            "FROM scratch\nCOPY backend/ai-service/app /app\nCOPY packages/govbiz-ai-runtime /runtime\n"
+        )
+        (self.context / "Dockerfile.dockerignore").write_bytes(
+            (dev.REPOSITORY_ROOT / "backend/ai-service/Dockerfile.dockerignore").read_bytes()
+        )
+        self.shared = self.root / "packages/govbiz-ai-runtime"
+        (self.shared / "src/govbiz_ai_runtime").mkdir(parents=True)
+        (self.shared / "pyproject.toml").write_text("[project]\nname = 'govbiz-ai-runtime'\n")
+        (self.shared / "src/govbiz_ai_runtime/agent.py").write_text("# shared implementation\n")
         (self.context / "uv.lock").write_text("version = 1\n")
         (self.context / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
         subprocess.run(["git", "-C", self.root, "add", "."], check=True)
@@ -57,9 +65,12 @@ class DevTests(unittest.TestCase):
             return ""
         if command[:2] == ["docker", "build"]:
             context = Path(command[-1])
-            self.assertTrue((context / "app/main.py").is_file())
+            service = context / "backend/ai-service"
+            self.assertTrue((service / "app/main.py").is_file())
+            self.assertTrue((context / "packages/govbiz-ai-runtime/src/govbiz_ai_runtime/agent.py").is_file())
+            self.assertEqual(Path(command[command.index("--file") + 1]), service / "Dockerfile")
             self.assertFalse((context / ".env").exists())
-            self.assertFalse((context / "app/.env.production").exists())
+            self.assertFalse((service / "app/.env.production").exists())
             if self.fail_build:
                 raise subprocess.CalledProcessError(1, command)
             return ""
@@ -100,7 +111,7 @@ class DevTests(unittest.TestCase):
         self.assertNotEqual(added, dev.snapshot(self.root, "ai-service"))
 
     def test_lock_and_dockerfile_changes_are_watched(self):
-        for filename in ("uv.lock", "pyproject.toml", "Dockerfile", ".dockerignore"):
+        for filename in ("uv.lock", "pyproject.toml", "Dockerfile", "Dockerfile.dockerignore"):
             before = dev.snapshot(self.root, "ai-service")
             with (self.context / filename).open("a") as file:
                 file.write("\n# changed\n")
@@ -126,6 +137,63 @@ class DevTests(unittest.TestCase):
         self.assertIn("--platform", builds[0])
         self.assertFalse(Path(builds[0][-1]).exists())
         self.assertFalse(any("push" in c for c in self.calls))
+
+    def test_shared_runtime_edits_additions_and_deletions_trigger_only_its_consumer(self):
+        self.sync()
+        original = dev.snapshot(self.root, "ai-service")
+        shared_code = self.shared / "src/govbiz_ai_runtime/agent.py"
+        shared_code.write_text("# updated shared implementation\n")
+        self.assertNotEqual(original, dev.snapshot(self.root, "ai-service"))
+        self.calls.clear()
+        self.assertTrue(self.sync())
+        self.assertEqual(len([c for c in self.calls if c[:2] == ["docker", "build"]]), 1)
+        before = dev.snapshot(self.root, "ai-service")
+        added = self.shared / "src/govbiz_ai_runtime/new.py"
+        added.write_text("# untracked package input\n")
+        self.assertNotEqual(before, dev.snapshot(self.root, "ai-service"))
+        added.unlink()
+        self.assertEqual(before, dev.snapshot(self.root, "ai-service"))
+        shared_code.unlink()
+        self.assertNotEqual(before, dev.snapshot(self.root, "ai-service"))
+
+    def test_shared_package_secrets_and_unrelated_packages_do_not_enter_snapshot(self):
+        before = dev.snapshot(self.root, "ai-service")
+        for relative in (".env", "src/govbiz_ai_runtime/private.key", "src/govbiz_ai_runtime/cache.log"):
+            (self.shared / relative).write_text("do-not-send")
+        cache = self.shared / "src/govbiz_ai_runtime/__pycache__"
+        cache.mkdir()
+        (cache / "agent.pyc").write_bytes(b"cache")
+        other = self.root / "packages/govbiz-evaluation-contracts"
+        other.mkdir()
+        (other / "unrelated.py").write_text("# other service only\n")
+        subprocess.run(["git", "-C", self.root, "add", "--force", self.shared / ".env"], check=True)
+        snapshot = self.root / "snapshot"
+        self.assertEqual(before, dev.snapshot(self.root, "ai-service", snapshot))
+        files = {p.relative_to(snapshot).as_posix() for p in snapshot.rglob("*") if p.is_file()}
+        self.assertFalse(any(".env" in name or "private.key" in name or "__pycache__" in name for name in files))
+        self.assertFalse(any("govbiz-evaluation-contracts" in name for name in files))
+
+    def test_ops_snapshot_includes_and_fingerprints_its_shared_contract(self):
+        service = self.root / "backend/ops-service"
+        service.mkdir()
+        for name in ("Dockerfile", "Dockerfile.dockerignore"):
+            (service / name).write_bytes((dev.REPOSITORY_ROOT / "backend/ops-service" / name).read_bytes())
+        shared = self.root / "packages/govbiz-evaluation-contracts"
+        shared.mkdir()
+        module = shared / "contract.py"
+        module.write_text("# contract\n")
+        destination = self.root / "ops-snapshot"
+        before = dev.snapshot(self.root, "ops-service", destination)
+        self.assertTrue((destination / "packages/govbiz-evaluation-contracts/contract.py").is_file())
+        self.assertFalse((destination / "packages/govbiz-ai-runtime").exists())
+        module.write_text("# updated contract\n")
+        self.assertNotEqual(before, dev.snapshot(self.root, "ops-service"))
+
+    def test_shared_package_symlinks_are_rejected(self):
+        link = self.shared / "src/govbiz_ai_runtime/private.py"
+        link.symlink_to(self.root / ".gitignore")
+        with self.assertRaisesRegex(ValueError, "Symlink"):
+            dev.snapshot(self.root, "ai-service")
 
     def test_unchanged_second_run_does_not_build_or_rollout(self):
         self.assertTrue(self.sync())

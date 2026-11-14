@@ -161,10 +161,10 @@ def validate(model, project):
         "web": APP,
         "core-service": APP / "backend/core-service",
         "catalog-service": APP / "backend/catalog-service",
-        "ai-service": APP / "backend/ai-service",
+        "ai-service": APP,
         "elasticsearch": APP / "infrastructure/elasticsearch",
-        "ops-service": DJANGO,
-        "ops-bootstrap": DJANGO,
+        "ops-service": APP,
+        "ops-bootstrap": APP,
     }.items():
         build = services[name]["build"]
         require(

@@ -819,6 +819,36 @@ def test_recovery_checker_rejects_regeneration_mutation_and_false_quality(defect
         assert result["original_evidence_preserved"] and result["model_sends"] == 0
 
 
+@pytest.mark.parametrize(
+    "defect", [None, "missing_kind", "reassessment", "different_run", "unfinished", "duplicate"]
+)
+def test_recovery_history_requires_one_completed_recovery(defect):
+    recovered = {"id": str(uuid4()), "status_label": "완료"}
+    attempts = [
+        {
+            "id": recovered["id"],
+            "status": "COMPLETED",
+            "status_label": "완료",
+            "recovery_kind": "recovery",
+        }
+    ]
+    if defect == "missing_kind":
+        attempts[0].pop("recovery_kind")
+    elif defect == "reassessment":
+        attempts[0]["recovery_kind"] = "reassessment"
+    elif defect == "different_run":
+        attempts[0]["id"] = str(uuid4())
+    elif defect == "unfinished":
+        attempts[0]["status"] = "RUNNING"
+    elif defect == "duplicate":
+        attempts.append(dict(attempts[0]))
+    if defect:
+        with pytest.raises(AssertionError):
+            smoke.verify_recovery_history(attempts, recovered)
+    else:
+        smoke.verify_recovery_history(attempts, recovered)
+
+
 def test_readiness_checks_real_langfuse_endpoint_without_model_calls(server, monkeypatch):
     state, base = server
     forwarded = Mock(return_value=(200, b'{"status":"OK"}'))

@@ -284,6 +284,17 @@ def verify_rag_recovery(source, recovered, before, after, files, *, events):
     }
 
 
+def verify_recovery_history(attempts, recovered):
+    assert attempts == [
+        {
+            "id": recovered["id"],
+            "status": "COMPLETED",
+            "status_label": recovered["status_label"],
+            "recovery_kind": "recovery",
+        }
+    ]
+
+
 class Smoke:
     def __init__(self, compose):
         self.compose = compose
@@ -887,13 +898,12 @@ class Smoke:
         assert status == 200 and state["events"] == source_events
         status, original = self.api(f"/api/v1/ops/evaluations/{source['id']}")
         assert status == 200 and original["status"] == "FAILED"
-        assert original["postprocessing"]["attempts"] == [
-            {
-                "id": recovered["id"],
-                "status": "COMPLETED",
-                "status_label": recovered["status_label"],
-            }
+        attempts = original["postprocessing"]["attempts"]
+        self.active["recovery_attempts"] = [
+            {key: item.get(key) for key in ("id", "status", "status_label", "recovery_kind")}
+            for item in attempts
         ]
+        verify_recovery_history(attempts, recovered)
         status, reviews = self.api(f"/api/v1/ops/evaluations/{recovered['id']}/rag-reviews")
         assert status == 200 and reviews["quality"]["status"] == "NOT_EVALUATED"
         assert not reviews["reference_review"]["approved"] and reviews["case_reviews"] == []

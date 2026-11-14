@@ -45,6 +45,10 @@ jobs:
     runs-on: ubuntu-24.04
     # Core captures and their replay share state; independent recovery suites run below.
     timeout-minutes: 40
+    env:
+      # Host integration tools reuse AI test fixtures excluded from installed packages.
+      # This path is not passed into the independently built service/runner containers.
+      PYTHONPATH: ${{ github.workspace }}/backend/ai-service
     services:
       ragmysql:
         image: mysql:8.4

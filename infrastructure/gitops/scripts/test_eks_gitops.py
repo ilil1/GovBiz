@@ -992,14 +992,14 @@ class EksGitOpsTests(unittest.TestCase):
             patch.object(gitops, "kube", side_effect=kube or (
                 lambda namespace, *args: (app or ready_app) if namespace == "argocd" else deployments[args[1]]
             )),
-            patch.object(gitops.time, "sleep") as sleep,
+            patch.object(gitops, "time", Mock(monotonic=gitops.time.monotonic, sleep=Mock())) as clock,
             redirect_stdout(stdout), redirect_stderr(stderr),
         ):
             path = Path(temp) / "receipt.json"
             path.write_text(json.dumps(record))
             with patch.object(gitops, "main", side_effect=lambda: gitops.wait(self.sha, path, timeout)):
                 result = gitops.cli()
-            sleep.assert_not_called()  # Reporting must not retry or hide an error.
+            clock.sleep.assert_not_called()  # Do not intercept subprocess polling in the shared time module.
         return result, stdout.getvalue(), stderr.getvalue(), ci.call_count
 
     def test_final_ci_rate_limit_is_distinct_from_successful_argo_sync(self):

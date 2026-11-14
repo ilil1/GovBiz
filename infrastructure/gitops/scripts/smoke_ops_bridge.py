@@ -161,6 +161,9 @@ def main():
                     if key == "LANGFUSE_PUBLIC_KEY"
                     else "sk-lf-" + secrets.token_hex(32)
                     if key == "LANGFUSE_SECRET_KEY"
+                    # Compose validates the original port mapping before !reset removes it.
+                    else "127.0.0.1"
+                    if key == "PREFECT_BIND_ADDRESS"
                     else secrets.token_hex(32)
                 )
                 + "\n"

@@ -33,27 +33,35 @@ class QuietHandler(WSGIRequestHandler):
 class StorageHttpTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Isolate the production WSGI app's relative imports from other test apps.
+        # Load the stdlib-only source contract without installing the Python 3.12 runtime.
+        # Keep any contract modules loaded by another test intact when this class finishes.
         package = "_storage_http_artifacts"
-        directory = (
-            Path(__file__).resolve().parents[3] / "backend/ops-service/apps/evaluations"
-        )
-        spec = importlib.util.spec_from_file_location(
-            package,
-            directory / "__init__.py",
-            submodule_search_locations=[str(directory)],
-        )
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[package] = module
-        spec.loader.exec_module(module)
-        cls.artifacts = importlib.import_module(package + ".artifact_server")
+        contract = "govbiz_evaluation_contracts"
+        owned = (package, contract)
+        saved = {name: module for name, module in sys.modules.items()
+                 if any(name == prefix or name.startswith(prefix + ".") for prefix in owned)}
 
         def cleanup():
             for name in list(sys.modules):
-                if name == package or name.startswith(package + "."):
+                if any(name == prefix or name.startswith(prefix + ".") for prefix in owned):
                     del sys.modules[name]
+            sys.modules.update(saved)
 
         cls.addClassCleanup(cleanup)
+        for name in saved:
+            del sys.modules[name]
+        root = Path(__file__).resolve().parents[3]
+        for name, directory in (
+            (contract, root / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts"),
+            (package, root / "backend/ops-service/apps/evaluations"),
+        ):
+            spec = importlib.util.spec_from_file_location(
+                name, directory / "__init__.py", submodule_search_locations=[str(directory)],
+            )
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            spec.loader.exec_module(module)
+        cls.artifacts = importlib.import_module(package + ".artifact_server")
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

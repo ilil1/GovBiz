@@ -29,8 +29,9 @@ PY
   uv run --locked --extra dev python -m pytest
   uv build
 )
-uv run --project pipelines --locked --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
-PYTHONPATH=backend/ai-service uv run --project pipelines --locked --extra dev --group integration python -m pytest backend/ai-service/integration
+python3 infrastructure/llmops/bundle_runner_inputs.py
+uv run --project pipelines --locked --no-editable --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
+PYTHONPATH=backend/ai-service uv run --project pipelines --locked --no-editable --extra dev --group integration python -m pytest backend/ai-service/integration
 cleanup_qdrant
 trap - EXIT
 python3 -B -m unittest discover -s infrastructure/scripts -p 'test_*.py'

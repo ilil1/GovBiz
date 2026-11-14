@@ -22,7 +22,7 @@ def test_npm_downloads_share_cache_and_keep_build_outside_retry():
     dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text()
     builder = dockerfile.split("FROM python:3.12-slim-bookworm AS builder", 1)[0]
     assert (
-        "COPY document-tools/npm-network-retry.sh /usr/local/bin/npm-network-retry.sh"
+        "COPY backend/ai-service/document-tools/npm-network-retry.sh /usr/local/bin/npm-network-retry.sh"
         in builder
     )
     assert (

@@ -20,9 +20,18 @@ from fork_cluster import REPOSITORY_ROOT, STATE, commands, load_settings, locked
 INPUTS = {
     "core-service": ("gradlew", "gradle", "build.gradle", "settings.gradle", "gradle.properties", "src"),
     "catalog-service": ("gradlew", "gradle", "build.gradle", "settings.gradle", "src"),
-    "ai-service": ("pyproject.toml", "uv.lock", "app", "document-tools"),
-    "ops-service": ("pyproject.toml", "uv.lock", "manage.py", "config", "apps"),
+    "ai-service": (
+        "backend/ai-service/pyproject.toml", "backend/ai-service/uv.lock",
+        "backend/ai-service/app", "backend/ai-service/document-tools",
+        "packages/govbiz-ai-runtime",
+    ),
+    "ops-service": (
+        "backend/ops-service/pyproject.toml", "backend/ops-service/uv.lock",
+        "backend/ops-service/manage.py", "backend/ops-service/config", "backend/ops-service/apps",
+        "packages/govbiz-evaluation-contracts",
+    ),
 }
+ROOT_CONTEXT = frozenset({"ai-service", "ops-service"})
 EXCLUDED_PARTS = {".git", ".local", ".gradle", ".kotlin", ".venv", "venv", "node_modules",
                   "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", "build", "dist",
                   "out", "coverage", ".idea", ".vscode"}
@@ -96,18 +105,22 @@ def check_dockerfile(text, roots):
 def source_files(root, service):
     if service not in INPUTS:
         raise ValueError("Unknown service")
-    context = root / "backend" / service
-    if context.is_symlink() or context.parent.is_symlink():
+    service_root = root / "backend" / service
+    context = root if service in ROOT_CONTEXT else service_root
+    if service_root.is_symlink() or service_root.parent.is_symlink():
         raise ValueError("Symlink source directory is not allowed")
-    for name in ("Dockerfile", ".dockerignore"):
-        regular_file(context / name, root)
-    if (context / "Dockerfile.dockerignore").exists():
-        raise ValueError("Dockerfile-specific ignore files are not supported; use .dockerignore")
-    check_dockerfile((context / "Dockerfile").read_text(), INPUTS[service])
-    ignore_text = (context / ".dockerignore").read_text()
+    dockerfile = service_root / "Dockerfile"
+    ignore = service_root / "Dockerfile.dockerignore" if service in ROOT_CONTEXT else context / ".dockerignore"
+    for path in (dockerfile, ignore):
+        regular_file(path, root)
+    if service not in ROOT_CONTEXT and (service_root / "Dockerfile.dockerignore").exists():
+        raise ValueError("Unexpected Dockerfile-specific ignore file for service-local context")
+    check_dockerfile(dockerfile.read_text(), INPUTS[service])
+    ignore_text = ignore.read_text()
+    watched = [str((context / source).relative_to(root)) for source in INPUTS[service]]
     listed = run(["git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--",
-                  str(context.relative_to(root))], capture=True, timeout=15)
-    selected = {"Dockerfile", ".dockerignore"}
+                  *watched], capture=True, timeout=15)
+    selected = {path.relative_to(context).as_posix() for path in (dockerfile, ignore)}
     for item in listed.split("\0"):
         if not item:
             continue
@@ -245,7 +258,9 @@ def sync_service(root, state, settings, service, expected=None, kind="kind"):
     with tempfile.TemporaryDirectory(prefix="govbiz-dev-context-") as directory:
         context = Path(directory)
         fingerprint = snapshot(root, service, context)
+        dockerfile = context / "backend" / service / "Dockerfile" if service in ROOT_CONTEXT else context / "Dockerfile"
         run(["docker", "build", "--platform", settings["platform"], "--tag", image,
+             "--file", dockerfile,
              "--label", "dev.govbiz.repository=" + settings["repository"],
              "--label", "dev.govbiz.fingerprint=" + fingerprint, context], timeout=3600)
     run([kind, "load", "docker-image", image, "--name", settings["cluster"]], timeout=600)

@@ -44,6 +44,7 @@ pipelines/
 [LLMOps 운영 안내](../infrastructure/llmops/README.md)의 빌드 절차로 준비한다.
 
 ```bash
+python3 infrastructure/llmops/bundle_runner_inputs.py
 uv sync --project pipelines --locked --no-editable --extra dev
 uv run --project pipelines --locked --no-editable govbiz-pipelines
 ```

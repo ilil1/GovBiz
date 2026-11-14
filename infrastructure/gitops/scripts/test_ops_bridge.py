@@ -722,7 +722,7 @@ class ComposeBridgeTests(unittest.TestCase):
             env = Path(temp) / ".env"
             env.write_text(
                 "".join(
-                    key + "=" + "x" * 64 + "\n"
+                    key + "=" + ("127.0.0.1" if key == "PREFECT_BIND_ADDRESS" else "x" * 64) + "\n"
                     for key in keys
                     if not key.startswith("GOVBIZ_OPS_BRIDGE_")
                 )

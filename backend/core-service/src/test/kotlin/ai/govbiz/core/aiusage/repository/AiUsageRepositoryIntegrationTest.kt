@@ -55,7 +55,7 @@ class AiUsageRepositoryIntegrationTest {
         val day = LocalDate.of(2002, 2, 3)
         val start = day.atStartOfDay().plusHours(9)
         val attribution = AiUsageAttribution(null, AiUsageFeature.AI_SEARCH)
-        val trace = "1234567890abcdef1234567890abcdef"
+        val trace = UUID.randomUUID().toString().replace("-", "")
         repository.insertUsage(start, attribution, "coverage", AiModelUsage("test-model", "default", 2, 10, 0, 1, 0, 0), null, trace)
         repository.insertUsage(start.plusHours(23), attribution, "coverage", AiModelUsage("test-model", "default", 3, 10, 0, 1, 0, 0), null)
         repository.insertUsage(start.plusDays(1), attribution, "coverage", AiModelUsage("test-model", "default", 4, 10, 0, 1, 0, 0), null, trace)
@@ -70,7 +70,7 @@ class AiUsageRepositoryIntegrationTest {
     @Test
     fun usageRetainsTheSampledTraceIdAndAllowsMissingTrace() {
         val operation = "trace-test-${UUID.randomUUID()}"
-        val traceId = "1234567890abcdef1234567890abcdef"
+        val traceId = UUID.randomUUID().toString().replace("-", "")
         val usage = AiModelUsage("gpt-6-luna", "default", 1, 10, 0, 5, 0, 0)
         service.record(operation, listOf(usage), null, traceId)
         service.record(operation, listOf(usage), null)
