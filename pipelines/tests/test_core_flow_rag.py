@@ -10,7 +10,7 @@ import core_flow_rag as importer
 import pytest
 from apps.evaluations import execution_spec
 
-RUN = Path(__file__).parent / "runs/official-flow-20260907-v2"
+RUN = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence/runs/official-flow-20260907-v2"
 
 
 @pytest.fixture
@@ -242,8 +242,8 @@ def test_failed_registration_rolls_back_catalog_and_new_files(repository, monkey
 def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
     repository, monkeypatch, tmp_path
 ):
-    import ops_flow
-    import rag_replay_flow
+    from pipelines.evaluation import flows as ops_flow
+    from pipelines.evaluation import rag as rag_replay_flow
     from apps.evaluations import catalog, rag_replay
 
     importer.register(
@@ -261,9 +261,6 @@ def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
         repository / importer.OPS / "execution_release.json",
     )
     monkeypatch.setattr(ops_flow, "ROOT", repository)
-    monkeypatch.setattr(
-        ops_flow, "__file__", str(repository / importer.EVIDENCE / "ops_flow.py")
-    )
     monkeypatch.setattr(rag_replay_flow, "ROOT", repository)
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path / "results"))
     monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))

@@ -300,7 +300,7 @@ def verify_release(image, project):
                 "docker",
                 "exec",
                 runner["Id"],
-                "/app/backend/ai-service/.venv/bin/python",
+                "/app/pipelines/.venv/bin/python",
                 "-c",
                 digest + "import os,json; print(json.dumps({"
                 "'release':hashlib.sha256(Path('/app/backend/ops-service/apps/evaluations/execution_release.json').read_bytes()).hexdigest(),"
@@ -524,7 +524,7 @@ def check_runtime(state, settings, run_id=None, *, expected_image=None):
                 "docker",
                 "exec",
                 runner["Id"],
-                "/app/backend/ai-service/.venv/bin/python",
+                "/app/pipelines/.venv/bin/python",
             ],
             "/app/backend/ops-service/apps/evaluations/execution_release.json",
         ),

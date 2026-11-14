@@ -62,10 +62,11 @@ def container(name):
         "Config": {
             "User": "10001:10001",
             "Entrypoint": None,
-            "WorkingDir": "/app/backend/ai-service" if runner else "/app",
+            "WorkingDir": "/app",
             "Cmd": [
-                ".venv/bin/python",
-                "/app/evaluation/support-program-evidence/ops_flow.py",
+                "/app/pipelines/.venv/bin/python",
+                "-m",
+                "pipelines.serve",
             ]
             if runner
             else [

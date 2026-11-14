@@ -21,9 +21,9 @@ def source_hashes(folder):
 def prepare(source_id, root):
     assert not os.environ.get("OPENAI_API_KEY")
     assert os.environ.get("LLMOPS_LIVE_ENABLED", "false") == "false"
-    sys.path.insert(0, "/app/evaluation/support-program-evidence")
-    import ops_flow
-    import llmops
+    sys.path.insert(0, "/app")
+    from pipelines.evaluation import flows as ops_flow
+    from pipelines.evaluation import capture
 
     def forbid_model(*args, **kwargs):
         raise AssertionError("Model calls are forbidden in recovery smoke")
@@ -32,7 +32,7 @@ def prepare(source_id, root):
         raise RuntimeError("SMOKE_PUBLISH_FAILURE")
 
     ops_flow.evaluate.execute = forbid_model
-    llmops.publish = fail_publish
+    capture.publish = fail_publish
     try:
         ops_flow.evaluate_saved_capture(source_id, ops_flow.DATASET_ID)
     except RuntimeError as error:
@@ -70,7 +70,7 @@ def register(source_id, email):
 
 def verify(source_id, recovery_id, root):
     sys.path[:0] = ["/app/evaluation/support-program-evidence", "/app/backend/ai-service"]
-    import llmops
+    import reporting
     import httpx
     from app.config import LangfuseSettings
     from langfuse.api.client import LangfuseAPI
@@ -84,9 +84,9 @@ def verify(source_id, recovery_id, root):
     manifest = json.loads((folder / "evaluation/manifest.json").read_text())
     assert marker["execution_mode"] == "recovery" and marker["live_config"] == {}
     assert manifest["status"] == "completed" and manifest["model_api_calls"] == 0
-    result = llmops.load_results(folder / "recovery-fixture.json", folder / "capture/capture.json")
+    result = reporting.load_results(folder / "recovery-fixture.json", folder / "capture/capture.json")
     settings = LangfuseSettings.from_environment()
-    expected = {item["id"]: item for item in llmops.score_payloads(result, settings)}
+    expected = {item["id"]: item for item in reporting.score_payloads(result, settings)}
     assert len(expected) == 22 and set(manifest["score_ids"]) == set(expected)
     assert sha256((folder / "evaluation/report.html").read_bytes()).hexdigest() == manifest["artifact_sha256"]["report.html"]
     with httpx.Client(timeout=10) as transport:

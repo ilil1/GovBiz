@@ -27,5 +27,5 @@ backend/ops-service/apps/evaluations/quality_policy.py text eol=lf
 backend/ops-service/apps/evaluations/recovery_inputs.py text eol=lf
 evaluation/support-program-evidence/budget_client.py text eol=lf
 evaluation/support-program-evidence/evaluate.py text eol=lf
-evaluation/support-program-evidence/llmops.py text eol=lf
-evaluation/support-program-evidence/ops_flow.py text eol=lf
+evaluation/support-program-evidence/reporting.py text eol=lf
+pipelines/** text eol=lf

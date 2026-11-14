@@ -1,37 +1,25 @@
-"""저장 캡처만 처리하는 무료 LLMOps 파이프라인. 모델 실행·스케줄은 자동 활성화하지 않는다."""
+"""저장 캡처의 검증·지표·보고서 계산. Prefect 없이 실행할 수 있다."""
 
-import argparse
-from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from math import isfinite
 import os
 from pathlib import Path
 import re
-import time
-import sys
 from uuid import UUID
+import sys
 
-# 평가 라이브러리의 사용량 telemetry도 외부로 보내지 않는다.
+# 보고서 라이브러리의 사용량 telemetry도 외부로 보내지 않는다.
 os.environ["DO_NOT_TRACK"] = "1"
-os.environ["PREFECT_SERVER_ANALYTICS_ENABLED"] = "false"
-os.environ.setdefault("PREFECT_HOME", str(Path(__file__).resolve().parents[2] / "work/llmops/prefect-client"))
 
 import pandas as pd
 import pandera.pandas as pa
-import httpx
 from evidently import Report
 from evidently.metrics import MeanValue, RowCount
 from evidently.legacy.renderers.html_widgets import WidgetSize
-from filelock import FileLock
-from langfuse.api.client import LangfuseAPI
-from prefect import flow, task
-from prefect.cache_policies import NO_CACHE
-from prefect.runtime import flow_run
 
 import evaluate
 from app.config import LangfuseSettings
-
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -314,137 +302,3 @@ def score_payloads(result: dict, settings: LangfuseSettings) -> list[dict]:
                 item["session_id"] = result["run_id"]
             payloads.append(item)
     return payloads
-
-
-def publish_scores(result: dict, settings: LangfuseSettings) -> list[str]:
-    return publish_payloads(score_payloads(result, settings), settings)
-
-
-def publish_payloads(payloads: list[dict], settings: LangfuseSettings) -> list[str]:
-    """범위별 검증을 마친 점수를 등록하고 실제 서버 저장을 재조회한다."""
-    evaluate.require(settings.enabled, "Langfuse must be explicitly enabled for publication")
-    # 재전송 시 날짜가 달라지면 같은 ID라도 별도 점수가 될 수 있으므로 자동 POST 재시도는 하지 않는다.
-    options = {"max_retries": 0, "timeout_in_seconds": 20}
-    with httpx.Client(timeout=20) as transport:
-        client = LangfuseAPI(username=settings.public_key, password=settings.secret_key,
-                             base_url=settings.base_url, httpx_client=transport, timeout=20)
-
-        def stored(expected: dict) -> bool:
-            deadline = time.monotonic() + 60
-            while True:
-                actual = {}
-                identifiers = list(expected)
-                try:
-                    for start in range(0, len(identifiers), 100):
-                        remaining = deadline - time.monotonic()
-                        if remaining <= 0:
-                            return False
-                        read_options = {**options, "timeout_in_seconds": min(20, remaining)}
-                        found = client.scores_v3.get_many_v3(id=",".join(identifiers[start:start + 100]), limit=100,
-                                                            fields="details,subject", request_options=read_options)
-                        actual.update({score.id: score for score in found.data})
-                except httpx.TimeoutException:
-                    # 읽기는 부작용이 없으므로 제한 시간 안에서 다시 확인할 수 있다.
-                    pass
-                else:
-                    if all(identifier in actual and actual[identifier].value == payload["value"]
-                           and actual[identifier].name == payload["name"] for identifier, payload in expected.items()):
-                        return True
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return False
-                time.sleep(min(1, remaining))
-
-        for payload in payloads:
-            try:
-                client.scores.create(**payload, request_options=options)
-            except httpx.TimeoutException:
-                # 서버에 이미 접수됐을 수 있다. 재전송하지 않고 실제 저장이 확인된 경우에만 진행한다.
-                if not stored({payload["id"]: payload}):
-                    raise
-        expected = {payload["id"]: payload for payload in payloads}
-        if not stored(expected):
-            raise RuntimeError("Langfuse score persistence verification timed out")
-        return list(expected)
-
-
-@task(name="validate-capture-and-results", retries=0, cache_policy=NO_CACHE, persist_result=False)
-def prepare(fixture: str, capture: str, case_ids: list[str] | None = None) -> dict:
-    return load_results(Path(fixture), Path(capture), case_ids)
-
-
-@task(name="evidently-comparison", retries=1, retry_delay_seconds=1, cache_policy=NO_CACHE, persist_result=False)
-def render(current: dict, reference: dict, output: str) -> dict:
-    return create_report(current, reference, Path(output))
-
-
-@task(name="langfuse-scores-and-readback", retries=0, cache_policy=NO_CACHE, persist_result=False)
-def publish(current: dict) -> list[str]:
-    # 키는 Prefect 인자로 저장하지 않고 실행 프로세스에서 읽는다.
-    return publish_scores(current, LangfuseSettings.from_environment())
-
-
-@flow(name="govbiz-evidence-capture-evaluation", retries=0, timeout_seconds=300, persist_result=False)
-def evaluate_capture(fixture: str, capture: str, reference: str, output_dir: str, case_ids: list[str] | None = None,
-                     execution_spec_sha256: str | None = None, reassessment: dict | None = None) -> dict:
-    reassessment = validate_reassessment(reassessment)
-    lock_dir = ROOT / "work/llmops"
-    lock_dir.mkdir(parents=True, exist_ok=True)
-    # 수동 실행 프로세스도 같은 checkout에서 겹치지 않는다. 배포 시에도 serve(limit=1)을 적용한다.
-    with FileLock(str(lock_dir / "evaluation.lock"), timeout=0):
-        output = Path(output_dir)
-        output.mkdir(parents=True, exist_ok=False)
-        manifest = {"status": "running", "prefect_flow_run_id": str(flow_run.id),
-                    "started_at": datetime.now(timezone.utc).isoformat(), "model_api_calls": 0}
-        if execution_spec_sha256:
-            manifest["execution_spec_sha256"] = execution_spec_sha256
-        write_json(output / "manifest.json", manifest)
-        try:
-            current = prepare(fixture, capture, case_ids)
-            baseline = prepare(fixture, reference, case_ids)
-            if reassessment is not None:
-                current = {**current, "reassessment": reassessment,
-                           "run_id": sha256(f"stored-response-reassessment:{reassessment['source_run_id']}:{reassessment['target_evaluator_version']}:{current['run_id']}".encode()).hexdigest()[:32]}
-            manifest.update(evaluation_run_id=current["run_id"], reference_run_id=baseline["run_id"],
-                            scope=current["summary"]["scope"],
-                            capture_sha256=current["capture_sha256"], reference_capture_sha256=baseline["capture_sha256"],
-                            fixture_sha256=current["fixture_sha256"], evaluator_version=EVALUATOR_VERSION)
-            # 프로세스가 강제 종료되어도 검증된 입력과 실패 단계를 복구할 수 있게 먼저 기록한다.
-            manifest["stage"] = "report"
-            write_json(output / "manifest.json", manifest)
-            current["frame"].to_json(output / "results.json", orient="records", force_ascii=False, indent=2)
-            report = render(current, baseline, str(output))
-            write_json(output / "comparison.json", report)
-            report["artifact_sha256"]["comparison.json"] = sha256((output / "comparison.json").read_bytes()).hexdigest()
-            manifest["stage"] = "publish"
-            write_json(output / "manifest.json", manifest)
-            score_ids = publish(current)
-            manifest.update(status="completed", score_ids=score_ids, report="report.html",
-                            artifact_sha256=report["artifact_sha256"])
-            if not current["summary"]["completed"] or not baseline["summary"]["completed"]:
-                raise RuntimeError("Source evaluation is incomplete; partial results were preserved")
-            manifest["stage"] = "completed"
-        except BaseException:
-            manifest["status"] = "failed"
-            raise
-        finally:
-            manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
-            write_json(output / "manifest.json", manifest)
-        return manifest
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fixture", type=Path, required=True)
-    parser.add_argument("--capture", type=Path, required=True)
-    parser.add_argument("--reference", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
-    args = parser.parse_args()
-    if not os.environ.get("PREFECT_API_URL"):
-        parser.error("PREFECT_API_URL is required; start the local evaluation server first")
-    result = evaluate_capture(*(str(path.resolve()) for path in [args.fixture, args.capture, args.reference, args.output_dir]))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    main()

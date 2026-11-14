@@ -7,9 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-import ops_flow
+from pipelines.evaluation import flows as ops_flow
 import pytest
-import rag_replay_flow
+from pipelines.evaluation import rag
+import rag_reporting
 from apps.evaluations import rag_replay
 from apps.evaluations.catalog import public_datasets, validate_execution
 from apps.evaluations.execution_spec import digest, make_spec, read_release
@@ -18,6 +19,9 @@ from apps.evaluations.recovery_inputs import read_recovery_inputs
 
 DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
+
+
+EVIDENCE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
 
 
 def parameters(mode="replay", recovery=None, *, dataset=DATASET, capture=CAPTURE):
@@ -39,10 +43,11 @@ def parameters(mode="replay", recovery=None, *, dataset=DATASET, capture=CAPTURE
 @pytest.fixture
 def runner(monkeypatch, tmp_path):
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
+    monkeypatch.setattr(rag, "ROOT", tmp_path)
     monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))
-    monkeypatch.setattr(rag_replay_flow, "flow_run", SimpleNamespace(id=str(uuid4())))
+    monkeypatch.setattr(rag, "flow_run", SimpleNamespace(id=str(uuid4())))
     monkeypatch.setattr(
-        ops_flow, "evaluate_rag_capture", rag_replay_flow.evaluate_rag_capture.fn
+        ops_flow, "evaluate_rag_capture", rag.evaluate_rag_capture.fn
     )
     monkeypatch.setattr(
         ops_flow.evaluate, "execute", lambda *a, **kw: pytest.fail("No model calls")
@@ -51,13 +56,13 @@ def runner(monkeypatch, tmp_path):
         ops_flow, "BudgetClient", lambda *a: pytest.fail("No paid reservation")
     )
     monkeypatch.setattr(
-        rag_replay_flow.LangfuseSettings,
+        rag.LangfuseSettings,
         "from_environment",
         lambda: SimpleNamespace(environment="test"),
     )
     scores = []
     monkeypatch.setattr(
-        rag_replay_flow,
+        rag,
         "publish_payloads",
         lambda payloads, _: scores.extend(payloads) or [p["id"] for p in payloads],
     )
@@ -94,7 +99,7 @@ def test_ops_entrypoint_replays_three_cases_with_real_report_and_distinct_metric
         p["session_id"] == result[0] and p["metadata"]["scope"] == rag_replay.SCOPE
         for p in scores
     )
-    here = Path(__file__).parent
+    here = EVIDENCE
     fixture = json.loads((here / "rag-fixture.json").read_bytes())
     capture = json.loads((here / "rag-synthetic-capture.json").read_bytes())
     material = material_from_sources(fixture, capture, capture, result[3])
@@ -116,7 +121,7 @@ def test_ops_entrypoint_replays_three_cases_with_real_report_and_distinct_metric
 @pytest.mark.parametrize("version", ["v1", "v2"])
 def test_official_preparation_can_render_unmeasured_report_without_model_calls(runner, version, monkeypatch):
     root, scores = runner
-    real_report = rag_replay_flow.Report
+    real_report = rag_reporting.Report
     snapshots = []
 
     class CapturedReport:
@@ -128,7 +133,7 @@ def test_official_preparation_can_render_unmeasured_report_without_model_calls(r
             snapshots.append(snapshot.dict())
             return snapshot
 
-    monkeypatch.setattr(rag_replay_flow, "Report", CapturedReport)
+    monkeypatch.setattr(rag_reporting, "Report", CapturedReport)
     params = parameters(dataset=f"official-rag-20261006-{version}", capture=f"official-rag-not-started-{version}")
     manifest = ops_flow.evaluate_saved_capture.fn(**params)
     folder = root / params["request_id"] / "evaluation"
@@ -143,61 +148,6 @@ def test_official_preparation_can_render_unmeasured_report_without_model_calls(r
     metrics = {item["metric_name"]: item["value"] for item in snapshots[0]["metrics"]}
     assert metrics["MeanValue(column=paired_available_retrieval_recall)"] == 0
     assert "MeanValue(column=paired_delta_retrieval_recall)" not in metrics
-
-
-@pytest.mark.parametrize("kind", ["synthetic", "integration-stub", "recorded"])
-@pytest.mark.parametrize("stage", [None, "not_started", "source", "chunk", "index", "search", "answer"])
-def test_review_material_preserves_real_evaluator_stage_contract(tmp_path, kind, stage):
-    from test_rag_evaluate import fail_at
-
-    here = Path(__file__).parent
-    fixture = json.loads((here / "rag-fixture.json").read_bytes())
-    candidate = json.loads((here / "rag-synthetic-capture.json").read_bytes())
-    reference = deepcopy(candidate)
-    if kind != "synthetic":
-        candidate["schemaVersion"] = (
-            "support-program-rag-capture-v2" if kind == "integration-stub"
-            else "support-program-rag-capture-v1"
-        )
-        candidate["execution"] = {
-            "kind": kind, "model": "offline-model", "embeddingModel": "offline-embedding",
-            "promptSha256": "a" * 64, "recorderSha256": "b" * 64,
-            **({"paidModelApiCalls": 0} if kind == "integration-stub" else {}),
-        }
-        candidate["cases"][0]["traceId"] = "1" * 32
-    if stage is not None:
-        fail_at(candidate["cases"][0], stage)
-    saved = tmp_path / "capture.json"
-    saved.write_text(json.dumps(candidate, ensure_ascii=False))
-    current = rag_replay_flow.rag_evaluate.evaluate(here / "rag-fixture.json", saved)
-    before = rag_replay_flow.rag_evaluate.evaluate(here / "rag-fixture.json", here / "rag-synthetic-capture.json")
-    comparison = {"scope": rag_replay.SCOPE, "case_ids": [c["id"] for c in fixture["cases"]], "current": current, "reference": before}
-    material = material_from_sources(fixture, candidate, reference, comparison)
-    first = material["cases"][0]
-    assert first["reference"]["answer"] == reference["cases"][0]["answer"]["response"]["answer"]
-    assert first["candidate"]["failure"] == candidate["cases"][0]["failure"]
-    assert first["candidate"]["trace_id"] == candidate["cases"][0]["traceId"]
-    assert (first["candidate"]["answer"] is None) == (stage is not None)
-    assert (first["candidate"]["context_chunk_ids"] is None) == (stage not in (None, "answer"))
-    assert material["candidate_measurement_kind"] == current["measurementKind"]
-    assert material["reference_measurement_kind"] == "synthetic-contract-check"
-
-
-def test_scores_target_either_original_trace_or_replay_session():
-    here = Path(__file__).parent
-    report = rag_replay_flow.rag_evaluate.evaluate(here / "rag-fixture.json", here / "rag-synthetic-capture.json")
-    report["cases"][0]["traceId"] = "1" * 32
-    value = {"current": report, "evaluation_run_id": "2" * 32}
-    spec = {"evaluation": {"version": "test"}}
-    scores = rag_replay_flow.score_payloads(value, spec, SimpleNamespace(environment="test"))
-    for score in scores:
-        assert ("trace_id" in score) != ("session_id" in score)
-        if score["metadata"]["case_id"] == "R01":
-            assert score["trace_id"] == "1" * 32
-        else:
-            assert score["session_id"] == value["evaluation_run_id"]
-        assert score["metadata"]["evaluation_run_id"] == value["evaluation_run_id"]
-    assert scores == rag_replay_flow.score_payloads(value, spec, SimpleNamespace(environment="test"))
 
 
 def test_catalog_and_runner_reject_live_and_unpinned_rag_before_spending(runner, monkeypatch):
@@ -251,18 +201,6 @@ def test_registered_core_capture_replays_original_failures_and_trace_scores(
     assert len({s["id"] for s in scores}) == len(scores)
 
 
-def test_registered_core_snapshots_keep_original_ci_bytes():
-    folder = Path(ops_flow.__file__).parent / "runs/core-rag-20261002"
-    source = json.loads((folder / "provenance.json").read_bytes())
-    assert source["commit"] == "461e79e13c9d8a87d7aa1fa5d59da64833762600"
-    assert source["paidModelApiCalls"] == 0 and source["baselineEligible"] is False
-    assert set(source["files"]) == {
-        f"{v}/{name}.json" for v in ("v1", "v2") for name in ("fixture", "capture")
-    }
-    for name, expected in source["files"].items():
-        assert sha256((folder / name).read_bytes()).hexdigest() == expected
-
-
 @pytest.mark.parametrize("failure", ["report", "publish"])
 def test_failed_postprocessing_recovers_without_repeating_model_or_score_identity(
     runner, monkeypatch, failure
@@ -270,21 +208,21 @@ def test_failed_postprocessing_recovers_without_repeating_model_or_score_identit
     root, scores = runner
     params = parameters()
     name = "render" if failure == "report" else "publish_payloads"
-    original = getattr(rag_replay_flow, name)
+    original = getattr(rag, name)
 
     def fail(*args):
         raise RuntimeError("offline injected failure")
 
-    monkeypatch.setattr(rag_replay_flow, name, fail)
+    monkeypatch.setattr(rag, name, fail)
     with pytest.raises(RuntimeError, match="offline injected"):
         ops_flow.evaluate_saved_capture.fn(**params)
     path = root / params["request_id"] / "evaluation/manifest.json"
     failed = json.loads(path.read_text())
     assert failed["status"] == "failed" and failed["stage"] == failure
     _, config, _ = read_recovery_inputs(
-        root, Path(ops_flow.__file__).parent, params["request_id"]
+        root, EVIDENCE, params["request_id"]
     )
-    monkeypatch.setattr(rag_replay_flow, name, original)
+    monkeypatch.setattr(rag, name, original)
     recovered = ops_flow.evaluate_saved_capture.fn(**parameters("recovery", config))
     assert recovered["status"] == "completed" and recovered["model_api_calls"] == 0
     assert recovered["evaluation_run_id"] == failed["evaluation_run_id"]
@@ -296,7 +234,7 @@ def test_original_search_failure_remains_visible_in_successful_recalculation(
     runner, monkeypatch
 ):
     root, _ = runner
-    original = rag_replay_flow.rag_evaluate.evaluate
+    original = rag.rag_evaluate.evaluate
 
     def partial(fixture, capture):
         report = original(fixture, capture)
@@ -340,7 +278,7 @@ def test_original_search_failure_remains_visible_in_successful_recalculation(
         }
         return report
 
-    monkeypatch.setattr(rag_replay_flow.rag_evaluate, "evaluate", partial)
+    monkeypatch.setattr(rag.rag_evaluate, "evaluate", partial)
     params = parameters()
     result = ops_flow.evaluate_saved_capture.fn(**params)
     report = json.loads(
@@ -424,16 +362,16 @@ def test_reviewed_reference_snapshot_survives_postprocessing_recovery(runner, mo
             "recovery_config": recovery,
         }
 
-    original = rag_replay_flow.render
-    monkeypatch.setattr(rag_replay_flow, "render", lambda *a: (_ for _ in ()).throw(RuntimeError("report test failure")))
+    original = rag.render
+    monkeypatch.setattr(rag, "render", lambda *a: (_ for _ in ()).throw(RuntimeError("report test failure")))
     failed = request()
     with pytest.raises(RuntimeError, match="report test failure"):
         ops_flow.evaluate_saved_capture.fn(**failed)
-    here = Path(ops_flow.__file__).parent
+    here = EVIDENCE
     marker, config, inputs = read_recovery_inputs(root, here, failed["request_id"])
     assert marker["reference_config"] == reference_config
     assert sha256(inputs["reference_capture"]).hexdigest() == reference_config["capture_sha256"]
-    monkeypatch.setattr(rag_replay_flow, "render", original)
+    monkeypatch.setattr(rag, "render", original)
     recovered = request("recovery", config)
     manifest = ops_flow.evaluate_saved_capture.fn(**recovered)
     assert manifest["status"] == "completed" and manifest["model_api_calls"] == 0

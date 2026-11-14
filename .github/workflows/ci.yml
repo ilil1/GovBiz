@@ -178,7 +178,9 @@ jobs:
           python-version: "3.12"
           working-directory: backend/ai-service
           enable-cache: true
-          cache-dependency-glob: backend/ai-service/uv.lock
+          cache-dependency-glob: |
+            backend/ai-service/uv.lock
+            pipelines/uv.lock
 
       - name: Check lock file
         run: uv lock --check
@@ -196,13 +198,15 @@ jobs:
         run: uv build
 
       - name: Test evidence evaluation tools without model calls
-        run: uv run --locked --extra dev --group evaluation python -m pytest ../../evaluation/support-program-evidence
+        working-directory: .
+        run: uv run --project pipelines --locked --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
 
       - name: Test conversation evaluation cases and replay tools without model calls
         run: uv run --locked --extra dev python -m pytest ../../evaluation/support-program-conversation
 
       - name: Test Compose cleanup guards without Docker mutations
-        run: uv run --locked --extra dev --group evaluation python -B -m unittest discover -s ../../infrastructure/scripts -p 'test_*.py'
+        working-directory: .
+        run: uv run --project pipelines --locked --extra dev python -B -m unittest discover -s infrastructure/scripts -p 'test_*.py'
 
       - name: Test backend deployment guards without AWS or Docker mutations
         run: python -B -m unittest discover -s ../../infrastructure/codebuild -p 'test_*.py'

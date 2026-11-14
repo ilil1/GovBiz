@@ -7,9 +7,9 @@ from uuid import uuid4
 
 import pytest
 
-import ops_flow
+from pipelines.evaluation import flows as ops_flow
 from apps.evaluations.execution_spec import (
-    AI, OPS, EVIDENCE, ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
+    AI, OPS, EVIDENCE, PIPELINES, ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
 )
 from apps.evaluations.catalog import live_config
 
@@ -30,7 +30,6 @@ def runner(monkeypatch, tmp_path):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ops_flow.ROOT / name, destination)
     monkeypatch.setattr(ops_flow, "ROOT", root)
-    monkeypatch.setattr(ops_flow, "__file__", str(root / EVIDENCE / "ops_flow.py"))
     monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path / "results"))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")
@@ -61,7 +60,16 @@ def test_checked_in_release_matches_repository():
     AI + "app/support_program_llm.py",
     AI + "app/support_program_identity.py",
     AI + "uv.lock",
-    EVIDENCE + "llmops.py",
+    PIPELINES + "pyproject.toml",
+    PIPELINES + "uv.lock",
+    PIPELINES + "__init__.py",
+    PIPELINES + "serve.py",
+    PIPELINES + "evaluation/flows.py",
+    PIPELINES + "evaluation/capture.py",
+    PIPELINES + "evaluation/rag.py",
+    PIPELINES + "evaluation/tasks.py",
+    PIPELINES + "evaluation/clients.py",
+    EVIDENCE + "reporting.py",
     EVIDENCE + "budget_client.py",
     OPS + "quality_policy.py",
     EVIDENCE + "target-coverage-fixture.json",

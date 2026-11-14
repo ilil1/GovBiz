@@ -28,8 +28,8 @@ PY
   uv pip check --python .venv/bin/python
   uv run --locked --extra dev python -m pytest
   uv build
-  uv run --locked --extra dev python -m pytest ../../evaluation/support-program-evidence
 )
+uv run --project pipelines --locked --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
 cleanup_qdrant
 trap - EXIT
 python3 -B -m unittest discover -s infrastructure/scripts -p 'test_*.py'

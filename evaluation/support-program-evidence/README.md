@@ -42,7 +42,7 @@ API의 청크 길이 상한을 넘는 목록은 자료 준비 시 거절하며 �
 
 ```bash
 cd backend/ai-service
-uv run --locked --extra dev --group evaluation python ../../evaluation/support-program-evidence/official_rag.py --grouped-lists
+uv run --project ../../pipelines --locked --extra dev python ../../evaluation/support-program-evidence/official_rag.py --grouped-lists
 ```
 
 v2 재생성은 `official_rag.py --grouped-lists --write`로만 수행합니다. 자료 변경 후 카탈로그의 fixture
@@ -90,8 +90,8 @@ H01~H06 질문**을 재사용하는 별도 RAG 자료입니다. 원문·출처·
 
 ```bash
 cd backend/ai-service
-uv run --locked --extra dev --group evaluation python ../../evaluation/support-program-evidence/official_rag.py
-uv run --locked --extra dev --group evaluation python ../../evaluation/support-program-evidence/rag_live.py
+uv run --project ../../pipelines --locked --extra dev python ../../evaluation/support-program-evidence/official_rag.py
+uv run --project ../../pipelines --locked --extra dev python ../../evaluation/support-program-evidence/rag_live.py
 uv run --locked python ../ops-service/apps/evaluations/execution_spec.py
 ```
 
@@ -123,7 +123,7 @@ uv run --locked python ../ops-service/apps/evaluations/execution_spec.py
 승계하지 않으므로 v3의 기준 자료와 모든 사례를 별도로 검토해야 한다.
 
 ```bash
-uv run --project backend/ai-service --locked --group evaluation python evaluation/support-program-evidence/revise_official_reference.py
+uv run --project pipelines --locked python evaluation/support-program-evidence/revise_official_reference.py
 ```
 
 위 명령은 저장한 v3를 재생성 결과와 대조한다. `--write`는 v3 파일만 작성하며 DB나 모델 API를
@@ -151,7 +151,7 @@ Ops·실행기의 일치하는 release 반영을 필요로 한다.
 무료 변환 검증(기존 원본이나 사람 검토 기록은 변경하지 않음):
 
 ```bash
-uv run --project backend/ai-service --locked --group evaluation python evaluation/support-program-evidence/official_snapshot.py
+uv run --project pipelines --locked python evaluation/support-program-evidence/official_snapshot.py
 ```
 
 자료 형식을 바꿨을 때만 `--write`로 파생 파일을 다시 생성한다. 이후 카탈로그의 fixture 해시와
@@ -169,7 +169,7 @@ uv run --project backend/ai-service --locked --group evaluation python evaluatio
 
 [`rag_live.py`](rag_live.py)는 등록 fixture의 원문·청크를 고정하고, 평가용 청크 벡터 조회·필요 시 생성 →
 격리된 메모리 색인 복원 → 질문 임베딩·검색 → Agent 답변을 실행합니다. Core 서버의 원문 수집·청킹과
-운영 Qdrant 성능을 측정하지 않습니다. [`ops_flow.py`](ops_flow.py)가 승인된 명세와 두 활성화 설정을
+운영 Qdrant 성능을 측정하지 않습니다. [`pipelines/evaluation/flows.py`](../../pipelines/evaluation/flows.py)가 승인된 명세와 두 활성화 설정을
 검증한 후 기존 `BudgetClient`와 `RagBudget`을 통해 전송 직전 승인·사용량 영수증·정산을 수행합니다.
 새 외부 서비스나 의존성은 추가하지 않습니다.
 
@@ -177,9 +177,9 @@ uv run --project backend/ai-service --locked --group evaluation python evaluatio
 계획과 실행 release를 함께 검토·갱신해야 합니다. 새로 등록한 캡처는 계획을 생성하기 전까지 replay만 제공합니다.
 
 ```bash
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/rag_live.py --write-plans
+pipelines/.venv/bin/python evaluation/support-program-evidence/rag_live.py --write-plans
 python3 backend/ops-service/apps/evaluations/execution_spec.py --write
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/rag_live.py
+pipelines/.venv/bin/python evaluation/support-program-evidence/rag_live.py
 ```
 
 `rag-synthetic-multichunk-v1`은 최초에 최대 8회(문서 2·질문 3·답변 3), 저장 벡터 재사용 시 최대 6회를 예약합니다.
@@ -223,11 +223,11 @@ RAG 자료·사례 검토와 검토 기반 품질 합격·기준 지정은 Ops�
 
 ```bash
 # 저장소 루트: 자료 검증만 수행. 모든 품질 지표는 null
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
   --fixture evaluation/support-program-evidence/rag-fixture.json
 
 # API 키·DB·서버 없이 합성 기록의 점수 계산을 검증. 보고서는 표준 출력으로만 반환
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
   --fixture evaluation/support-program-evidence/rag-fixture.json \
   --capture evaluation/support-program-evidence/rag-synthetic-capture.json
 ```
@@ -361,9 +361,9 @@ Core 수집 완료 → fixture/capture/wire/integration 대조
 
 ```bash
 # 저장소 루트, 모델·Ops·DB 호출 없이 이미 생성된 준비 파일 확인
-backend/ai-service/.venv/bin/python infrastructure/llmops/core_rag_budget.py check work/core-rag-new/v1
+pipelines/.venv/bin/python infrastructure/llmops/core_rag_budget.py check work/core-rag-new/v1
 # 과거 완료 캡처에 준비 파일이 없을 때만 생성; 현행 Core 청커와 계약이 일치해야 합니다.
-backend/ai-service/.venv/bin/python infrastructure/llmops/core_rag_budget.py prepare work/core-rag-old/v1
+pipelines/.venv/bin/python infrastructure/llmops/core_rag_budget.py prepare work/core-rag-old/v1
 ```
 
 토큰 상한 계산에는 기존 tiktoken 인코딩 데이터를 사용합니다. 완전한 오프라인 실행은 캐시가 준비되어
@@ -473,11 +473,11 @@ E12 추가 실행에서 모델이 64자리 인용 ID를 63자리로 복사한 �
 
 ```bash
 # API 키·서버 없이 새 입력 검증. 지표는 null이며 품질 평가가 아님
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
   --fixture evaluation/support-program-evidence/target-coverage-fixture.json
 
 # 명시적으로 유료 평가를 선택한 경우에만 실행: 답변 최대 6회, 임베딩 없음
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
   --fixture evaluation/support-program-evidence/target-coverage-fixture.json \
   --execute --output-dir work/evidence-target-coverage-v1
 ```
@@ -541,7 +541,7 @@ Windows 체크아웃에서도 같은 원본을 재검증하기 위한 규칙이�
 
 ### Langfuse·Prefect·Pandera·Evidently·pandas 평가 배치
 
-[llmops.py](llmops.py)는 기존 캡처의 점수를 재계산하고 검증된 결과를 Langfuse와 Evidently에 연결합니다.
+[평가 파이프라인](../../pipelines/evaluation/capture.py)는 기존 캡처의 점수를 재계산하고 검증된 결과를 Langfuse와 Evidently에 연결합니다.
 새 모델 호출 없이 Prefect로 실행하며, 원본 캡처를 덮어쓰지 않습니다.
 Evidently 원본 보고서는 기존 점수 분포와 함께 같은 사례에서 양쪽이 측정된 점수의 변화
 (후보 − 비교 대상) 분포와 양쪽에서 측정된 사례의 비율을 보여줍니다. 변화 그래프의 Reference 0은 비교 대상 점수가
@@ -550,8 +550,9 @@ Evidently 원본 보고서는 기존 점수 분포와 함께 같은 사례에서
 새 원본 보고서의 차트는 최대 두 열로 배치합니다. 잠긴 Evidently 0.7.23의 보고서 위젯 크기를
 사용하므로 버전 변경 시 실제 HTML 배치와 위젯 구조를 함께 검증해야 합니다.
 AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
-`uv sync --locked --extra dev --group evaluation`으로 설치합니다.
-이 디렉터리의 전체 테스트에도 `--group evaluation`을 포함해야 합니다.
+저장소 루트에서 `uv sync --project pipelines --locked --extra dev`으로 설치합니다.
+평가 계산은 이 디렉터리에, Prefect 순서·재시도·등록과 Langfuse 전송은 `pipelines/evaluation/`에 있습니다.
+두 범위는 `uv run --project pipelines --locked --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests`로 함께 검증합니다.
 [개발 서버·무료 검증·실행 명령](../../infrastructure/llmops/README.md)에 구성과 제한 사항을 정리했습니다.
 
 기존 `--execute`는 Langfuse를 명시적으로 활성화한 경우 실제 사례의 `traceId`와
@@ -559,7 +560,7 @@ AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
 
 ### Ops 실행 명세 검증
 
-`ops_flow.py`는 Django가 접수한 명세와 실행기의 실제 소스·잠금 파일·입력 바이트를 대조합니다.
+`pipelines/evaluation/flows.py`는 Django가 접수한 명세와 실행기의 실제 소스·잠금 파일·입력 바이트를 대조합니다.
 명세 생성기는 [execution_spec.py](../../backend/ops-service/apps/evaluations/execution_spec.py)이며
 명시적인 파일 목록으로 생성·평가 경로를 구분합니다. `execution_release.json`은 빌드 입력이고
 실행 중 실제 파일 재검증을 대신하지 않습니다.
@@ -591,10 +592,10 @@ Prefect에서는 실행 준비의 `validate-evaluation-inputs`, 새 응답 생�
 
 ```bash
 # 입력 검증만: API 키 불필요, 파일 쓰기 없음, 품질 지표는 null
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/evaluate.py
+pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py
 
 # 테스트: 실제 Agent/SDK 경로도 HTTP 스텁으로만 검증하며 외부 호출 없음
-backend/ai-service/.venv/bin/python -m pytest evaluation/support-program-evidence
+pipelines/.venv/bin/python -m pytest evaluation/support-program-evidence pipelines/tests
 ```
 
 실제 모델 평가를 선택한 경우에만 아래 명령을 실행합니다. `OPENAI_API_KEY`는 기존 보안 환경변수 주입
@@ -602,11 +603,11 @@ backend/ai-service/.venv/bin/python -m pytest evaluation/support-program-evidenc
 
 ```bash
 # 유료: 최대 12회 답변 생성. 기존 폴더가 아닌 새 경로를 지정
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
   --execute --output-dir work/evidence-evaluation-v1
 
 # 저장된 결과 재계산: API 호출 없음
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
   --capture work/evidence-evaluation-v1/capture.json
 ```
 
@@ -682,10 +683,10 @@ backend/ai-service/.venv/bin/python evaluation/support-program-evidence/evaluate
 
 ## Ops에서 실패한 후처리 복구
 
-`ops_flow.py`의 `recovery` 모드는 원본 요청·완료 캡처·fixture·비교 기준의 해시를 확인하고,
+`pipelines/evaluation/flows.py`의 `recovery` 모드는 원본 요청·완료 캡처·fixture·비교 기준의 해시를 확인하고,
 새 요청 폴더에 바이트를 복사한 뒤 기존 `evaluate_capture`만 호출합니다. `evaluate.execute`는
 호출하지 않습니다. 원본의 유료 호출 수는 보존하며 복구의 추가 호출 수는 0입니다.
-`llmops.py`는 입력 검증 뒤 해시와 마지막 보고서/등록 단계를 즉시 manifest에 저장하므로
+`pipelines/evaluation/capture.py`는 입력 검증 뒤 해시와 마지막 보고서/등록 단계를 즉시 manifest에 저장하므로
 후처리 도중 프로세스가 중단되어도 입력을 확인할 수 있습니다. 입력 검증 이전의 중단은 복구하지 않습니다.
 실행 방법과 제한은 [후처리 복구 안내](../../infrastructure/llmops/README.md#후처리-복구)를 참고하세요.
 
@@ -702,7 +703,7 @@ migration과 같은 소스로 생성한 실행기·실행 명세가 필요합니
 호출을 합산하지 않습니다. [Ops 누적 한도와 설정](../../backend/ops-service/README.md#누적-호출출력-토큰-한도)을 따릅니다.
 
 [실행 설정](../../infrastructure/llmops/README.md#ops에서-새-모델-평가) 후 Ops에서 새 응답 생성을 선택합니다.
-`ops_flow.py`는 승인한 fixture 해시와 비교 기준을 먼저 검증하고 선택 사례만 `evaluate.execute()`에 전달합니다.
+`pipelines/evaluation/flows.py`는 승인한 fixture 해시와 비교 기준을 먼저 검증하고 선택 사례만 `evaluate.execute()`에 전달합니다.
 실제 생성은 기존 `Service → Agent → OpenAI Responses` 경로를 사용하며 HTTP 서버 초기화에 의존하지 않습니다.
 모델은 승인 명세에서 고정하고, 전송 직전 endpoint·모델·출력 제한·호출 예산을 다시 검사합니다.
 자동 재시도는 없고 첫 실패에서 중단합니다. `capture.modelApiCalls`는 응답 유실을 포함한 전송 시도 횟수이며
@@ -756,7 +757,7 @@ Service가 결과·캐시 반영을 거절합니다.
 
 이 도구는 **내부 색인·검색 세션용 연결점**입니다. 예약 생성·claim·close 및 자료/예산 승인은 호출자가
 수행해야 합니다. 가드를 전달한 세션은 답변 생성을 거절하며, 답변 슬롯을 임베딩 캐시로 건너뛰지 않습니다.
-답변까지 포함하는 내부 CLI는 아래 혼합 RAG 예산 세션을 따릅니다. 현재 `ops_flow.py`의 고정 원문·청크
+답변까지 포함하는 내부 CLI는 아래 혼합 RAG 예산 세션을 따릅니다. 현재 `pipelines/evaluation/flows.py`의 고정 원문·청크
 RAG live는 `rag_live.py → RagBudget → EmbeddingBudget`으로 이 가드를 사용하며, 상단의 별도 활성화·
 자료 승인·누적 예산 계약을 따릅니다. Core 원문 수집·청킹까지 포함하는 운영 경로는 후속 범위입니다.
 
@@ -821,7 +822,7 @@ Ops 실행**이 전제입니다. 이 명령은 실행 접수나 예산 승인·�
 
 ```bash
 # backend/ai-service에서 실행. 아래 변수는 기존 승인/예약의 값이어야 합니다.
-uv run --locked --group evaluation python ../../evaluation/support-program-evidence/serve_flow.py \
+uv run --project ../../pipelines --locked python ../../evaluation/support-program-evidence/serve_flow.py \
   --execute --output-dir "$RAG_CAPTURE_DIR" --qdrant-url http://127.0.0.1:16333 \
   --max-api-calls "$RAG_MAX_MODEL_CALLS" --budget-spec "$RAG_SPEC_PATH" \
   --request-id "$RAG_RUN_ID" --flow-id "$RAG_FLOW_ID" --spec-sha256 "$RAG_SPEC_SHA256"
@@ -832,7 +833,7 @@ uv run --locked --group evaluation python ../../evaluation/support-program-evide
 세션 종료 시 서버를 정상 종료해야 `close`를 시도합니다. claim/close 실패는 오류로 드러나며
 프로세스 강제 종료·close 유실 시 기존 Ops 종료 정리/보정 절차가 필요합니다. 출력 경로는
 artifact 조회를 사용하려면 해당 실행의 `/results/{run UUID}/capture`에 연결해야 합니다.
-runner 이미지에 모듈을 포함하지만 기본 `ops_flow.py`가 자동으로 이 세션을 시작하지는 않습니다.
+runner 이미지에 모듈을 포함하지만 기본 `pipelines/evaluation/flows.py`가 자동으로 이 세션을 시작하지는 않습니다.
 
 무료 `test_rag_budget.py`는 실제 AI 앱·Service·Agent·SDK·메모리 Qdrant와 로컬 예산 HTTP 대역,
 모델 HTTP 대역으로 정상·캐시·계산/승인/정산 실패·취소 상태의 승인 거절·응답 유실·미확정 사용량·
@@ -870,8 +871,8 @@ Django WSGI HTTP·serializer·예산 transaction·MySQL 8.4를 연결합니다. 
 Django가 해당 서버에 `test_<DB_NAME>` DB를 생성·삭제하므로 개발·운영 DB 서버를 사용하지 않습니다.
 
 ```bash
-# 저장소 루트. AI는 uv sync --locked --extra dev --group evaluation, Ops는 uv sync --locked로 설치
-RAG_BUDGET_AI_PYTHON="$PWD/backend/ai-service/.venv/bin/python" \
+# 저장소 루트. 실행기는 uv sync --project pipelines --locked --extra dev, Ops는 해당 디렉터리에서 uv sync --locked로 설치
+RAG_BUDGET_AI_PYTHON="$PWD/pipelines/.venv/bin/python" \
 PYTHONPATH="$PWD/infrastructure/llmops" \
 backend/ops-service/.venv/bin/python backend/ops-service/manage.py test rag_budget_http_checks --noinput
 ```
@@ -915,7 +916,7 @@ Core의 실제 수집 산출물 → 준비 명세 재검증 → 테스트 DB의 
 # Core 수집 성공 후 생성된 원본·준비 파일이 모두 필요합니다.
 CORE_RAG_CAPTURE_ROOT="$PWD/work/core-rag-new" \
 CORE_RAG_BUDGET_REPORT="$PWD/work/core-budget.json" \
-RAG_BUDGET_AI_PYTHON="$PWD/backend/ai-service/.venv/bin/python" \
+RAG_BUDGET_AI_PYTHON="$PWD/pipelines/.venv/bin/python" \
 PYTHONPATH="$PWD/infrastructure/llmops" \
 backend/ops-service/.venv/bin/python backend/ops-service/manage.py test core_rag_budget_http_checks --noinput
 ```
@@ -940,11 +941,11 @@ DB나 서버에 접속하지 않으며 **서버가 사용하지 않는 배포 �
 
 ```bash
 # 잠금 평가 환경이 설치된 저장소 루트. v1·v2는 각각 등록합니다.
-backend/ai-service/.venv/bin/python infrastructure/llmops/register_core_rag.py \
+pipelines/.venv/bin/python infrastructure/llmops/register_core_rag.py \
   work/core-rag-new/v1 --repository "$PWD"
-backend/ai-service/.venv/bin/python infrastructure/llmops/register_core_rag.py \
+pipelines/.venv/bin/python infrastructure/llmops/register_core_rag.py \
   work/core-rag-new/v2 --repository "$PWD"
-backend/ai-service/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
+pipelines/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
 ```
 
 원본 `fixture.json`, `capture.json`, `wire.json`, 상위 `integration.json`을 예산 준비와 같은 검증기로
@@ -1011,7 +1012,7 @@ docker run --detach --rm --name govbiz-rag-evaluation \
   --publish 127.0.0.1:17333:6333 qdrant/qdrant:v1.17.1
 
 # 저장소 루트, 터미널 1: API 비용 발생 가능. 출력은 매번 새 경로
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/serve_flow.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/serve_flow.py \
   --execute --port 18009 --qdrant-url http://127.0.0.1:17333 \
   --max-api-calls 14 --output-dir work/evidence-flow-v2/api
 
@@ -1037,7 +1038,7 @@ Qdrant를 사용하면 호출 조건이 달라지므로 같은 조건 비교가 
 공유 결과는 API 없이 다시 검사할 수 있습니다.
 
 ```bash
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/verify_flow.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/verify_flow.py \
   --run-dir evaluation/support-program-evidence/runs/official-flow-20260907-v1
 ```
 
@@ -1070,11 +1071,11 @@ HTTP API·원문 수집·DB·청킹·임베딩·Qdrant를 생략하므로 `scope
 
 ```bash
 # 저장소 루트: 무료 Core HTTP 테스트 산출물 등록
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/core_flow_rag.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/core_flow_rag.py \
   --core-capture backend/core-service/build/reports/evidence-flow/capture.json --register
 
 # 이미 저장된 실제 API 실행 기록 등록; 이 명령 자체의 모델 호출은 0회
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/core_flow_rag.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/core_flow_rag.py \
   --core-capture evaluation/support-program-evidence/runs/official-flow-20260907-v2/core/capture.json \
   --api-capture evaluation/support-program-evidence/runs/official-flow-20260907-v2/api/api-capture.json \
   --register

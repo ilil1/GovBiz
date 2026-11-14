@@ -111,7 +111,7 @@ spec:
           image: {{ .Values.evidenceImage | quote }}
           imagePullPolicy: {{ ternary "Never" "IfNotPresent" .Values.allowLocalImages }}
           command:
-            - /app/backend/ai-service/.venv/bin/python
+            - /app/pipelines/.venv/bin/python
             - -c
             - |
               import shutil
@@ -181,8 +181,8 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
           {{- else }}
-          workingDir: /app/backend/ai-service
-          command: [/app/backend/ai-service/.venv/bin/python, /app/evaluation/support-program-evidence/ops_flow.py]
+          workingDir: /app
+          command: [/app/pipelines/.venv/bin/python, -m, pipelines.serve]
           env:
             - {name: HOME, value: /tmp}
             - {name: PREFECT_HOME, value: /tmp/prefect}

@@ -10,8 +10,9 @@ from uuid import uuid4
 import pytest
 
 import evaluate
-import llmops
-import ops_flow
+from pipelines.evaluation import capture as llmops
+import reporting
+from pipelines.evaluation import flows as ops_flow
 from app.config import LangfuseSettings
 from apps.evaluations.catalog import DATASETS, get_dataset, managed_snapshot_context
 from apps.evaluations.execution_spec import build_release, digest, make_spec, read_release, verify_spec
@@ -110,14 +111,14 @@ def test_non_managed_fixture_still_requires_review_facts(snapshot, tmp_path):
 
 def test_manual_answers_keep_honest_provenance_and_unknown_model_metrics(snapshot, tmp_path):
     fixture, capture = loaded(snapshot, tmp_path)
-    result = llmops.load_results(fixture, capture)
+    result = reporting.load_results(fixture, capture)
     assert result["summary"]["referenceSource"] == "admin-authored"
     assert result["summary"]["dataType"] == "admin-provided"
     assert result["summary"]["measurementKind"] == "admin-entered-answer"
     assert result["summary"]["modelMeasured"] is False
     assert result["summary"]["statusAccuracy"] == 1
     assert result["frame"][["elapsed_ms", "input_tokens", "output_tokens"]].isna().all().all()
-    payloads = llmops.score_payloads(result, LangfuseSettings())
+    payloads = reporting.score_payloads(result, LangfuseSettings())
     assert payloads
     assert all(item["metadata"]["record_kind"] == "admin-entered-answer" for item in payloads)
     assert all(item["metadata"]["reference_source"] == "admin-authored" for item in payloads)
@@ -246,7 +247,7 @@ def test_database_json_key_order_preserves_hashes_and_request_contract(snapshot,
     assert list(reordered["fixture"]) != list(snapshot["fixture"])
     assert release_dataset(reordered) == release_dataset(snapshot)
     fixture, capture = loaded(reordered, tmp_path)
-    result = llmops.load_results(fixture, capture)
+    result = reporting.load_results(fixture, capture)
     assert result["summary"]["completed"] is True
     assert result["capture_sha256"] == sha256(encoded(snapshot["capture"])).hexdigest()
 

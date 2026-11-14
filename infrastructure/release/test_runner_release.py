@@ -66,8 +66,9 @@ class RunnerSourceTests(unittest.TestCase):
             if words and words[0] == "COPY" and not words[1].startswith("--from="):
                 inputs.update(words[1:-1])
         self.assertEqual(inputs, set(publish.RUNNER_PATHS))
+        self.assertNotIn("pipelines", inputs, "Do not copy the host pipeline environment")
         self.assertIn(
-            "RUN .venv/bin/python /app/"
+            "RUN /app/pipelines/.venv/bin/python /app/"
             + publish.RUNNER_RELEASE.replace(
                 "execution_release.json", "execution_spec.py"
             ),
@@ -86,6 +87,8 @@ class RunnerSourceTests(unittest.TestCase):
             if line.strip() and not line.lstrip().startswith("#")
         }
         self.assertIn("**", rules)
+        for excluded in ("**/.venv", "**/.pytest_cache", "**/.ruff_cache", "pipelines/tests"):
+            self.assertIn(excluded, rules)
         # Dockerfiles and their ignore files are sent by the builder implicitly.
         for name in set(publish.RUNNER_PATHS) - {
             publish.RUNNER_DOCKERFILE, publish.RUNNER_IGNORE
@@ -220,13 +223,14 @@ class RunnerPublishTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.files = {}
         for name in self.paths:
-            # These two source inputs are trees; all others are blobs.
+            # Directory inputs are trees; all other inputs are blobs.
             target = (
                 name + "/fixture.py"
                 if name
                 in (
                     "backend/ai-service/app",
                     "evaluation/support-program-evidence",
+                    "pipelines/evaluation",
                     "frontend/web",
                     "frontend/packages/shared",
                 )

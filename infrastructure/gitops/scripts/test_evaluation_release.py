@@ -28,6 +28,7 @@ class EvaluationReleaseTests(SourceFixture):
             if path in (
                 "backend/ai-service/app",
                 "evaluation/support-program-evidence",
+                "pipelines/evaluation",
             ):
                 files[path + "/fixture.txt"] = b"runner tree\n"
             else:

@@ -38,6 +38,7 @@ class LocalReleaseTests(unittest.TestCase):
         tree_paths = {
             "backend/ai-service/app",
             "evaluation/support-program-evidence",
+            "pipelines/evaluation",
             "frontend/web",
             "frontend/packages/shared",
         }

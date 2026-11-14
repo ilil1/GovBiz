@@ -31,14 +31,6 @@ dev = [
     "pytest>=8.4.0,<10.0.0",
 ]
 
-[dependency-groups]
-evaluation = [
-    "prefect==3.8.6",
-    "pandas==3.0.6",
-    "pandera[pandas]==0.33.1",
-    "evidently==0.7.23",
-]
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]

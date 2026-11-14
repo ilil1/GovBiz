@@ -6,7 +6,7 @@ import json
 import pytest
 
 import evaluate
-import llmops
+import reporting
 import official_snapshot as official
 
 
@@ -67,8 +67,8 @@ def test_projection_cannot_claim_new_measurement_or_invent_missing_settings(chan
 
 
 def test_free_comparison_retains_history_and_unknown_latency(tmp_path):
-    result = llmops.load_results(official.OUTPUT / "fixture.json", official.OUTPUT / "capture.json")
-    comparison = llmops.create_report(result, result, tmp_path)
+    result = reporting.load_results(official.OUTPUT / "fixture.json", official.OUTPUT / "capture.json")
+    comparison = reporting.create_report(result, result, tmp_path)
     assert comparison["comparison"] == "self-replay"
     assert comparison["data_type"] == "official-html-snapshot"
     assert comparison["retrieval_evaluated"] is False

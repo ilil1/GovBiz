@@ -199,6 +199,15 @@ class DocumentTest(unittest.TestCase):
         self.assertIn(Path(host.__file__).read_text(), command)
         self.assertNotIn('{{', command.replace('{{json .State}}', '').replace('{{.Config.Image}}', ''))
 
+    def test_evaluation_and_pipeline_tests_use_the_locked_pipeline_environment(self):
+        script = Path(__file__).with_name('verify-backend.sh').read_text()
+        command = ('uv run --project pipelines --locked --extra dev python -m pytest '
+                   'evaluation/support-program-evidence pipelines/tests')
+        # The AI subshell must finish before repository-relative pipeline paths are used.
+        self.assertIn('\n)\n' + command + '\n', script)
+        self.assertNotIn('python -m pytest ../../evaluation/support-program-evidence', script)
+        self.assertLess(script.index(command), script.index('cd evaluation/support-program-search'))
+
     def test_tests_precede_release_in_fail_fast_build_phase(self):
         spec = Path(__file__).with_name('backend.yml').read_text()
         self.assertIn('on-failure: ABORT', spec)

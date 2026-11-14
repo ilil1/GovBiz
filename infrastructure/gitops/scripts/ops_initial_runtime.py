@@ -143,7 +143,7 @@ def image_release(image, *, runner=False):
     ):
         raise ValueError("Use an existing immutable non-root runtime image")
     if runner:
-        python = "/app/backend/ai-service/.venv/bin/python"
+        python = "/app/pipelines/.venv/bin/python"
         release = "/app/backend/ops-service/apps/evaluations/execution_release.json"
         program = (
             "import hashlib,subprocess,sys;from pathlib import Path;"
@@ -287,10 +287,11 @@ def compose_definition(settings, project, items, images):
             len(mounts) != 1
             or config.get("Cmd")
             != [
-                ".venv/bin/python",
-                "/app/evaluation/support-program-evidence/ops_flow.py",
+                "/app/pipelines/.venv/bin/python",
+                "-m",
+                "pipelines.serve",
             ]
-            or config.get("WorkingDir") != "/app/backend/ai-service"
+            or config.get("WorkingDir") != "/app"
         ):
             raise ValueError("Unexpected runner command, working directory or mount")
         networks = item["NetworkSettings"]["Networks"]

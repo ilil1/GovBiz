@@ -40,6 +40,8 @@ RUNNER_PATHS = (
     "backend/ai-service/uv.lock",
     "backend/ai-service/app",
     "evaluation/support-program-evidence",
+    "pipelines/pyproject.toml", "pipelines/uv.lock",
+    "pipelines/__init__.py", "pipelines/serve.py", "pipelines/evaluation",
     *("backend/ops-service/apps/evaluations/" + name for name in (
         "catalog.py", "capture_catalog.json", "rag_live_plans.json", "recovery_inputs.py",
         "execution_spec.py", "execution_release.json", "quality_policy.py", "rag_replay.py",

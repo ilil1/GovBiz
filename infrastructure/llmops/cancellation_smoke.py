@@ -438,7 +438,7 @@ class Smoke:
             "exec",
             "-T",
             "evaluation-runner",
-            ".venv/bin/python",
+            "/app/pipelines/.venv/bin/python",
             "/test/cancellation_runner.py",
             *args,
         )
@@ -1005,7 +1005,7 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "work/llmops-ci/cancellation.json")
     args = parser.parse_args()
     if sys.version_info[:2] != (3, 12):
-        parser.error("Python 3.12 is required; use backend/ai-service/.venv/bin/python")
+        parser.error("Python 3.12 is required; use pipelines/.venv/bin/python")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     project = "govbiz-cancel-test-" + uuid4().hex[:12]
     values = isolated_environment()

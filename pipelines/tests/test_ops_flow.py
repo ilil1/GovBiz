@@ -17,7 +17,7 @@ def stub_budget(monkeypatch):
     return client
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import ops_flow
+from pipelines.evaluation import flows as ops_flow
 
 
 def run_live(*args, **kwargs):
@@ -42,7 +42,7 @@ def reviewed_source(tmp_path):
     (folder / "evaluation").mkdir(parents=True)
     dataset = DATASETS["fixed-context-e01-v1"]
     candidate = dataset["captures"][1]
-    raw = (Path(ops_flow.__file__).parent / candidate["path"]).read_bytes()
+    raw = ((ops_flow.ROOT / "evaluation/support-program-evidence") / candidate["path"]).read_bytes()
     config = {"run_id": source_id, "capture_sha256": sha256(raw).hexdigest(),
               "fixture_sha256": dataset["fixture_sha256"]}
     (folder / "request.json").write_text(json.dumps({
@@ -59,7 +59,8 @@ def reviewed_source(tmp_path):
 
 @pytest.mark.parametrize("source_mode", ["replay", "live", "recovery"])
 def test_reviewed_baseline_is_snapshotted_for_free_replay(monkeypatch, tmp_path, source_mode):
-    import llmops
+    from pipelines.evaluation import capture as llmops
+    import reporting
     config, candidate, raw = reviewed_source(tmp_path)
     if source_mode in {"live", "recovery"}:
         folder = tmp_path / config["run_id"]
@@ -305,7 +306,8 @@ def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_pa
 @pytest.mark.parametrize("model", ["gpt-6-luna", "gpt-6-sol", "gpt-5.6-luna"])
 def test_live_response_to_report_pipeline_uses_only_stub_transport(monkeypatch, tmp_path, stub_budget, model):
     import httpx2
-    import llmops
+    from pipelines.evaluation import capture as llmops
+    import reporting
     from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
 
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))

@@ -67,33 +67,33 @@ jobs:
         with:
           version: '0.12.5'
           python-version: '3.12'
-          working-directory: backend/ai-service
+          working-directory: pipelines
       - name: Install locked evaluation dependencies
-        working-directory: backend/ai-service
-        run: uv sync --locked --extra dev --group evaluation
+        working-directory: pipelines
+        run: uv sync --locked --extra dev
       - name: Verify execution release
-        run: backend/ai-service/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
+        run: pipelines/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
       - name: Verify Kubernetes Ops DB archive guards and isolated MySQL restore
         shell: bash
         run: |
           set -euo pipefail
           snapshot_mysql_image=$(docker image inspect mysql:8.4 --format '{{index .RepoDigests 0}}')
           test -n "$snapshot_mysql_image"
-          OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_db_snapshot
+          OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_db_snapshot
       - name: Test offline runner preparation checks
-        working-directory: backend/ai-service
-        run: uv run --locked --extra dev --group evaluation python -m pytest ../../infrastructure/llmops/test_check_runner_runtime.py ../../infrastructure/llmops/test_restore_image.py -q
+        working-directory: .
+        run: uv run --project pipelines --locked --extra dev python -m pytest infrastructure/llmops/test_check_runner_runtime.py infrastructure/llmops/test_restore_image.py -q
       - name: Test smoke assertions and offline HTTP model fixtures
-        working-directory: backend/ai-service
-        run: uv run --locked --extra dev --group evaluation python -m pytest ../../infrastructure/llmops/test_ops_smoke.py ../../infrastructure/llmops/test_cancellation_smoke.py ../../infrastructure/llmops/test_search_trace_smoke.py ../../infrastructure/llmops/test_core_search_trace.py ../../infrastructure/llmops/test_core_assistant_trace.py ../../infrastructure/llmops/test_core_evidence_trace.py ../../infrastructure/llmops/test_core_rag_capture.py ../../infrastructure/llmops/test_core_rag_budget.py ../../infrastructure/llmops/test_register_core_rag.py ../../infrastructure/scripts/test_catalog_separation_config.py -q
+        working-directory: .
+        run: uv run --project pipelines --locked --extra dev python -m pytest infrastructure/llmops/test_ops_smoke.py infrastructure/llmops/test_cancellation_smoke.py infrastructure/llmops/test_search_trace_smoke.py infrastructure/llmops/test_core_search_trace.py infrastructure/llmops/test_core_assistant_trace.py infrastructure/llmops/test_core_evidence_trace.py infrastructure/llmops/test_core_rag_capture.py infrastructure/llmops/test_core_rag_budget.py infrastructure/llmops/test_register_core_rag.py infrastructure/scripts/test_catalog_separation_config.py -q
       - name: Verify default and LAN Prefect Compose settings
         run: python3 -B infrastructure/llmops/check_prefect_compose.py
       - name: Generate isolated development credentials
         id: development-credentials
         run: |
-          backend/ai-service/.venv/bin/python infrastructure/llmops/init_env.py
-          backend/ai-service/.venv/bin/python infrastructure/llmops/init_ops_env.py
-          backend/ai-service/.venv/bin/python infrastructure/llmops/init_ops_env.py --artifacts
+          pipelines/.venv/bin/python infrastructure/llmops/init_env.py
+          pipelines/.venv/bin/python infrastructure/llmops/init_ops_env.py
+          pipelines/.venv/bin/python infrastructure/llmops/init_ops_env.py --artifacts
       - name: Start local Langfuse and Prefect
         run: |
           docker compose --env-file infrastructure/llmops/.env -f infrastructure/llmops/compose.yaml --profile evaluation config --quiet
@@ -119,7 +119,7 @@ jobs:
           set -a
           source infrastructure/llmops/.env
           set +a
-          backend/ai-service/.venv/bin/python infrastructure/llmops/smoke.py --output-dir work/llmops-ci
+          pipelines/.venv/bin/python infrastructure/llmops/smoke.py --output-dir work/llmops-ci
       - name: Verify actual Core search, assistant and detailed RAG traces, failures and timeouts
         timeout-minutes: 30
         shell: bash
@@ -127,7 +127,7 @@ jobs:
           set -a
           source infrastructure/llmops/.env
           set +a
-          backend/ai-service/.venv/bin/python -B infrastructure/scripts/verify-catalog-separation.py --search-traces-output work/llmops-ci/core-search-traces.json --assistant-traces-output work/llmops-ci/core-assistant-traces.json --evidence-traces-output work/llmops-ci/core-evidence-traces.json --rag-capture-output work/llmops-ci/core-rag
+          pipelines/.venv/bin/python -B infrastructure/scripts/verify-catalog-separation.py --search-traces-output work/llmops-ci/core-search-traces.json --assistant-traces-output work/llmops-ci/core-assistant-traces.json --evidence-traces-output work/llmops-ci/core-evidence-traces.json --rag-capture-output work/llmops-ci/core-rag
       - name: Install locked Ops environment for Core budget integration
         working-directory: backend/ops-service
         run: |
@@ -144,7 +144,7 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_PORT: ${{ job.services.ragmysql.ports['3306'] }}
           PYTHONPATH: ${{ github.workspace }}/infrastructure/llmops
-          RAG_BUDGET_AI_PYTHON: ${{ github.workspace }}/backend/ai-service/.venv/bin/python
+          RAG_BUDGET_AI_PYTHON: ${{ github.workspace }}/pipelines/.venv/bin/python
           CORE_RAG_CAPTURE_ROOT: ${{ github.workspace }}/work/llmops-ci/core-rag
           CORE_RAG_BUDGET_REPORT: ${{ github.workspace }}/work/llmops-ci/core-budget.json
         run: uv run --locked python manage.py test core_rag_budget_http_checks --noinput
@@ -164,10 +164,10 @@ jobs:
       - name: Register this checkout's actual Core captures for free Ops replay
         run: |
           for version in v1 v2; do
-            receipt=$(backend/ai-service/.venv/bin/python -B infrastructure/llmops/register_core_rag.py "work/llmops-ci/core-rag/$version" --repository "$PWD")
+            receipt=$(pipelines/.venv/bin/python -B infrastructure/llmops/register_core_rag.py "work/llmops-ci/core-rag/$version" --repository "$PWD")
             cp "$receipt" "work/llmops-ci/core-registration-$version.json"
           done
-          backend/ai-service/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
+          pipelines/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
       - name: Build isolated HTTP artifact storage, Core auth fixture, Ops and runner
         run: |
           docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation config --format json | python3 infrastructure/llmops/check_artifact_compose.py
@@ -176,7 +176,7 @@ jobs:
         run: docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation exec -T ops-service python manage.py migrate_deployment
       - name: Verify evaluation image excludes raw capture evidence
         run: |
-          docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation run --rm --no-deps evaluation-runner .venv/bin/python -c '
+          docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation run --rm --no-deps evaluation-runner /app/pipelines/.venv/bin/python -c '
           from pathlib import Path
           assert not list(Path("/app/evaluation/support-program-evidence/runs").glob("official-flow-*"))
           bundles = list(Path("/app/evaluation/support-program-evidence/runs").glob("core-rag-*"))
@@ -201,7 +201,7 @@ jobs:
           test -n "$image_id"
           docker run --rm --interactive --network none --read-only --memory 768m --pids-limit 64 \
             --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
-            --entrypoint .venv/bin/python "$image_id" -B - --root /app \
+            --entrypoint /app/pipelines/.venv/bin/python "$image_id" -B - --root /app \
             < infrastructure/llmops/check_runner_runtime.py
       - name: Start background Ops status synchronization after migrations
         run: docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation up -d --build ops-sync
@@ -236,8 +236,8 @@ jobs:
           pnpm --dir frontend/web exec playwright-core install --with-deps --only-shell chromium
           node --experimental-transform-types --test infrastructure/gitops/scripts/test_ops_restore_browser.mjs
           node --test infrastructure/gitops/scripts/test_ops_browser_login.mjs
-          OPS_STATUS_DOCKER_IMAGE="$RESTORE_DOCKER_IMAGE" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_status.DockerInspectionTests
-          OPS_VOLUME_SNAPSHOT_TEST_IMAGE="$RESTORE_DOCKER_IMAGE" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_state_snapshot
+          OPS_STATUS_DOCKER_IMAGE="$RESTORE_DOCKER_IMAGE" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_status.DockerInspectionTests
+          OPS_VOLUME_SNAPSHOT_TEST_IMAGE="$RESTORE_DOCKER_IMAGE" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_state_snapshot
       - name: Verify encrypted Ops DB-result-Prefect links and recovered database credentials
         timeout-minutes: 5
         shell: bash
@@ -247,15 +247,15 @@ jobs:
           snapshot_ops_image=$(docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation images -q ops-service)
           test -n "$snapshot_mysql_image" && test -n "$snapshot_ops_image"
           snapshot_ops_image=$(docker image inspect "$snapshot_ops_image" --format '{{.Id}}')
-          OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" OPS_VOLUME_SNAPSHOT_TEST_IMAGE="$snapshot_ops_image" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_state_links
-          OPS_RUNTIME_KEY_TEST_IMAGE="$snapshot_ops_image" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_runtime_keys test_ops_database_login
+          OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" OPS_VOLUME_SNAPSHOT_TEST_IMAGE="$snapshot_ops_image" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_state_links
+          OPS_RUNTIME_KEY_TEST_IMAGE="$snapshot_ops_image" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_runtime_keys test_ops_database_login
       - name: Rehearse encrypted legacy Ops DB upgrade without changing its source
         timeout-minutes: 5
         shell: bash
         run: |
           set -euo pipefail
           snapshot_mysql_image=$(docker image inspect mysql:8.4 --format '{{index .RepoDigests 0}}')
-          OPS_DB_UPGRADE_TEST_IMAGE="$RESTORE_DOCKER_IMAGE" OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_db_upgrade
+          OPS_DB_UPGRADE_TEST_IMAGE="$RESTORE_DOCKER_IMAGE" OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_db_upgrade
       - name: Verify first-rollout images, Compose inputs and legacy Prefect readiness
         timeout-minutes: 3
         # Runtime image and literal-input checks must also run when the unit suite
@@ -265,7 +265,7 @@ jobs:
           runner_image=$(docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation images -q evaluation-runner)
           test -n "$runner_image"
           runner_image=$(docker image inspect "$runner_image" --format '{{.Id}}')
-          OPS_INITIAL_RUNTIME_OPS_IMAGE="$RESTORE_DOCKER_IMAGE" OPS_INITIAL_RUNTIME_RUNNER_IMAGE="$runner_image" PYTHONPATH=infrastructure/gitops/scripts backend/ai-service/.venv/bin/python -B -m unittest test_ops_initial_runtime.DockerTests
+          OPS_INITIAL_RUNTIME_OPS_IMAGE="$RESTORE_DOCKER_IMAGE" OPS_INITIAL_RUNTIME_RUNNER_IMAGE="$runner_image" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_initial_runtime.DockerTests
       - name: Start React development proxy
         run: |
           (cd frontend/web && VITE_DEV_PROXY_TARGET=http://127.0.0.1:18082 VITE_CORE_API_BASE_URL=/ exec node node_modules/vite/bin/vite.js --host 127.0.0.1) > /tmp/govbiz-ops-web.log 2>&1 &
@@ -312,11 +312,11 @@ jobs:
           }
           source_id=$(python -c 'from uuid import uuid4; print(uuid4())')
           fixture="$PWD/infrastructure/llmops/recovery_smoke_fixture.py:/tmp/recovery_smoke_fixture.py:ro"
-          dc run --rm --no-deps -v "$fixture" -e OPENAI_API_KEY= -e LLMOPS_LIVE_ENABLED=false evaluation-runner .venv/bin/python /tmp/recovery_smoke_fixture.py prepare --source-id "$source_id"
+          dc run --rm --no-deps -v "$fixture" -e OPENAI_API_KEY= -e LLMOPS_LIVE_ENABLED=false evaluation-runner /app/pipelines/.venv/bin/python /tmp/recovery_smoke_fixture.py prepare --source-id "$source_id"
           dc run --rm --no-deps -v "$fixture" ops-service python /tmp/recovery_smoke_fixture.py register --source-id "$source_id" --operator-email "$CORE_ADMIN_EMAIL"
           python infrastructure/llmops/ops_smoke.py --recover-source "$source_id" --base-url http://localhost:5173 --storage-transport http --output work/llmops-ci/ops-recovery-verification.json
           recovery_id=$(python -c 'import json; print(json.load(open("work/llmops-ci/ops-recovery-verification.json"))["request_id"])')
-          dc run --rm --no-deps -v "$fixture" -e OPENAI_API_KEY= -e LLMOPS_LIVE_ENABLED=false evaluation-runner .venv/bin/python /tmp/recovery_smoke_fixture.py verify --source-id "$source_id" --recovery-id "$recovery_id"
+          dc run --rm --no-deps -v "$fixture" -e OPENAI_API_KEY= -e LLMOPS_LIVE_ENABLED=false evaluation-runner /app/pipelines/.venv/bin/python /tmp/recovery_smoke_fixture.py verify --source-id "$source_id" --recovery-id "$recovery_id"
       - name: Stop this job's development containers
         # Earlier validation can fail before the Compose env files are created.
         if: ${{ always() && steps.development-credentials.outcome == 'success' }}
@@ -343,14 +343,14 @@ jobs:
         with:
           version: '0.12.5'
           python-version: '3.12'
-          working-directory: backend/ai-service
+          working-directory: pipelines
       - name: Install locked evaluation dependencies
-        working-directory: backend/ai-service
-        run: uv sync --locked --extra dev --group evaluation
+        working-directory: pipelines
+        run: uv sync --locked --extra dev
       - name: Verify execution, cancellation, budget and free RAG recovery with offline model HTTP
         # Includes cold startup, 13 fixed-context and 6 RAG scenarios; deadlines stay strict.
         timeout-minutes: 20
-        run: backend/ai-service/.venv/bin/python infrastructure/llmops/cancellation_smoke.py --output work/llmops-ci/cancellation.json
+        run: pipelines/.venv/bin/python infrastructure/llmops/cancellation_smoke.py --output work/llmops-ci/cancellation.json
       - name: Preserve cancellation evidence including failed scenarios
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -375,10 +375,10 @@ jobs:
         with:
           version: '0.12.5'
           python-version: '3.12'
-          working-directory: backend/ai-service
+          working-directory: pipelines
       - name: Install locked evaluation dependencies
-        working-directory: backend/ai-service
-        run: uv sync --locked --extra dev --group evaluation
+        working-directory: pipelines
+        run: uv sync --locked --extra dev
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2.0.2
         with:
@@ -415,7 +415,7 @@ jobs:
           echo "$tool_dir" >> "$GITHUB_PATH"
       - name: Verify evaluation PVC restore, retention and replacement with synthetic WAL and reports
         timeout-minutes: 8
-        run: backend/ai-service/.venv/bin/python -B infrastructure/gitops/scripts/smoke_evaluation_pvc.py --report work/llmops-ci/evaluation-pvc.json
+        run: pipelines/.venv/bin/python -B infrastructure/gitops/scripts/smoke_evaluation_pvc.py --report work/llmops-ci/evaluation-pvc.json
       - name: Preserve isolated evaluation PVC evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -427,7 +427,7 @@ jobs:
       - name: Verify Ops recovery and restored Kubernetes evaluation runtime
         # This smoke creates and cleans up its own cluster, images and synthetic data.
         timeout-minutes: 40
-        run: backend/ai-service/.venv/bin/python -B infrastructure/gitops/scripts/smoke_ops_bridge.py --evaluate --evaluation-runtime --report work/llmops-ci/ops-bridge.json
+        run: pipelines/.venv/bin/python -B infrastructure/gitops/scripts/smoke_ops_bridge.py --evaluate --evaluation-runtime --report work/llmops-ci/ops-bridge.json
       - name: Preserve isolated Compose bridge evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

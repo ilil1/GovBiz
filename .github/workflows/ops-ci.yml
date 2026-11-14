@@ -146,9 +146,9 @@ jobs:
           connection.close()
           PY
           uv run --locked python scripts/check-schema.py --legacy-evaluations
-      - name: Install locked AI environment for mixed RAG HTTP checks
-        working-directory: backend/ai-service
-        run: uv sync --locked --extra dev --group evaluation
+      - name: Install locked pipeline environment for mixed RAG HTTP checks
+        working-directory: pipelines
+        run: uv sync --locked --extra dev
       - name: Check mixed RAG integration sources
         run: |
           uv run --locked ruff check ../../infrastructure/llmops/rag_budget_http_checks.py ../../infrastructure/llmops/rag_budget_http_worker.py
@@ -162,7 +162,7 @@ jobs:
       - name: Test real Ops HTTP and MySQL with offline RAG worker
         env:
           PYTHONPATH: ${{ github.workspace }}/infrastructure/llmops
-          RAG_BUDGET_AI_PYTHON: ${{ github.workspace }}/backend/ai-service/.venv/bin/python
+          RAG_BUDGET_AI_PYTHON: ${{ github.workspace }}/pipelines/.venv/bin/python
         run: uv run --locked python manage.py test rag_budget_http_checks --noinput
 
   docker:

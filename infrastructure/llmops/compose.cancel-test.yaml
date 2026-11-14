@@ -27,7 +27,7 @@ services:
     volumes:
       - ./cancellation_probe.py:/test/cancellation_probe.py:ro
   evaluation-runner:
-    command: [".venv/bin/python", "/test/cancellation_runner.py"]
+    command: ["/app/pipelines/.venv/bin/python", "/test/cancellation_runner.py"]
     restart: "no"
     depends_on:
       prefect: {condition: service_healthy}

@@ -41,8 +41,8 @@ import json, os, sys
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-sys.path.insert(0, "/app/evaluation/support-program-evidence")
-import ops_flow
+sys.path.insert(0, "/app")
+from pipelines.evaluation import flows as ops_flow
 from apps.evaluations.execution_spec import ExecutionSpecMismatch, build_release
 os.environ["OPENAI_API_KEY"] = "not-a-real-key-model-function-is-forbidden"
 os.environ["LLMOPS_LIVE_ENABLED"] = "true"
@@ -79,7 +79,7 @@ print(json.dumps({**receipt, "ops_generation": parameters["execution_spec"]["gen
         changed.chmod(0o644)
         completed = subprocess.run(
             COMPOSE + ["run", "--rm", "--no-deps", "-T", "-e", "OPENAI_API_KEY=",
-                       "-v", f"{changed}:/app/{prompt}:ro", "--entrypoint", ".venv/bin/python",
+                       "-v", f"{changed}:/app/{prompt}:ro", "--entrypoint", "/app/pipelines/.venv/bin/python",
                        "evaluation-runner", "-"],
             cwd=ROOT, input="parameters = " + repr(parameters) + "\n" + code,
             check=True, text=True, capture_output=True,

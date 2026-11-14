@@ -1,6 +1,11 @@
 # LLMOps 개발 환경과 실행
 
-[전략 문서](../../docs/langfuse-adoption-strategy.md) · [근거 답변 평가](../../evaluation/support-program-evidence/README.md)
+[전략 문서](../../docs/langfuse-adoption-strategy.md) · [근거 답변 평가](../../evaluation/support-program-evidence/README.md) · [파이프라인 실행](../../pipelines/README.md)
+
+평가 지표·자료·보고서 계산은 `evaluation/`, Prefect flow·task와 Langfuse 점수 전송은
+`pipelines/`에서 관리합니다. 실행기는 저장소 루트에서
+`uv run --project pipelines --locked python -m pipelines.serve`로 시작하며, Docker와 Kubernetes도
+같은 진입점을 사용합니다. Prefect 서버·Langfuse·저장소 구성은 이 디렉터리에 남습니다.
 
 Kubernetes 배포는 [내부 연결 values](../gitops/environments/in-cluster/README.md)를 기준으로 Ops·Prefect·
 평가 실행기·결과 서버·Langfuse를 연결합니다. 아래 Compose 명령과 과거 실행 기록은 로컬 개발·검증용으로 유지합니다.
@@ -126,7 +131,7 @@ v1의 원본 실패 4건을 보존하며 유료 예약·품질 기준 지정은 
 
 runner 빌드에는 `serve_flow.py`, `embedding_budget.py`, `rag_budget.py`를 함께 포함합니다.
 이미 승인·예약된 내부 실행에 AI 색인·검색·답변과 Ops claim/승인/정산/close를 연결하는 CLI이며,
-기본 `ops_flow.py` 실행이나 공개 RAG live 접수를 활성화하지 않습니다. 명세 인자·격리 Qdrant·
+기본 `pipelines/evaluation/flows.py` 실행이나 공개 RAG live 접수를 활성화하지 않습니다. 명세 인자·격리 Qdrant·
 증거 경로 및 무료 대역 검증 범위는
 [혼합 RAG 예산 세션](../../evaluation/support-program-evidence/README.md#혼합-rag-예산-세션)을 따릅니다.
 실제 Ops HTTP+MySQL 혼합 검사는 별도 AI 프로세스와 격리 MySQL 8.4를 사용하는
@@ -391,7 +396,7 @@ Langfuse는 자체 로그인이 필요하며 Ops 로그인과 자동 공유하�
 Ops의 점수 링크는 해당 평가 ID의 `Session ID` 필터와 고정 조회 기간을 사용한다.
 가상 6건 재현은 점수 22개, E01 비교의 후보 실행은 점수 4개다.
 
-실행기는 `ops_flow.py`의 `govbiz-ops-evidence-evaluation/saved-capture` deployment를 등록하고
+실행 진입점은 `pipelines/serve.py`이며, `pipelines/evaluation/flows.py`의 `govbiz-ops-evidence-evaluation/saved-capture` deployment를 등록하고
 `serve(limit=1)`로 요청을 받는다. 스케줄은 등록하지 않는다. Django는 Prefect HTTP API만 호출하며
 평가 의존성을 설치하지 않는다. UI는 저장된 가상 평가 6건 재현과 과거 프롬프트 실행의 공통 E01 비교를 제공한다.
 자료를 선택하면 허용된 기준·후보 실행과 비교 사례가 표시된다. 상세 화면에서는 지표 차이, 사례별 상태·인용,
@@ -502,12 +507,12 @@ Migration `0006_evaluationrun_sync_attempted_at`을 적용한 뒤 `ops-service`�
 
 ```bash
 cd backend/ai-service
-uv sync --locked --extra dev --group evaluation
+uv sync --project ../../pipelines --locked --extra dev
 cd ../..
 set -a
 source infrastructure/llmops/.env
 set +a
-backend/ai-service/.venv/bin/python infrastructure/llmops/smoke.py \
+pipelines/.venv/bin/python infrastructure/llmops/smoke.py \
   --output-dir work/llmops-verification-001
 ```
 
@@ -695,7 +700,7 @@ ID·이름·값이 확인되지 않으면 실패로 남긴다. Langfuse v4는 �
 위 설치와 환경변수 설정 뒤 저장소 루트에서 실행한다.
 
 ```bash
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/llmops.py \
+pipelines/.venv/bin/python -m pipelines.evaluation.capture \
   --fixture evaluation/support-program-evidence/target-coverage-fixture.json \
   --capture evaluation/support-program-evidence/runs/target-coverage-20260907-v1/capture.json \
   --reference evaluation/support-program-evidence/runs/target-coverage-20260907-v1/capture.json \
@@ -951,12 +956,12 @@ Langfuse에서 `support-program-evidence`로 필터하거나 Core의 `support_pr
 
 ```bash
 # backend/ai-service, Python 3.12. 평가 실행기와 API 경로는 별도 테스트로 확인합니다.
-uv run --locked --extra dev --group evaluation python -m pytest \
+uv run --project ../../pipelines --locked --extra dev python -m pytest \
   tests/support_program_evidence/test_rag_tracing.py \
   ../../infrastructure/llmops/test_search_trace_smoke.py
-uv run --locked --extra dev --group evaluation python -m pytest \
+uv run --project ../../pipelines --locked --extra dev python -m pytest \
   ../../evaluation/support-program-evidence/test_evaluate.py \
-  ../../evaluation/support-program-evidence/test_execution_spec.py
+  ../../pipelines/tests/test_execution_spec.py
 ```
 
 Core는 JDK 21에서 `SupportProgramEvidenceTracingTest`, 기존 근거 Service·Facade·Client,
@@ -1067,16 +1072,16 @@ Qdrant 검색 결과와 Langfuse 관측을 이어서 검증하고 [오프라인 
 set -a
 source infrastructure/llmops/.env
 set +a
-backend/ai-service/.venv/bin/python -B infrastructure/scripts/verify-catalog-separation.py --config-only \
+pipelines/.venv/bin/python -B infrastructure/scripts/verify-catalog-separation.py --config-only \
   --search-traces-output work/core-search-rag-new.json \
   --evidence-traces-output work/core-evidence-rag-new.json \
   --rag-capture-output work/core-rag-new
 # 전체 서버 실행은 --config-only를 제외. 기존 개발 환경을 교체하지 않고 임시 프로젝트를 만듭니다.
 # 수집한 파일은 서버·모델 호출 없이 다시 계산할 수 있습니다.
-backend/ai-service/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
+pipelines/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
   --fixture work/core-rag-new/v1/fixture.json --capture work/core-rag-new/v1/capture.json
 # 전체 수집 성공 후 생성된 예산 준비 파일을 모델·Ops 호출 없이 대조합니다.
-backend/ai-service/.venv/bin/python infrastructure/llmops/core_rag_budget.py check work/core-rag-new/v1
+pipelines/.venv/bin/python infrastructure/llmops/core_rag_budget.py check work/core-rag-new/v1
 ```
 
 새 출력 폴더를 지정해야 하며 다른 추적 출력과 겹칠 수 없습니다. `--evidence-traces-output`과
@@ -1133,11 +1138,11 @@ Linux에서는 두 Compose 네트워크의 연결 또는 호스트 게이트웨�
 
 ```bash
 cd backend/ai-service
-uv run --locked --extra dev --group evaluation python -m pytest \
+uv run --project ../../pipelines --locked --extra dev python -m pytest \
   tests/test_config.py tests/test_bootstrap.py tests/test_container_image_contract.py \
   tests/support_program_evidence/test_agent.py tests/support_program_evidence/test_tracing.py tests/test_search_tracing.py \
   ../../infrastructure/llmops/test_search_trace_smoke.py \
-  ../../evaluation/support-program-evidence
+  ../../evaluation/support-program-evidence ../../pipelines/tests
 ```
 
 [GovBiz CI](../../.github/workflows/ci.yml)는 기존 전체 AI 검증과 평가 도구 무료 테스트를 유지한다.
@@ -1272,8 +1277,9 @@ C2는 실행기가 정산 전에 서명된 사용량 증거를 저장하고, 운
 - Python 3.12 검사 컨테이너·격리 MySQL 8.4의 `test_usage_correction`, `test_budget_reporting`,
   `test_budget_cleanup`: **55개** 통과(추가 회귀 재실행은 중복 합산하지 않음). `manage.py check` 및
   `makemigrations --check --dry-run`도 확인했다. 테스트 DB·컨테이너·네트워크만 정리했다.
-- `backend/ai-service`에서 `uv run --locked --no-sync --extra dev --group evaluation python -m pytest`
-  `../../evaluation/support-program-evidence/{test_budget_client,test_evaluate,test_ops_flow,test_execution_spec}.py`:
+- `backend/ai-service`에서 `uv run --project ../../pipelines --locked --no-sync --extra dev python -m pytest`
+  `../../evaluation/support-program-evidence/{test_budget_client,test_evaluate}.py`와
+  `../../pipelines/tests/{test_ops_flow,test_execution_spec}.py`:
   **126개** 통과. 모델 HTTP는 대역이며 정산 실패 후 증거 보존, 미확인 응답의 증거 미생성도 확인했다.
 - `../../infrastructure/llmops/test_cancellation_smoke.py`: **51개** 통과. 로컬 HTTP 대역의 소켓을
   허용한 환경에서 실행했으며 외부 모델 전송은 없었다.
@@ -1576,7 +1582,7 @@ Ops는 Python 3.12의 검사 컨테이너와 격리 MySQL 8.4를 사용했다. �
 uv run --locked python manage.py test apps.evaluations.test_quality apps.evaluations.test_reviews apps.evaluations.test_case_reviews apps.evaluations.test_baselines apps.evaluations.test_execution_spec --noinput
 
 # backend/ai-service: 고정된 평가 의존성을 설치한 환경
-uv run --locked --extra dev --group evaluation python -m pytest ../../evaluation/support-program-evidence/test_execution_spec.py ../../evaluation/support-program-evidence/test_ops_flow.py ../../evaluation/support-program-evidence/test_recovery.py -q
+uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/tests/test_execution_spec.py ../../pipelines/tests/test_ops_flow.py ../../pipelines/tests/test_recovery.py -q
 
 # frontend/web
 pnpm test src/App.ops.test.tsx
@@ -1669,10 +1675,10 @@ close HTTP 실패 직후 전체 예약이 유지되는지 확인한 뒤, 별도 
 
 ```bash
 # 저장소 루트: Python 3.12, Linux 컨테이너가 가능한 Docker Engine + Compose 필요
-backend/ai-service/.venv/bin/python infrastructure/llmops/cancellation_smoke.py --output work/llmops-ci/cancellation.json
+pipelines/.venv/bin/python infrastructure/llmops/cancellation_smoke.py --output work/llmops-ci/cancellation.json
 
 # backend/ai-service: 서버/유료 API 없이 도구 계약과 SDK→HTTP 대역 확인
-uv run --locked --extra dev --group evaluation python -m pytest ../../infrastructure/llmops/test_cancellation_smoke.py ../../infrastructure/llmops/test_ops_smoke.py -q
+uv run --project ../../pipelines --locked --extra dev python -m pytest ../../infrastructure/llmops/test_cancellation_smoke.py ../../infrastructure/llmops/test_ops_smoke.py -q
 ```
 
 실행 흐름은 `테스트 클라이언트 → Ops → MySQL 예약·Prefect 접수 → 실제 평가 실행기 →

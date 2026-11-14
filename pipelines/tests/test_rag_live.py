@@ -8,10 +8,10 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx2
-import ops_flow
+from pipelines.evaluation import flows as ops_flow
 import pytest
 import rag_live
-import rag_replay_flow
+from pipelines.evaluation import rag as rag_replay_flow
 from apps.evaluations.catalog import live_config
 from apps.evaluations.execution_spec import digest, make_spec, read_release
 from apps.evaluations.rag_material import material_from_sources
@@ -21,7 +21,7 @@ from budget_client import BudgetClient, BudgetUnavailable
 
 DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
 
 
 def parameters(dataset=DATASET, capture=CAPTURE):
@@ -34,6 +34,7 @@ def parameters(dataset=DATASET, capture=CAPTURE):
 
 @pytest.fixture
 def runner(tmp_path, monkeypatch):
+    monkeypatch.setattr(rag_replay_flow, "ROOT", tmp_path)
     for key, value in {"LLMOPS_RESULTS_DIR": str(tmp_path), "LLMOPS_LIVE_ENABLED": "true",
                        "LLMOPS_RAG_LIVE_ENABLED": "true", "OPENAI_API_KEY": "test-only",
                        "LLMOPS_BUDGET_TOKEN": "test-only-token-never-used-outside-tests",

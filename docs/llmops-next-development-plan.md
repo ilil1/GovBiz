@@ -1,5 +1,7 @@
 # LLMOps 개발 현황과 후속 전략 — 누적 예산을 적용한 E01 실평가
 
+> 현재 코드는 Prefect 실행 순서를 `pipelines/evaluation/`, 평가 계산을 `evaluation/support-program-evidence/`에서 관리합니다. 아래 과거 검증 기록의 `ops_flow.py`와 `llmops.py`는 분리 전 파일명입니다. 최신 실행 방법은 [파이프라인 안내](../pipelines/README.md)를 따릅니다.
+
 [문서 목록](README.md) · [도입·구현 이력](langfuse-adoption-strategy.md) · [Ops API](../backend/ops-service/README.md) · [실행 안내](../infrastructure/llmops/README.md)
 
 ## 2026-10-06 상세 공고 실제 서비스 평가: Core 청킹 사전 점검
@@ -1004,7 +1006,7 @@ exec를 포함해 6.11초였으며, 이 결과만으로 이전 원인이나 재�
   GET/POST 타임아웃의 재전송 금지, Docker 명령 실패·비정상 JSON 분류, 민감한 문자열 제외,
   최근 32개 제한, 실패 보고서 저장·일회용 환경 정리를 포함한다.
 - 변경 Python 파일의 Ruff 검사·포맷 확인 통과. PATH에 `uv`가 없어 기존
-  `backend/ai-service/.venv/bin/python`으로 실행했다.
+  `pipelines/.venv/bin/python`으로 실행했다.
 - 기존 LLMOps CI는 push/PR에 검사기 테스트와 19개 서버 시나리오를 수행하고 실패 산출물도
   보존한다. 위 로컬 검증은 전체 CI 통과를 뜻하지 않으며, 커밋·푸시 후 해당 SHA의 결과를 확인한다.
 
@@ -1075,9 +1077,9 @@ CI는 성공했고 GovBiz·[LLMOps CI](https://github.com/ilil1/SKN34-4th-1Team/
   문서 링크·`git diff --check`를 확인했다. PATH에 `uv`가 없어 기존 Python 3.12 venv를 사용했다.
   전체 DB/컨테이너 검증은 기존 CI에 맡기며 사용자 개발 서버·DB·볼륨은 변경하지 않았다.
 
-명령은 저장소 루트에서 `backend/ai-service/.venv/bin/python -m pytest` 뒤에 각각
+명령은 저장소 루트에서 `pipelines/.venv/bin/python -m pytest` 뒤에 각각
 `infrastructure/llmops/test_cancellation_smoke.py -q`,
-`evaluation/support-program-evidence/test_rag_live.py -q`를 붙여 실행했다.
+`pipelines/tests/test_rag_live.py -q`를 붙여 실행했다.
 CI는 기존 LLMOps 검사기 테스트 및 GovBiz의 전체 평가 도구 테스트가 두 파일을 포함한다.
 
 선행 `67859d2`의 GovBiz·Ops·Catalog·Infra CI는 성공했고,
@@ -1162,7 +1164,7 @@ RAG 비활성 상태에서는 올바른 신규 실행 요청을 HTTP 400으로 �
 로컬 검증:
 
 - 검사기 계약·실패 조건·옵션 가드 **77건**:
-  `backend/ai-service/.venv/bin/python -m pytest infrastructure/llmops/test_ops_smoke.py -q`.
+  `pipelines/.venv/bin/python -m pytest infrastructure/llmops/test_ops_smoke.py -q`.
   HTTP 응답 대역 검증이며 실제 서버 왕복 성공을 의미하지 않는다.
 - Python 3.12·격리 MySQL 8.4에서 `python manage.py test apps.evaluations.test_rag_baselines --noinput`
   **11건** 통과. 기준 지정·철회·동시성·기존 데이터 migration 보존, Django check·migration 정합성을 확인했다.
@@ -2821,7 +2823,7 @@ skn-48의 별도 ingress는 중복되어 제외하고 Python 3.12 실행 고정,
 | 평가 취소 | [services.py](../backend/ops-service/apps/evaluations/services.py), [취소 테스트](../backend/ops-service/apps/evaluations/test_cancellation.py) | 요청자 권한·취소 기록·신규 승인 차단·종료 확인·환급 경합은 구현됐다. 실제 실행기 중단 11개 시나리오를 추가했으며, 아래 PR A의 최신 검증 상태를 따른다. |
 | 실서버 CI | [LLMOps CI](../.github/workflows/llmops-ci.yml), [Ops smoke](../infrastructure/llmops/ops_smoke.py), [취소 smoke](../infrastructure/llmops/cancellation_smoke.py) | 저장 응답·인증·재접수·보고서·무료 복구·실행 명세 불일치 검증에 11개 취소·예산 시나리오를 연결했다. skn-43 CI의 포트 조회 실패와 후속 수정·검증 상태는 아래 PR A에서 구분한다. |
 | 한도 변경·장부 조회 | [조회·감사](../backend/ops-service/apps/evaluations/budget_reporting.py), [공개 API](../backend/ops-service/apps/evaluations/urls.py), [웹 계약](../frontend/web/src/data/ops/opsApi.ts) | 후속 PR B 구현으로 관리자 읽기 API·React 표시·CLI 감사 이력을 추가했다. 새 migration 적용과 해당 변경의 필수 CI는 현재 구현 절의 상태를 따른다. |
-| 미확인 예약 복구 | [worker_action/close_after_cancellation](../backend/ops-service/apps/evaluations/budget.py), [ops_flow.py](../evaluation/support-program-evidence/ops_flow.py) | claim은 실행 try/finally 앞에 있고 close 실패를 자동 재정산하지 않는다. 취소 기록 없는 FAILED/CRASHED 등은 동기화에서 예약을 정리하지 않으며 종료된 실행에는 새 취소도 거절한다. closed 예약의 늦은 settle도 거절한다. 보수적으로 한도를 유지하지만 이를 안전하게 정리하는 별도 경로가 필요하다. |
+| 미확인 예약 복구 | [worker_action/close_after_cancellation](../backend/ops-service/apps/evaluations/budget.py), [평가 flow](../pipelines/evaluation/flows.py) | claim은 실행 try/finally 앞에 있고 close 실패를 자동 재정산하지 않는다. 취소 기록 없는 FAILED/CRASHED 등은 동기화에서 예약을 정리하지 않으며 종료된 실행에는 새 취소도 거절한다. closed 예약의 늦은 settle도 거절한다. 보수적으로 한도를 유지하지만 이를 안전하게 정리하는 별도 경로가 필요하다. |
 | 추적·평가 범위 | [tracing.py](../backend/ai-service/app/tracing.py), [evaluate.py](../evaluation/support-program-evidence/evaluate.py) | 기준 검토 이후 Core→AI 검색 단계·임베딩/랭킹·선택 추적과 Ops 이동 링크를 추가했다. 상세 범위·미검증 항목은 [실행 안내](../infrastructure/llmops/README.md#지원사업-ai-검색-추적)를 참조한다. 고정 근거 평가는 synthetic·ai-authored, 최대 3문서·12사례이며 자동 의미 충실도는 미측정이다. |
 | 발행·승격 | [gate.py](../infrastructure/release/gate.py) | 동일 SHA의 5개 CI·필수 job 검사는 구현됐다. 현재 모델의 사람 검토 품질 증거와 배포 대상의 연결은 별도 과제다. |
 
@@ -3032,7 +3034,7 @@ Ops 명세·실행기 검증·웹 동의·migration·CI 양쪽 계약을 함께 
 
 실제 공고와 사람 작성 참조를 쓰려면 현재 synthetic/ai-authored 강제 계약을 버전 확장한다.
 불필요한 인용, 조건의 AND/OR·예외·제외·근거 부족 등 검토 범주와 지표를 정하고, 자료 확대 시
-[점수 등록](../evaluation/support-program-evidence/llmops.py)의 단일 100개 조회도 페이지 처리로 검증한다.
+[점수 등록](../pipelines/evaluation/clients.py)의 단일 100개 조회도 페이지 처리로 검증한다.
 
 전체 RAG는 기존 [검색 평가](../evaluation/support-program-search/README.md)와 근거 답변 도구를 재사용한다.
 문서 snapshot·청킹/임베딩/재정렬 버전과 검색 후보·순위·최종 인용을 고정하고,

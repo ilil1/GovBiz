@@ -280,7 +280,7 @@ Compose 실행기를 함께 확인한다. [진단 범위와 실행 명령](ops-r
 | 릴리스 | 배포 리소스 | 저장소 | 역할 |
 | --- | --- | --- | --- |
 | `prefect` | Deployment·ClusterIP Service·NetworkPolicy | 별도 복원한 Prefect PVC | 기존 SQLite 이력과 수동 평가 API |
-| `evaluation-runner` | Deployment·NetworkPolicy | 복원한 결과 PVC, 읽기/쓰기 | 기존 `ops_flow.py`의 단일 실행기 |
+| `evaluation-runner` | Deployment·NetworkPolicy | 복원한 결과 PVC, 읽기/쓰기 | 기존 `pipelines/serve.py`의 단일 실행기 |
 | `ops-artifacts` | Deployment·ClusterIP Service·NetworkPolicy | 같은 결과 PVC, 읽기 전용 | 기존 인증된 결과·평가 자료 HTTP 조회 |
 
 Chart는 PVC·PV·Secret·namespace·migration Job을 생성하거나 삭제하지 않는다. 기존 Compose named

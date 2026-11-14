@@ -8,14 +8,15 @@ from uuid import uuid4
 
 import pytest
 
-import llmops
-import ops_flow
+from pipelines.evaluation import capture as llmops
+import reporting
+from pipelines.evaluation import flows as ops_flow
 from apps.evaluations.recovery_inputs import read_recovery_inputs
 
 
 @pytest.fixture
 def source(monkeypatch, tmp_path):
-    here = Path(ops_flow.__file__).parent
+    here = (ops_flow.ROOT / "evaluation/support-program-evidence")
     dataset, candidate, _ = ops_flow.selection(ops_flow.DATASET_ID, ops_flow.DATASET_ID, ops_flow.DATASET_ID)
     source_id = str(uuid4())
     folder = tmp_path / source_id
@@ -27,7 +28,7 @@ def source(monkeypatch, tmp_path):
     }
     (folder / "request.json").write_text(json.dumps(marker))
     capture_hash = sha256((here / candidate["path"]).read_bytes()).hexdigest()
-    manifest = {"evaluator_version": llmops.EVALUATOR_VERSION, "status": "failed", "model_api_calls": 0, "stage": "publish",
+    manifest = {"evaluator_version": reporting.EVALUATOR_VERSION, "status": "failed", "model_api_calls": 0, "stage": "publish",
                 "capture_sha256": capture_hash, "reference_capture_sha256": capture_hash,
                 "fixture_sha256": dataset["fixture_sha256"]}
     (folder / "evaluation/manifest.json").write_text(json.dumps(manifest))
@@ -73,7 +74,7 @@ def test_recovery_after_failure_preserves_source_and_never_calls_model(source, m
     # 프로세스 재시작으로 running manifest만 남아도 입력 해시는 이미 저장되어 있다.
     manifest["status"] = "running"
     manifest_path.write_text(json.dumps(manifest))
-    _, next_config, _ = read_recovery_inputs(tmp_path, Path(ops_flow.__file__).parent, attempt_id)
+    _, next_config, _ = read_recovery_inputs(tmp_path, (ops_flow.ROOT / "evaluation/support-program-evidence"), attempt_id)
     monkeypatch.setattr(llmops, "render", original_render)
     monkeypatch.setattr(llmops, "publish", lambda current: seen.add(current["run_id"]) or [])
     retry_id = str(uuid4())
@@ -132,7 +133,7 @@ def test_completed_live_capture_recovers_with_live_disabled_and_changed_default_
     from apps.evaluations.catalog import live_config
     source_id, _ = source
     folder = tmp_path / source_id
-    here = Path(ops_flow.__file__).parent
+    here = (ops_flow.ROOT / "evaluation/support-program-evidence")
     _, _, inputs = read_recovery_inputs(tmp_path, here, source_id)
     approved = live_config(ops_flow.DATASET_ID)
     capture = json.loads(inputs["capture"])
@@ -162,7 +163,7 @@ def test_completed_live_capture_recovers_with_live_disabled_and_changed_default_
 def test_reviewed_baseline_uses_source_snapshot_even_after_baseline_changes(source, tmp_path):
     source_id, config = source
     folder = tmp_path / source_id
-    here = Path(ops_flow.__file__).parent
+    here = (ops_flow.ROOT / "evaluation/support-program-evidence")
     _, _, inputs = read_recovery_inputs(tmp_path, here, source_id)
     baseline_id = str(uuid4())
     reference_id = f"run:{baseline_id}"

@@ -13,7 +13,7 @@ from uuid import UUID
 PROBE = "http://cancellation-probe:8099"
 RESULTS = Path("/results")
 PARENT = RESULTS / ".cancellation-parent.json"
-sys.path.insert(0, "/app/evaluation/support-program-evidence")
+sys.path[:0] = ["/app", "/app/evaluation/support-program-evidence"]
 
 
 def process_info(pid):
@@ -131,7 +131,7 @@ def install_http_double(run_id):
 
 
 def install_publish_gate(run_id):
-    import rag_replay_flow
+    import pipelines.evaluation.rag as rag_replay_flow
 
     original = rag_replay_flow.publish_payloads
 
@@ -209,7 +209,7 @@ def cancellation_evaluation(
     execution_spec: dict | None = None,
     execution_spec_sha256: str | None = None,
 ):
-    from ops_flow import evaluate_saved_capture
+    from pipelines.evaluation.flows import evaluate_saved_capture
 
     marker_path(request_id).write_text(json.dumps(process_info(os.getpid())))
     install_http_double(request_id)

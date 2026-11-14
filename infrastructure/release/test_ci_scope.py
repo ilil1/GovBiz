@@ -83,6 +83,14 @@ def fixture_api(runs, comparisons, jobs=None):
 
 
 class AffectedJobsTests(unittest.TestCase):
+    def test_pipeline_source_and_lock_require_evaluation_integrations(self):
+        for path in ("pipelines/evaluation/flows.py", "pipelines/uv.lock"):
+            with self.subTest(path=path):
+                selected = policy.affected_jobs([path])
+                self.assertIn("ai-service", selected["ci.yml"])
+                self.assertEqual(selected["ops-ci.yml"], set(policy.WORKFLOW_JOBS["ops-ci.yml"]))
+                self.assertEqual(selected["llmops-ci.yml"], set(policy.WORKFLOW_JOBS["llmops-ci.yml"]))
+
     def test_global_web_styles_still_require_the_ops_browser_checks(self):
         for path in ("frontend/web/src/index.css", "frontend/web/src/design-tokens.css"):
             with self.subTest(path=path):
@@ -99,7 +107,7 @@ class AffectedJobsTests(unittest.TestCase):
             "README.md", "AGENTS.md", "docs/guide.md", "docs/screenshot.png",
             "backend/ai-service/README.md", "frontend/web/README.md",
             "backend/ai-service/docs/agent-structure.md", "infrastructure/gitops/docs/web-kubernetes.md",
-            "evaluation/support-program-evidence/README.md",
+            "evaluation/support-program-evidence/README.md", "pipelines/README.md",
         ])
         self.assertEqual(selected["infra-ci.yml"], {"repository", "fork-identity"})
         self.assertTrue(all(not jobs for name, jobs in selected.items() if name != "infra-ci.yml"))

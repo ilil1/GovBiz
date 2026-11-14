@@ -233,7 +233,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             steps = jobs[identity]["steps"]
             self.assertEqual(jobs[identity]["needs"], "changes")
             self.assertTrue(steps[0]["uses"].startswith("actions/checkout@"))
-            self.assertTrue(any(step.get("run") == "uv sync --locked --extra dev --group evaluation" for step in steps))
+            self.assertTrue(any(step.get("run") == "uv sync --locked --extra dev" for step in steps))
             for command in commands:
                 matched = [step for step in steps if command in step.get("run", "")]
                 self.assertTrue(matched, (identity, command))

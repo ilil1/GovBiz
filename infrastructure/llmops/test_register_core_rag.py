@@ -15,6 +15,31 @@ from apps.evaluations import execution_spec
 
 
 @pytest.fixture
+def isolated_prefect_tasks(monkeypatch):
+    """Flow.fn 통합 검사는 내부 Task 본문만 실행하고 Prefect 서버는 시작하지 않는다."""
+    import prefect.task_engine
+    from prefect.context import FlowRunContext
+
+    original = prefect.task_engine.run_task
+    names = {
+        "validate-evaluation-inputs",
+        "claim-evaluation-budget",
+        "generate-evaluation-responses",
+        "validate-rag-results",
+        "render-rag-comparison",
+        "publish-rag-scores",
+    }
+
+    def run_task(*args, **kwargs):
+        task = kwargs.get("task")
+        if task is None or task.name not in names or FlowRunContext.get() is not None:
+            return original(*args, **kwargs)
+        return task.fn(**kwargs.get("parameters", {}))
+
+    monkeypatch.setattr(prefect.task_engine, "run_task", run_task)
+
+
+@pytest.fixture
 def repository(tmp_path):
     root = registration.planner.ROOT
     release = execution_spec.build_release(root)
@@ -147,16 +172,15 @@ def test_registration_refuses_concurrent_writer(repository, completed_capture):
 
 @pytest.mark.parametrize("source_failed", [False, True])
 def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
-    repository, completed_capture, monkeypatch, tmp_path, source_failed
+    repository, completed_capture, monkeypatch, tmp_path, source_failed, isolated_prefect_tasks
 ):
     import core_rag_capture as collector
     import ops_smoke
 
     sys.path.insert(0, str(registration.planner.ROOT / execution_spec.EVIDENCE))
-    import ops_flow
-    import rag_replay_flow
-
     from apps.evaluations import catalog, rag_replay
+    from pipelines.evaluation import flows as ops_flow
+    from pipelines.evaluation import rag as rag_replay_flow
 
     if source_failed:
         wire_path = completed_capture / "wire.json"
@@ -199,9 +223,6 @@ def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
         repository / execution_spec.OPS / "execution_release.json",
     )
     monkeypatch.setattr(ops_flow, "ROOT", repository)
-    monkeypatch.setattr(
-        ops_flow, "__file__", str(repository / execution_spec.EVIDENCE / "ops_flow.py")
-    )
     monkeypatch.setattr(rag_replay_flow, "ROOT", repository)
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path / "results"))
     monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))

@@ -10,16 +10,19 @@ import sys
 from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend/ai-service"))
+# Prefect는 등록된 파일을 새 프로세스에서 직접 불러올 수도 있다.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+import pipelines  # noqa: F401 -- initialize shared source paths before loading the flow
 
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.runtime import flow_run
 import evaluate
 from budget_client import BudgetClient, BudgetUnavailable
-from llmops import EVALUATOR_VERSION, evaluate_capture, load_results, write_json
+from reporting import EVALUATOR_VERSION, load_results, write_json
+from pipelines.evaluation.capture import evaluate_capture
 
-sys.path.insert(0, str(ROOT / "backend/ops-service"))
 from apps.evaluations.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
 from apps.evaluations.recovery_inputs import read_recovery_inputs
 from apps.evaluations.execution_spec import (
@@ -28,7 +31,7 @@ from apps.evaluations.execution_spec import (
 from apps.evaluations.catalog import RAG_SCOPE, evaluation_scope
 from apps.evaluations.catalog import managed_snapshot_context
 from apps.evaluations.managed_materials import materialize
-from rag_replay_flow import evaluate_rag_capture
+from pipelines.evaluation.rag import evaluate_rag_capture
 
 DATASET_ID = LEGACY_DATASET_ID
 
@@ -61,7 +64,7 @@ def reviewed_reference(dataset_id, config, here, output_root):
 
 def prepare_recovery(output, dataset_id, candidate_id, reference_id, reference_config, config, *, evidence_root=None):
     """완료 응답의 고정 바이트만 복사한다. 모델 실행 경로를 호출하지 않는다."""
-    here = evidence_root or Path(__file__).resolve().parent
+    here = evidence_root or (ROOT / "evaluation/support-program-evidence")
     marker, expected, inputs = read_recovery_inputs(
         output.parent, here, config["source_run_id"],
         reassessment=config.get("reassessment_kind") == "stored-response-reassessment",
@@ -93,7 +96,7 @@ def evaluate_saved_capture(
     request_id = str(UUID(request_id))
     config = live_config or {}
     reference_config = reference_config or {}
-    here = Path(__file__).resolve().parent
+    here = ROOT / "evaluation/support-program-evidence"
     output_root = Path(os.environ.get("LLMOPS_RESULTS_DIR", ROOT / "work/llmops-ops")).resolve()
     output = output_root / request_id
     # UUID 디렉터리의 배타 생성은 실패 기록도 보존하며 수동 재실행의 중복 호출을 차단한다.
@@ -263,7 +266,3 @@ def evaluate_saved_capture(
             write_json(manifest_path, manifest)
             result["reassessment"] = provenance
         return result
-
-
-if __name__ == "__main__":
-    evaluate_saved_capture.serve(name="saved-capture", limit=1)

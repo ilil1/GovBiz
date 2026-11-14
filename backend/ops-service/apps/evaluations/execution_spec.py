@@ -9,14 +9,20 @@ from pathlib import Path
 AI = "backend/ai-service/"
 OPS = "backend/ops-service/apps/evaluations/"
 EVIDENCE = "evaluation/support-program-evidence/"
+PIPELINES = "pipelines/"
 RELEASE_PATH = Path(__file__).with_name("execution_release.json")
 EVALUATION_SCOPE = "fixed-answer-context-only"
-DEPENDENCIES = (AI + "pyproject.toml", AI + "uv.lock")
+DEPENDENCIES = (
+    AI + "pyproject.toml",
+    AI + "uv.lock",
+    PIPELINES + "pyproject.toml",
+    PIPELINES + "uv.lock",
+)
 EVALUATION_FILES = (
     EVIDENCE + "evaluate.py",
     EVIDENCE + "official_snapshot.py",
     EVIDENCE + "verify_flow.py",
-    EVIDENCE + "llmops.py",
+    EVIDENCE + "reporting.py",
     OPS + "managed_materials.py",
     AI + "app/support_program_evidence/models.py",
     AI + "app/support_program_identity.py",
@@ -38,7 +44,14 @@ GENERATION_FILES = (
     *DEPENDENCIES,
 )
 PIPELINE_FILES = (
-    EVIDENCE + "ops_flow.py",
+    PIPELINES + "__init__.py",
+    PIPELINES + "serve.py",
+    PIPELINES + "evaluation/__init__.py",
+    PIPELINES + "evaluation/flows.py",
+    PIPELINES + "evaluation/capture.py",
+    PIPELINES + "evaluation/rag.py",
+    PIPELINES + "evaluation/tasks.py",
+    PIPELINES + "evaluation/clients.py",
     EVIDENCE + "budget_client.py",
     OPS + "catalog.py",
     OPS + "recovery_inputs.py",
@@ -50,8 +63,8 @@ PIPELINE_FILES = (
 )
 RAG_FILES = (
     EVIDENCE + "rag_evaluate.py",
-    EVIDENCE + "rag_replay_flow.py",
-    EVIDENCE + "llmops.py",
+    EVIDENCE + "rag_reporting.py",
+    EVIDENCE + "reporting.py",
     OPS + "rag_replay.py",
     AI + "app/support_program_evidence/models.py",
     AI + "app/support_program_identity.py",

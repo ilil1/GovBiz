@@ -1,0 +1,32 @@
+[project]
+name = "govbiz-pipelines"
+version = "0.1.0"
+description = "Prefect orchestration for GovBiz evaluation pipelines"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "govbiz-ai-service",
+    "prefect==3.8.6",
+    "pandas==3.0.6",
+    "pandera[pandas]==0.33.1",
+    "evidently==0.7.23",
+    "filelock==4.0.3",
+    "httpx>=0.28,<1",
+    "langfuse==4.15.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx2>=2.0.0,<3.0.0",
+    "pytest>=8.4.0,<10.0.0",
+]
+
+[tool.uv]
+package = false
+required-version = "==0.12.5"
+
+[tool.uv.sources]
+govbiz-ai-service = { path = "../backend/ai-service" }
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

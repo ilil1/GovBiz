@@ -72,7 +72,7 @@ def affected_jobs(paths):
         selected[filename].update(jobs or WORKFLOW_JOBS[filename])
 
     for path in paths:
-        if (path in {"README.md", "AGENTS.md"}
+        if (path in {"README.md", "AGENTS.md", "pipelines/README.md"}
                 or path.startswith(("docs/", "infrastructure/gitops/docs/", "backend/ai-service/docs/"))
                 and path.endswith((".md", ".png", ".jpg", ".svg"))
                 or re.fullmatch(r"(?:backend/[^/]+|frontend/[^/]+|infrastructure/[^/]+|evaluation/[^/]+)/README\.md", path)):
@@ -118,7 +118,7 @@ def affected_jobs(paths):
         elif path.startswith("infrastructure/gitops/"):
             add("infra-ci.yml")
             add("llmops-ci.yml")
-        elif path.startswith(("infrastructure/llmops/", "evaluation/support-program-evidence/")):
+        elif path.startswith(("infrastructure/llmops/", "evaluation/support-program-evidence/", "pipelines/")):
             add("ci.yml", "ai-service")
             add("ops-ci.yml")
             add("llmops-ci.yml")
