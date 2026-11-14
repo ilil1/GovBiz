@@ -107,7 +107,7 @@ export async function checkBrowserLogin({ origin, email, password, expected }, p
         if (ids.includes(row.id)) assert.ok(row.status === 'COMPLETED' && row.execution_spec_sha256 === expected[row.id].execution_spec_sha256, 'Expected evaluation differs')
         await history.locator(`a[href="/ops/evaluations/${row.id}"]`).waitFor()
       }
-      assert.equal(await history.locator('tbody tr').count(), rows.length, 'Rendered evaluation page differs')
+      assert.equal(await history.getByRole('list', { name: '평가 실행 목록', exact: true }).locator(':scope > li').count(), rows.length, 'Rendered evaluation page differs')
       listings.push(rows)
       pagesVerified++
       const next = history.getByRole('button', { name: '다음', exact: true })
@@ -126,10 +126,11 @@ export async function checkBrowserLogin({ origin, email, password, expected }, p
       }
       await history.locator(`a[href="/ops/evaluations/${id}"]`).click()
       await page.getByRole('heading', { name: '평가 실행 상세', exact: true }).waitFor()
-      await page.locator('summary').getByText('실행 정보·버전 자세히 보기', { exact: true }).click()
+      await page.locator('summary').getByText('관리자용 기술 정보', { exact: true }).click()
       await page.locator('dd').getByText(id, { exact: true }).waitFor()
       await page.locator('dd').getByText(expected[id].execution_spec_sha256, { exact: true }).waitFor()
-      await page.getByRole('region', { name: '실행 예산 장부' }).getByText('새 모델 호출을 예약하는 실행이 아닙니다.', { exact: false }).waitFor()
+      await page.locator('summary').getByText('AI 사용량 보기', { exact: true }).click()
+      await page.getByRole('region', { name: '실행 예산 장부' }).getByText('이번 실행은 AI를 새로 호출하지 않았어요.', { exact: false }).waitFor()
       const detail = listings.flat().find((row) => row.id === id)
       if (detail.evaluation_scope === 'source-chunks-retrieval-answer') {
         progress('RAG_MATERIAL')
@@ -138,7 +139,8 @@ export async function checkBrowserLogin({ origin, email, password, expected }, p
       }
       const reportPath = `/api/v1/ops/evaluations/${id}/report`
       // The UI opens the explanation page; the immutable HTML remains at the API URL.
-      const reportLink = page.getByRole('link', { name: 'Evidently 보고서', exact: true })
+      await page.locator('summary').getByText('보고서와 Prefect 실행 로그 보기', { exact: true }).click()
+      const reportLink = page.getByRole('link', { name: '평가 보고서 보기', exact: true })
       assert.equal(await reportLink.getAttribute('href'), `/ops/evaluations/${id}/report`)
       assert.equal(await reportLink.getAttribute('target'), '_blank')
       assert.deepEqual((await reportLink.getAttribute('rel')).split(' ').sort(), ['noopener', 'noreferrer'])
@@ -203,6 +205,7 @@ export async function checkBrowserLogin({ origin, email, password, expected }, p
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  let phase = 'INPUT'
   try {
     const chunks = []
     let size = 0
@@ -211,10 +214,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       assert.ok(size <= 65536, 'Browser login input exceeds limit')
       chunks.push(chunk)
     }
-    process.stdout.write(JSON.stringify(await checkBrowserLogin(JSON.parse(Buffer.concat(chunks).toString('utf8')))))
+    process.stdout.write(JSON.stringify(await checkBrowserLogin(JSON.parse(Buffer.concat(chunks).toString('utf8')), (stage) => { phase = stage })))
   } catch {
     // Playwright diagnostics can contain form values; never publish them from CI.
-    process.stderr.write('KUBERNETES_BROWSER_LOGIN_FAILED\n')
+    process.stderr.write(`BRIDGE_BROWSER_LOGIN_FAILED_${phase}\n`)
     process.exitCode = 1
   }
 }

@@ -224,13 +224,13 @@ test('external origins and missing credentials are rejected before opening a bro
   }
 })
 
-test('CLI failures redact login input and emit only the fixed error code', () => {
+test('CLI failures redact login input and emit only the fixed error code and phase', () => {
   const result = spawnSync(process.execPath, [fileURLToPath(new URL('./ops_browser_login.mjs', import.meta.url))], {
     input: JSON.stringify({ origin: 'https://external.invalid', email, password, expected }), encoding: 'utf8', timeout: 10000,
   })
   assert.equal(result.status, 1)
   assert.equal(result.stdout, '')
-  assert.equal(result.stderr, 'KUBERNETES_BROWSER_LOGIN_FAILED\n')
+  assert.equal(result.stderr, 'BRIDGE_BROWSER_LOGIN_FAILED_INPUT\n')
 })
 
 // A child process forwards each RPC to the live disposable HTTP fixtures above.

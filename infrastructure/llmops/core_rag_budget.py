@@ -1,14 +1,14 @@
 """완료된 무료 Core 캡처를 내부 RAG 예산 명세로 변환한다. 예약·모델 호출은 하지 않는다."""
 
 import argparse
-import json
 import importlib.util
+import json
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
 
 from govbiz_evaluation import rag_evaluate as rag
 from govbiz_evaluation.rag_budget import digest
+
+ROOT = Path(__file__).resolve().parents[2]
 
 # This source-only tool prepares the explicitly installed AI HTTP integration app.
 _adapter_spec = importlib.util.spec_from_file_location(
@@ -105,7 +105,12 @@ def build_plan(directory):
                 Path(__file__).with_name("core_rag_capture.py"),
                 CHUNKER,
             )
-        } | {"evaluation/support-program-evidence/rag_evaluate.py": rag.digest(Path(rag.__file__).read_bytes())},
+        }
+        | {
+            "evaluation/support-program-evidence/rag_evaluate.py": rag.digest(
+                Path(rag.__file__).read_bytes()
+            )
+        },
         "executionSpecSha256": digest(execution),
         "executionSpec": execution,
     }

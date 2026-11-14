@@ -31,11 +31,11 @@ def synthetic_cases():
 
 def run_session(config):
     import httpx2
-    from integration import serve_flow
-    from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
     from fastapi.testclient import TestClient
+    from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
+    from govbiz_evaluation.rag_budget import digest
+    from integration import serve_flow
     from qdrant_client import AsyncQdrantClient
-    from govbiz_evaluation.rag_budget import RagBudget, digest
 
     if "core_capture_directory" in config:
         from core_rag_budget import load_plan

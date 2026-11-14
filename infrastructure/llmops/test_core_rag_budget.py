@@ -96,8 +96,8 @@ def test_plan_preserves_input_order_and_is_accepted_by_existing_guard(
 ):
     from uuid import uuid4
 
-    from govbiz_evaluation.budget_client import BudgetClient
     from core_rag_budget import http_adapter
+    from govbiz_evaluation.budget_client import BudgetClient
 
     plan = planner.prepare(completed_capture)
     fixture, _ = planner.rag.read_json(completed_capture / "fixture.json")
@@ -111,9 +111,9 @@ def test_plan_preserves_input_order_and_is_accepted_by_existing_guard(
     assert plan["paidModelApiCalls"] == 0
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "test-only-" + "a" * 40)
     client = BudgetClient(str(uuid4()), str(uuid4()), plan["executionSpecSha256"])
-    assert http_adapter.create_http_budget(client, spec, receipt_directory=completed_capture).spec == {
-        key: value for key, value in spec.items() if key != "http_runtime_sha256"
-    }
+    assert http_adapter.create_http_budget(
+        client, spec, receipt_directory=completed_capture
+    ).spec == {key: value for key, value in spec.items() if key != "http_runtime_sha256"}
     assert planner.load_plan(completed_capture) == plan
     worker = subprocess.run(
         [
