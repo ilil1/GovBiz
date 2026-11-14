@@ -5,9 +5,9 @@ import time
 import httpx
 from langfuse.api.client import LangfuseAPI
 
-import evaluate
-from app.config import LangfuseSettings
-from reporting import score_payloads
+from govbiz_evaluation import evaluate
+from govbiz_ai_runtime.config import LangfuseSettings
+from govbiz_evaluation.reporting import score_payloads
 
 
 def publish_scores(result: dict, settings: LangfuseSettings) -> list[str]:

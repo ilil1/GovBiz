@@ -140,6 +140,18 @@ React 목록은 DB 결과와 마지막 확인 시각을 읽으며 상세 방문 
 
 `운영자 → React → /api/v1/ops 프록시 → Django 인증·평가 Service → Prefect API → 상시 평가 실행기 → Langfuse / Evidently`로 연결하며,
 평가는 HTTP 요청 밖에서 실행합니다. Django는 요청 UUID·기준/후보 캡처·실행 상태·요약·비교를 저장하고 상세 조회 때 Prefect 상태를 반영합니다.
+
+평가 실행 순서는 설치 가능한 `pipelines` 패키지에, 계산·보고서는 `govbiz-evaluation-engine`에
+둡니다. AI와 함께 사용하는 생성·검색 코드는 `packages/govbiz-ai-runtime`, Ops와 함께 사용하는
+불변 입력·실행 명세 검증은 `packages/govbiz-evaluation-contracts`가 소유합니다.
+실행기는 AI·Ops의 내부 모듈을 가져오거나 서비스 소스 디렉터리를 실행 경로에 추가하지 않습니다.
+AI HTTP 앱을 사용하는 통합 캡처 도구는 `backend/ai-service/integration`에 별도로 둡니다.
+
+실행기 이미지는 설치된 패키지와 승인 목록의 입력 JSON을 포함합니다. 저장소를 마운트하지 않아도
+저장 캡처 평가와 보고서 생성이 가능하며, 접수 명세는 실제 설치 코드·입력 바이트와 비교합니다.
+공통 패키지 의존성은 명시적으로 유지하고, 예산 승인·정산은 Ops HTTP API를 통해 처리합니다.
+DB 조회와 관리자 권한 판단은 Ops에 남습니다. 실행 방법은 [파이프라인 안내](../pipelines/README.md)를 따릅니다.
+
 Ops와 실행기가 공유하는 캡처 목록으로 가상 6건 재현 또는 과거 두 실행의 공통 E01 비교를 선택합니다.
 원본 캡처를 먼저 검증한 뒤 지정된 같은 사례만 비교하고, 모델 호출 없이 지표 차이와 실행 정보를 React에 표시합니다.
 

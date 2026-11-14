@@ -1,18 +1,17 @@
 """공식 원문 보존과 검색 누락·미실행 표시를 무료로 검증한다."""
 
 import json
+from pathlib import Path
 import sys
 
 import pytest
 
-import official_rag
-import rag_evaluate as rag
+from govbiz_evaluation import official_rag
+from govbiz_evaluation import rag_evaluate as rag
 
-sys.path.insert(0, str(official_rag.HERE.parents[1] / "backend/ops-service"))
-
-from apps.evaluations.rag_material import material_from_sources
-from apps.evaluations.catalog import live_config, public_datasets
-from apps.evaluations.execution_spec import read_release
+from govbiz_evaluation_contracts.rag_material import material_from_sources
+from govbiz_evaluation_contracts.catalog import live_config, public_datasets
+from govbiz_evaluation_contracts.execution_spec import read_release
 
 
 def test_preparation_preserves_official_sources_questions_and_existing_seed():
@@ -30,7 +29,7 @@ def test_preparation_preserves_official_sources_questions_and_existing_seed():
         assert doc["source"]["collectedAt"] == source["source"]["collectedAt"]
     for case, original_case in zip(fixture["cases"], original["cases"], strict=True):
         assert all(case[key] == original_case[key] for key in ("id", "question", "expectedStatus"))
-    seed = json.loads((official_rag.HERE.parents[1] / "backend/ops-service/apps/evaluations/seed/official-v3/seed.json").read_bytes())
+    seed = json.loads((Path(__file__).resolve().parents[2] / "backend/ops-service/apps/evaluations/seed/official-v3/seed.json").read_bytes())
     assert seed["source_run_id"] == "628ae52a-f417-4b53-b400-d90405e6a7d8"
     assert official_rag.DATASET not in json.dumps(seed)
 
@@ -101,7 +100,7 @@ def test_recorded_search_with_missing_evidence_is_not_full_recall(tmp_path):
 
 
 def test_catalog_prepares_separate_embedding_and_answer_budget(monkeypatch):
-    monkeypatch.setattr("apps.evaluations.vector_cache.discover", lambda _: None)
+    monkeypatch.setattr("govbiz_evaluation_contracts.vector_cache.discover", lambda _: None)
     config = live_config(official_rag.DATASET)
     plan = read_release()["datasets"][official_rag.DATASET]["live_plan"]
     # Six questions share two documents: 2 document + 6 query + 6 answer calls.
@@ -170,7 +169,7 @@ def test_oversized_list_fails_instead_of_silently_losing_a_condition(monkeypatch
 
 
 def test_grouped_catalog_requires_its_own_unmeasured_inputs_and_budget(monkeypatch):
-    monkeypatch.setattr("apps.evaluations.vector_cache.discover", lambda _: None)
+    monkeypatch.setattr("govbiz_evaluation_contracts.vector_cache.discover", lambda _: None)
     fixture, pending = official_rag.build(grouped_lists=True)
     result = rag.evaluate(official_rag.GROUPED_OUTPUT / "fixture.json", official_rag.GROUPED_OUTPUT / "not-started.json")
     assert not result["completed"] and not result["baselineEligible"]

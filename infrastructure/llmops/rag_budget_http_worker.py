@@ -31,11 +31,11 @@ def synthetic_cases():
 
 def run_session(config):
     import httpx2
-    import serve_flow
-    from budget_client import BudgetClient, BudgetUnavailable
+    from integration import serve_flow
+    from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
     from fastapi.testclient import TestClient
     from qdrant_client import AsyncQdrantClient
-    from rag_budget import RagBudget, digest
+    from govbiz_evaluation.rag_budget import RagBudget, digest
 
     if "core_capture_directory" in config:
         from core_rag_budget import load_plan
@@ -156,7 +156,7 @@ def run_session(config):
     output = Path(config["results"]) / config["run_id"] / "capture"
     output.parent.mkdir(parents=True, exist_ok=True)
     budget = BudgetClient(config["run_id"], config["flow_id"], config["spec_hash"])
-    guard = RagBudget(budget, config["spec"], receipt_directory=output)
+    guard = serve_flow.create_http_budget(budget, config["spec"], receipt_directory=output)
     result = {
         "counts": counts,
         "worker_id": budget.identity["worker_id"],
@@ -227,12 +227,11 @@ def run_session(config):
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(ROOT / "evaluation/support-program-evidence"))
     sys.path.insert(0, str(ROOT / "backend/ai-service"))
     if sys.argv[1:] == ["spec"]:
-        from rag_budget import make_rag_spec
+        from integration.serve_flow import make_http_rag_spec
 
-        print(json.dumps(make_rag_spec(synthetic_cases())))
+        print(json.dumps(make_http_rag_spec(synthetic_cases())))
     elif sys.argv[1:] == ["core-spec"]:
         from core_rag_budget import load_plan
 

@@ -6,9 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-import budget_client
-
-
+from govbiz_evaluation import budget_client
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "offline-test-budget-token-32-characters")

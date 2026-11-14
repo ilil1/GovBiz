@@ -10,10 +10,11 @@ from hashlib import sha256
 from math import isfinite
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "backend/ai-service"))
+from govbiz_evaluation_contracts.resources import evidence_root, source_path
 
-from app.support_program_evidence.models import (
+HERE = evidence_root()
+
+from govbiz_ai_runtime.support_program_evidence.models import (
     SupportProgramEvidenceAnswerRequest,
     SupportProgramEvidenceAnswerResponse,
     SupportProgramEvidenceBatchRequest,
@@ -403,7 +404,7 @@ def evaluate(fixture_path, capture_path=None):
         "apiContractSha256": json_digest(
             {
                 path: digest(
-                    (HERE.parents[1] / "backend/ai-service/app" / path).read_bytes()
+                    source_path("backend/ai-service/app/" + path).read_bytes()
                 )
                 for path in (
                     "support_program_evidence/models.py",

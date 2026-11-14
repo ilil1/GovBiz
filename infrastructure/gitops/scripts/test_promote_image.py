@@ -5,7 +5,8 @@ import unittest
 
 import yaml
 
-from promote_image import UniqueLoader, promote, updated_values, validate_receipt
+from promote_image import UniqueLoader, promote, updated_values, validate_receipt, validate_source
+from publish import SERVICE_PATHS, input_key, workspace_input_key
 from repository import Fork
 
 FORK = Fork("alice/Example")
@@ -28,6 +29,37 @@ def values():
 
 
 class ImagePromotionTests(unittest.TestCase):
+    def test_shared_runtime_receipt_rejects_changed_or_missing_package_identities(self):
+        for service, paths in SERVICE_PATHS.items():
+            inputs = dict.fromkeys(paths, "d" * 40)
+            publisher = "e" * 40
+            key = workspace_input_key(service, inputs, publisher)
+            current = receipt() | {
+                "schemaVersion": 5, "visibility": "public", "service": service,
+                "repository": FORK.image(service), "sourceInputs": inputs,
+                "publisherTree": publisher, "inputKey": key, "tag": "src-" + key,
+            }
+            del current["sourceTree"]
+            validate_receipt(current, FORK)
+            validate_source(current, inputs, publisher)
+            for changed in ({}, inputs | {paths[-1]: "f" * 40}):
+                with self.subTest(service=service, changed=changed), self.assertRaises(ValueError):
+                    validate_source(current, changed, publisher)
+            with self.assertRaises(ValueError):
+                validate_source(current, inputs, "f" * 40)
+
+    def test_legacy_receipt_only_verifies_sources_before_shared_runtime_extraction(self):
+        for service, paths in SERVICE_PATHS.items():
+            publisher, tree = "e" * 40, "d" * 40
+            key = input_key(tree, publisher)
+            legacy = receipt() | {"service": service, "repository": FORK.image(service),
+                                  "sourceTree": tree, "inputKey": key, "tag": "src-" + key}
+            identities = {paths[0]: tree}
+            validate_receipt(legacy, FORK)
+            validate_source(legacy, identities, publisher)
+            with self.assertRaisesRegex(ValueError, "version 5"):
+                validate_source(legacy, identities | {paths[-1]: "f" * 40}, publisher)
+
     def test_v2_public_receipt_removes_only_registry_pull_auth(self):
         original = values()
         public = receipt() | {"schemaVersion": 2, "visibility": "public"}

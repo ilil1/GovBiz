@@ -5,8 +5,8 @@ import re
 from copy import deepcopy
 from hashlib import sha256
 
-from app.support_program_embedding import embedding_usage, prepare_embedding_batches
-from budget_client import BudgetUnavailable
+from govbiz_ai_runtime.support_program_embedding import embedding_usage, prepare_embedding_batches
+from govbiz_evaluation.budget_client import BudgetUnavailable
 
 
 def input_digest(inputs):

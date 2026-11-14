@@ -1,0 +1,36 @@
+# Build from the repository root; send only AI service and shared runtime inputs.
+**
+!backend/
+!backend/ai-service/
+!backend/ai-service/pyproject.toml
+!backend/ai-service/uv.lock
+!backend/ai-service/app/
+!backend/ai-service/app/**
+!backend/ai-service/document-tools/
+!backend/ai-service/document-tools/**
+!packages/
+!packages/govbiz-ai-runtime/
+!packages/govbiz-ai-runtime/**
+
+**/.git
+**/.venv
+**/venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/*.py[cod]
+**/*.egg-info
+**/build
+**/dist
+**/coverage
+**/.coverage*
+**/.idea
+**/.vscode
+**/.env
+**/.env.*
+**/*.log
+**/.DS_Store
+# The model is downloaded by its pinned URL and checksum in Dockerfile.
+**/FFDetr.pth

@@ -4,6 +4,12 @@ LLMOps·관리자 시스템 개발을 위한 Django 서비스이며, `GovBiz` �
 `backend/ops-service`에서 관리합니다. 같은 저장소의 Core API·AI Service와 코드를 함께
 관리하지만, Django 프로세스와 Ops 데이터베이스는 독립적으로 실행합니다.
 
+평가 자료 검증·실행 명세·재평가 규칙은 `packages/govbiz-evaluation-contracts` 패키지를
+평가 실행기와 함께 설치해 사용합니다. 이 패키지는 Django를 가져오지 않습니다. Ops가
+관리자 자료의 DB 버전과 벡터 캐시 조회를 전달하며, 실행기는 승인된 자료 스냅샷을 사용합니다.
+공유 카탈로그·RAG 계획·실행 릴리스 JSON의 원본도 이 패키지에 있습니다. Ops 이미지는
+저장소 루트를 빌드 컨텍스트로 사용하고, 실행 환경은 기존 `/app/.venv`를 유지합니다.
+
 소스 디렉터리·Compose 서비스·Kubernetes Deployment/Service/컨테이너 이름은 `ops-service`로 통일했습니다.
 DB 컨테이너·내부 DNS는 `ops-mysql`, Python 패키지·health 응답은 `govbiz-ops-service`,
 Kubernetes 검증 이미지 접두사는 `govbiz-ops-service`입니다.

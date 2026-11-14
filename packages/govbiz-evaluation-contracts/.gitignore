@@ -1,0 +1,4 @@
+src/govbiz_evaluation_contracts/_inputs/
+build/
+dist/
+*.egg-info/

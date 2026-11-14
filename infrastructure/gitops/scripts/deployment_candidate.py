@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release"))
 from check_msa import CHART_PATH, NAMESPACE, SERVICES, policy_errors
 from check_portfolio import free_runtime_errors
 from gate import valid_sha
-from promote_image import UniqueLoader, validate_receipt
+from promote_image import UniqueLoader, validate_receipt, validate_source
+from publish import SERVICE_PATHS
 from sync_images import prepare, validate_record
 
 SCHEMA = "govbiz-deployment-v2"
@@ -288,12 +289,15 @@ def release_files(
             .decode()
             .strip()
         )
-        key = digest(f"v1\nlinux/amd64\n{service_tree}\n{release_tree}\n".encode())
-        if (
-            receipt["verifiedRevision"] != source_sha
-            or receipt["sourceTree"] != service_tree
-            or receipt["inputKey"] != key
-        ):
+        identities = {"backend/" + service: service_tree}
+        for path in SERVICE_PATHS.get(service, ())[1:]:
+            if git_bytes(root, "ls-tree", source_sha, "--", path).strip():
+                identities[path] = git_bytes(root, "rev-parse", f"{source_sha}:{path}").decode().strip()
+        try:
+            validate_source(receipt, identities, release_tree)
+        except ValueError as error:
+            raise ValueError("Receipt does not match the exact tracked source") from error
+        if receipt["verifiedRevision"] != source_sha:
             raise ValueError("Receipt does not match the exact tracked source")
     record = {
         "repository": fork.repository,

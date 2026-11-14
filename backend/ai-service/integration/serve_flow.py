@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from functools import partial
 import json
+from importlib import import_module
 import os
 from pathlib import Path
 from time import perf_counter
@@ -16,15 +17,47 @@ import httpx2
 from openai import AsyncOpenAI
 from starlette.responses import JSONResponse, Response
 
-from budget_client import BudgetUnavailable
+from govbiz_evaluation.budget_client import BudgetUnavailable
+from govbiz_evaluation.rag_budget import RagBudget, digest as spec_digest, make_rag_spec
 
-from evaluate import (
+from govbiz_evaluation.evaluate import (
     DEFAULT_LLM_MODEL_TIMEOUT_SECONDS, DEFAULT_LLM_RUN_TIMEOUT_SECONDS, DEFAULT_OPENAI_MODEL,
     SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS, digest, require, response_record,
 )
 from app import bootstrap
 from app.config import Settings
 from app.main import create_app
+
+
+def http_runtime_fingerprints():
+    """HTTP 도구가 실제로 불러온 앱 코드와 도구 자체를 승인 명세에 고정한다."""
+    result = {
+        "backend/ai-service/" + name.replace(".", "/") + ".py": digest(Path(import_module(name).__file__).read_bytes())
+        for name in ("app.bootstrap", "app.main", "app.openai_usage", "app.support_program_evidence.router")
+    }
+    result["backend/ai-service/app/__init__.py"] = digest(Path(import_module("app").__file__).read_bytes())
+    result["backend/ai-service/integration/serve_flow.py"] = digest(Path(__file__).read_bytes())
+    source = Path(__file__).resolve().parents[1]
+    for name in ("pyproject.toml", "uv.lock"):
+        result["backend/ai-service/" + name] = digest((source / name).read_bytes())
+    return result
+
+
+def make_http_rag_spec(cases, **options):
+    return {**make_rag_spec(cases, **options), "http_runtime_sha256": http_runtime_fingerprints()}
+
+
+def create_http_budget(client, spec, *, receipt_directory):
+    require(spec.get("http_runtime_sha256") == http_runtime_fingerprints(),
+            "HTTP evaluation runtime differs from the approved session")
+    base = {key: value for key, value in spec.items() if key != "http_runtime_sha256"}
+    return RagBudget(client, base, receipt_directory=receipt_directory, execution_spec=spec)
+
+
+def verify_http_budget(guard):
+    expected = {**guard.spec, "http_runtime_sha256": http_runtime_fingerprints()}
+    require(spec_digest(expected) == guard.client.identity["spec_hash"],
+            "HTTP evaluation runtime is not bound to the approved session")
 
 
 def require_loopback_url(value: str) -> str:
@@ -41,6 +74,7 @@ def build_evaluation_app(output_dir: Path, qdrant_url: str, max_api_calls: int, 
     require(not (embedding_budget is not None and rag_budget is not None), "Choose one budget guard")
     require(type(max_api_calls) is int and 1 <= max_api_calls <= (512 if rag_budget else 20), "Invalid API budget")
     if rag_budget is not None:
+        verify_http_budget(rag_budget)
         require(max_api_calls == len(rag_budget.spec["model_operations"])
                 and output_dir.resolve() == rag_budget.receipt_directory.resolve(), "RAG reservation/output differs")
     key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -210,13 +244,12 @@ def main():
         parser.error("RAG budget mode requires --budget-spec, --request-id, --flow-id and --spec-sha256")
     guard = None
     if args.budget_spec:
-        from budget_client import BudgetClient
-        from rag_budget import RagBudget
+        from govbiz_evaluation.budget_client import BudgetClient
 
         with args.budget_spec.open("rb") as source:
             raw = source.read(8 * 1024 * 1024 + 1)
         require(len(raw) <= 8 * 1024 * 1024, "RAG budget specification is oversized")
-        guard = RagBudget(BudgetClient(args.request_id, args.flow_id, args.spec_sha256),
+        guard = create_http_budget(BudgetClient(args.request_id, args.flow_id, args.spec_sha256),
                           json.loads(raw), receipt_directory=args.output_dir)
     app = build_evaluation_app(args.output_dir, args.qdrant_url, args.max_api_calls, rag_budget=guard)
     import uvicorn

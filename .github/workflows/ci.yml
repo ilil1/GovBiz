@@ -197,9 +197,20 @@ jobs:
       - name: Build package
         run: uv build
 
+      - name: Prepare approved evaluation package resources
+        working-directory: .
+        run: python infrastructure/llmops/bundle_runner_inputs.py
+
+      - name: Verify worker packages without backend source imports
+        working-directory: .
+        run: |
+          uv sync --project pipelines --locked --extra dev --no-editable
+          cd /tmp
+          "$GITHUB_WORKSPACE/pipelines/.venv/bin/python" -I "$GITHUB_WORKSPACE/infrastructure/scripts/check-installed-pipelines.py"
+
       - name: Test evidence evaluation tools without model calls
         working-directory: .
-        run: uv run --project pipelines --locked --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
+        run: uv run --project pipelines --locked --extra dev --group integration --no-editable python -m pytest evaluation/support-program-evidence pipelines/tests backend/ai-service/integration
 
       - name: Test conversation evaluation cases and replay tools without model calls
         run: uv run --locked --extra dev python -m pytest ../../evaluation/support-program-conversation

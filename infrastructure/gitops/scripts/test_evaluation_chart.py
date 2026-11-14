@@ -289,7 +289,8 @@ class EvaluationChartTests(unittest.TestCase):
                 program = (
                     container["command"][-1]
                     .replace(
-                        "'/app/evaluation/support-program-evidence'", repr(str(source))
+                        "from govbiz_evaluation_contracts.resources import evidence_root",
+                        "def evidence_root(): return Path(" + repr(str(source)) + ")"
                     )
                     .replace("'/evidence'", repr(str(target)))
                 )

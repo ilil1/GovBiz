@@ -2,16 +2,15 @@
 
 import json
 import shutil
-import sys
 from copy import deepcopy
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 import register_core_rag as registration
+from govbiz_evaluation_contracts import execution_spec
+from govbiz_evaluation_contracts.resources import source_path
 from test_core_rag_budget import completed_capture as completed_capture
-
-from apps.evaluations import execution_spec
 
 
 @pytest.fixture
@@ -60,14 +59,16 @@ def repository(tmp_path):
     from core_rag_capture import CHUNKER
 
     paths.add(str(CHUNKER.relative_to(root)))
-    for item in json.loads((root / execution_spec.OPS / "capture_catalog.json").read_bytes()):
+    for item in json.loads(
+        source_path(execution_spec.OPS + "capture_catalog.json", root).read_bytes()
+    ):
         paths.add(execution_spec.EVIDENCE + item["fixture"])
         paths.update(execution_spec.EVIDENCE + c["path"] for c in item["captures"])
     target = tmp_path / "checkout"
     for name in paths:
         path = target / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(root / name, path)
+        shutil.copyfile(source_path(name, root), path)
     return target
 
 
@@ -176,9 +177,8 @@ def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
 ):
     import core_rag_capture as collector
     import ops_smoke
+    from govbiz_evaluation_contracts import catalog, rag_replay
 
-    sys.path.insert(0, str(registration.planner.ROOT / execution_spec.EVIDENCE))
-    from apps.evaluations import catalog, rag_replay
     from pipelines.evaluation import flows as ops_flow
     from pipelines.evaluation import rag as rag_replay_flow
 

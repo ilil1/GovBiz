@@ -30,6 +30,7 @@ from publish import (
     RUNNER,
     RUNNER_PATHS,
     RUNNER_RELEASE,
+    SERVICE_PATHS,
     WEB,
     WEB_MODE,
     WEB_PATHS,
@@ -65,14 +66,19 @@ def validate_receipt(root, fork, sha, service, receipt):
     publisher = (
         git_bytes(root, "rev-parse", sha + ":infrastructure/release").decode().strip()
     )
-    if service in SERVICES:
+    shared = service in SERVICE_PATHS and any(
+        git_bytes(root, "ls-tree", sha, "--", path).strip()
+        for path in SERVICE_PATHS[service][1:]
+    )
+    if service in SERVICES and not shared:
         tree = (
             git_bytes(root, "rev-parse", sha + ":backend/" + service).decode().strip()
         )
         key = input_key(tree, publisher)
         source = {"schemaVersion": 2, "sourceTree": tree}
     else:
-        paths = RUNNER_PATHS if service == RUNNER else WEB_PATHS
+        paths = (SERVICE_PATHS[service] if shared else RUNNER_PATHS
+                 if service == RUNNER else WEB_PATHS)
         hashes = (
             git_bytes(root, "rev-parse", *(sha + ":" + path for path in paths))
             .decode()
@@ -81,7 +87,7 @@ def validate_receipt(root, fork, sha, service, receipt):
         inputs = dict(zip(paths, hashes, strict=True))
         key = workspace_input_key(service, inputs, publisher)
         source = {
-            "schemaVersion": 3 if service == RUNNER else 4,
+            "schemaVersion": 5 if shared else 3 if service == RUNNER else 4,
             "sourceInputs": inputs,
             "publisherTree": publisher,
         }
@@ -89,7 +95,7 @@ def validate_receipt(root, fork, sha, service, receipt):
             source["executionReleaseSha256"] = digest(
                 git_bytes(root, "show", sha + ":" + RUNNER_RELEASE)
             )
-        else:
+        elif service == WEB:
             source["webMode"] = WEB_MODE
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", str(receipt.get("digest", ""))):
         raise ValueError("An immutable image digest is required")

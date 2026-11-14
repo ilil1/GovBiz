@@ -1,39 +1,46 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.12.5 /uv /bin/uv
 ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/app/pipelines/.venv \
     PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
-    PREFECT_HOME=/tmp/prefect DO_NOT_TRACK=1
+    TIKTOKEN_CACHE_DIR=/app/tokenizer-cache
+WORKDIR /build
+# uv validates all locked local metadata, including the unselected integration test group.
+# Only its project metadata is needed; AI HTTP code is neither copied nor installed.
+COPY backend/ai-service/pyproject.toml /build/backend/ai-service/pyproject.toml
+COPY packages/govbiz-ai-runtime /build/packages/govbiz-ai-runtime
+COPY packages/govbiz-evaluation-contracts /build/packages/govbiz-evaluation-contracts
+COPY evaluation/pyproject.toml evaluation/setup.py /build/evaluation/
+COPY evaluation/support-program-evidence /build/evaluation/support-program-evidence
+COPY pipelines/pyproject.toml pipelines/uv.lock pipelines/__init__.py pipelines/serve.py /build/pipelines/
+COPY pipelines/evaluation /build/pipelines/evaluation
+COPY infrastructure/llmops/bundle_runner_inputs.py /build/infrastructure/llmops/bundle_runner_inputs.py
+RUN python infrastructure/llmops/bundle_runner_inputs.py --root /build \
+    && uv sync --project pipelines --locked --no-dev --no-editable \
+    && /app/pipelines/.venv/bin/python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
+FROM python:3.12-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    PREFECT_HOME=/tmp/prefect DO_NOT_TRACK=1 \
+    TIKTOKEN_CACHE_DIR=/app/tokenizer-cache LLMOPS_RESULTS_DIR=/results
 WORKDIR /app
-COPY backend/ai-service/pyproject.toml backend/ai-service/uv.lock /app/backend/ai-service/
-COPY backend/ai-service/app /app/backend/ai-service/app
-COPY pipelines/pyproject.toml pipelines/uv.lock pipelines/__init__.py pipelines/serve.py /app/pipelines/
-COPY pipelines/evaluation /app/pipelines/evaluation
-RUN uv sync --project pipelines --locked --no-dev --no-editable
-# RAG 사전 검증과 임베딩 배치는 실행 중 외부 토크나이저 다운로드를 요구하지 않는다.
-ENV TIKTOKEN_CACHE_DIR=/app/tokenizer-cache
-RUN /app/pipelines/.venv/bin/python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
-COPY evaluation/support-program-evidence /app/evaluation/support-program-evidence
-COPY backend/ops-service/apps/evaluations/catalog.py backend/ops-service/apps/evaluations/capture_catalog.json backend/ops-service/apps/evaluations/rag_live_plans.json /app/backend/ops-service/apps/evaluations/
-COPY backend/ops-service/apps/evaluations/recovery_inputs.py /app/backend/ops-service/apps/evaluations/
-COPY backend/ops-service/apps/evaluations/execution_spec.py backend/ops-service/apps/evaluations/execution_release.json /app/backend/ops-service/apps/evaluations/
-COPY backend/ops-service/apps/evaluations/quality_policy.py /app/backend/ops-service/apps/evaluations/
-COPY backend/ops-service/apps/evaluations/managed_materials.py /app/backend/ops-service/apps/evaluations/
-COPY backend/ops-service/apps/evaluations/rag_replay.py /app/backend/ops-service/apps/evaluations/
-COPY backend/ops-service/apps/evaluations/vector_cache.py backend/ops-service/apps/evaluations/artifact_files.py /app/backend/ops-service/apps/evaluations/
-RUN /app/pipelines/.venv/bin/python /app/backend/ops-service/apps/evaluations/execution_spec.py
+COPY --from=builder /app/pipelines/.venv /app/pipelines/.venv
+COPY --from=builder /app/tokenizer-cache /app/tokenizer-cache
 RUN groupadd --gid 10001 govbiz \
     && useradd --uid 10001 --gid govbiz --no-create-home govbiz \
     && mkdir -p /results /app/work/llmops \
     && chown -R govbiz:govbiz /results /app/work
 USER 10001:10001
-# 빈 캐시/권한 회귀는 긴 통합 실행 전에 빌드에서 거절한다. 모델 API 호출은 없다.
+# Installed packages verify their actual code and approved input bytes offline.
+RUN --network=none /app/pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec
 RUN --network=none /app/pipelines/.venv/bin/python - <<'PY'
-from app.support_program_embedding import prepare_embedding_batches
-
+from importlib.util import find_spec
+from govbiz_ai_runtime.support_program_embedding import prepare_embedding_batches
+assert find_spec("app") is None and find_spec("apps") is None
 texts = ["지원사업 신청 자격과 제출 서류", "지원사업 신청 자격과 제출 서류"]
 batches = prepare_embedding_batches(texts)
 assert len(batches) == 1 and batches[0][0] == texts and batches[0][1] > 0
-print("Offline embedding preparation verified as runtime user; model calls: 0")
+print("Standalone offline embedding preparation verified; model calls: 0")
 PY
 CMD ["/app/pipelines/.venv/bin/python", "-m", "pipelines.serve"]

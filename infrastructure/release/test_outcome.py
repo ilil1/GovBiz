@@ -458,7 +458,7 @@ class OutcomeTests(unittest.TestCase):
         ]
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.object(publish, "git", side_effect=[SHA, "b" * 40, "c" * 40]),
+            patch.object(publish, "git", side_effect=[SHA, "b" * 40, "b" * 40, "c" * 40]),
             patch.object(publish, "eligible", return_value=True),
             patch.object(publish, "urlopen", side_effect=responses),
             patch.object(publish, "lookup", return_value=None),
@@ -720,7 +720,7 @@ class OutcomeTests(unittest.TestCase):
     def test_reuse_does_not_claim_new_upload(self):
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch.object(publish, "git", side_effect=[SHA, "b" * 40, "c" * 40]),
+            patch.object(publish, "git", side_effect=[SHA, "b" * 40, "b" * 40, "c" * 40]),
             patch.object(publish, "eligible", return_value=True),
             patch.object(publish, "package_exists", return_value=True),
             patch.object(publish, "lookup", return_value="sha256:" + "d" * 64),

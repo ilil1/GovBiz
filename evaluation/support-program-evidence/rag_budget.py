@@ -2,30 +2,28 @@
 
 import json
 import re
-import sys
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
-from app.support_program_evidence.models import (
+from govbiz_ai_runtime.support_program_evidence.models import (
     SupportProgramEvidenceAnswerRequest,
     SupportProgramEvidenceAnswerSelection,
     SupportProgramEvidenceBatchRequest,
     SupportProgramEvidenceSearchRequest,
     SupportProgramEvidenceSearchResponse,
 )
-from budget_client import BudgetUnavailable
-from embedding_budget import EmbeddingBudget, embedding_operations
-from evaluate import (
+from govbiz_evaluation.budget_client import BudgetUnavailable
+from govbiz_evaluation.embedding_budget import EmbeddingBudget, embedding_operations
+from govbiz_evaluation.evaluate import (
     DEFAULT_LLM_MODEL_TIMEOUT_SECONDS,
     DEFAULT_OPENAI_MODEL,
     MAX_INPUT_TOKENS,
     SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS,
 )
 from openai import pydantic_function_tool
+from govbiz_evaluation_contracts.resources import source_path
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend/ops-service"))
 RUNTIME_FILES = (
     *(
         f"evaluation/support-program-evidence/{name}.py"
@@ -33,16 +31,12 @@ RUNTIME_FILES = (
             "rag_budget",
             "embedding_budget",
             "budget_client",
-            "serve_flow",
             "evaluate",
         )
     ),
     *(
         f"backend/ai-service/app/{name}.py"
         for name in (
-            "bootstrap",
-            "main",
-            "openai_usage",
             "config",
             "tracing",
             "support_program_embedding",
@@ -51,14 +45,16 @@ RUNTIME_FILES = (
             "support_program_evidence/service",
             "support_program_evidence/agent",
             "support_program_evidence/answer_service",
-            "support_program_evidence/router",
             "support_program_evidence/models",
             "support_program_evidence/prompt",
             "support_program_evidence/errors",
         )
     ),
-    "backend/ai-service/pyproject.toml",
-    "backend/ai-service/uv.lock",
+    "packages/govbiz-ai-runtime/pyproject.toml",
+    "packages/govbiz-evaluation-contracts/pyproject.toml",
+    "evaluation/pyproject.toml",
+    "pipelines/pyproject.toml",
+    "pipelines/uv.lock",
     "backend/ops-service/apps/evaluations/vector_cache.py",
 )
 
@@ -145,7 +141,7 @@ def make_rag_spec(cases, *, model=DEFAULT_OPENAI_MODEL, document_sources=None, d
         "execution_mode": "live",
         "rag_cases": prepared,
         "runtime_sha256": {
-            name: sha256((ROOT / name).read_bytes()).hexdigest()
+            name: sha256(source_path(name).read_bytes()).hexdigest()
             for name in RUNTIME_FILES
         },
         "live_config": {
@@ -159,7 +155,7 @@ def make_rag_spec(cases, *, model=DEFAULT_OPENAI_MODEL, document_sources=None, d
         "model_operations": operations,
     }
     if document_sources is not None:
-        from apps.evaluations.vector_cache import apply_plan
+        from govbiz_evaluation_contracts.vector_cache import apply_plan
 
         require(set(document_sources) == seen and all(
             isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value)

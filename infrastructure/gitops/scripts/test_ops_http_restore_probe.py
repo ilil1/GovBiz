@@ -488,7 +488,7 @@ class EvidenceTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             repository = Path(directory)
             catalog = (
-                repository / "backend/ops-service/apps/evaluations/capture_catalog.json"
+                repository / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json"
             )
             source = repository / "evaluation/support-program-evidence"
             target = repository / "snapshot"

@@ -16,11 +16,12 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-import serve_flow
-from budget_client import BudgetClient, BudgetUnavailable
+from integration import serve_flow
+from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
 from fastapi.testclient import TestClient
 from qdrant_client import AsyncQdrantClient
-from rag_budget import RagBudget, digest, make_rag_spec
+from govbiz_evaluation.rag_budget import digest
+from integration.serve_flow import create_http_budget as RagBudget, make_http_rag_spec as make_rag_spec
 
 PREFIX = "/internal/v1/support-program-evidence/"
 TOKEN = "test-only-rag-budget-token-never-used-in-production"
@@ -597,7 +598,9 @@ def test_cli_requires_explicit_execution_and_complete_reserved_identity(
     if mode == "valid":
         serve_flow.main()
         guard = build.call_args.kwargs["rag_budget"]
-        assert guard.spec == spec and guard.client.run_id == request_id
+        assert guard.spec == {key: value for key, value in spec.items() if key != "http_runtime_sha256"}
+        assert guard.client.run_id == request_id
+        assert guard.client.identity["spec_hash"] == digest(spec)
         assert guard.client.identity["flow_id"] == flow_id
         run.assert_called_once_with(
             build.return_value,
@@ -611,3 +614,50 @@ def test_cli_requires_explicit_execution_and_complete_reserved_identity(
             serve_flow.main()
         build.assert_not_called()
         run.assert_not_called()
+
+
+def test_http_adapter_rejects_missing_binding_before_budget_or_model_calls(tmp_path):
+    from types import SimpleNamespace
+
+    spec = make_rag_spec(cases())
+    spec.pop("http_runtime_sha256")
+    client = SimpleNamespace(identity={"spec_hash": digest(spec)}, request=Mock())
+    with pytest.raises(ValueError, match="HTTP evaluation runtime differs"):
+        serve_flow.create_http_budget(client, spec, receipt_directory=tmp_path / "capture")
+    client.request.assert_not_called()
+    assert not (tmp_path / "capture").exists()
+
+
+def test_http_adapter_rejects_plain_worker_guard_before_starting_app(tmp_path):
+    from types import SimpleNamespace
+    from govbiz_evaluation.rag_budget import RagBudget as WorkerBudget, make_rag_spec as worker_spec
+
+    spec = worker_spec(cases())
+    client = SimpleNamespace(identity={"spec_hash": digest(spec)}, request=Mock())
+    output = tmp_path / "capture"
+    guard = WorkerBudget(client, spec, receipt_directory=output)
+    with pytest.raises(ValueError, match="HTTP evaluation runtime is not bound"):
+        serve_flow.build_evaluation_app(output, "http://127.0.0.1:1", len(spec["model_operations"]), rag_budget=guard)
+    client.request.assert_not_called()
+    assert not output.exists()
+
+
+def test_http_code_tampering_rejected_after_approval_and_guard_creation(tmp_path, monkeypatch):
+    from importlib import import_module
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    spec = make_rag_spec(cases())
+    client = SimpleNamespace(identity={"spec_hash": digest(spec)}, request=Mock())
+    output = tmp_path / "capture"
+    guard = serve_flow.create_http_budget(client, spec, receipt_directory=output)
+    app_module = import_module("app.main")
+    changed = tmp_path / "changed-app.py"
+    changed.write_bytes(Path(app_module.__file__).read_bytes() + b"\n# changed after approval\n")
+    monkeypatch.setattr(app_module, "__file__", str(changed))
+    with pytest.raises(ValueError, match="HTTP evaluation runtime differs"):
+        serve_flow.create_http_budget(client, spec, receipt_directory=output)
+    with pytest.raises(ValueError, match="HTTP evaluation runtime is not bound"):
+        serve_flow.build_evaluation_app(output, "http://127.0.0.1:1", len(spec["model_operations"]), rag_budget=guard)
+    client.request.assert_not_called()
+    assert not output.exists()

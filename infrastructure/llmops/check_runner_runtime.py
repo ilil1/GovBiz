@@ -2,17 +2,18 @@
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 
-def verify(root):
-    import rag_live
+def verify(root=None):
+    from govbiz_evaluation import rag_live
     import tiktoken
     import tiktoken.registry
-    from apps.evaluations.catalog import DATASETS, RAG_SCOPE, live_config
-    from apps.evaluations.execution_spec import build_release, read_release
+    from govbiz_evaluation_contracts.catalog import DATASETS, RAG_SCOPE, live_config
+    from govbiz_evaluation_contracts.execution_spec import build_release, read_release
+
+    from govbiz_evaluation_contracts.resources import evidence_root
 
     release = read_release()
     if release != build_release(root):
@@ -38,7 +39,7 @@ def verify(root):
             if config is None:
                 continue
             _, fingerprint, plan = rag_live.prepare(
-                root / "evaluation/support-program-evidence" / dataset["fixture"],
+                evidence_root(root) / dataset["fixture"],
                 model=config["model"],
             )
             accepted = release["datasets"][identifier]["live_plan"]
@@ -64,12 +65,6 @@ def verify(root):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--root", type=Path)
     args = parser.parse_args()
-    for path in (
-        "backend/ai-service",
-        "backend/ops-service",
-        "evaluation/support-program-evidence",
-    ):
-        sys.path.insert(0, str(args.root / path))
     print(json.dumps(verify(args.root), ensure_ascii=False))

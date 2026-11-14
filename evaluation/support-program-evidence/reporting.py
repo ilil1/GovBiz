@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 from uuid import UUID
-import sys
 
 # 보고서 라이브러리의 사용량 telemetry도 외부로 보내지 않는다.
 os.environ["DO_NOT_TRACK"] = "1"
@@ -18,16 +17,13 @@ from evidently import Report
 from evidently.metrics import MeanValue, RowCount
 from evidently.legacy.renderers.html_widgets import WidgetSize
 
-import evaluate
-from app.config import LangfuseSettings
+from govbiz_evaluation import evaluate
+from govbiz_ai_runtime.config import LangfuseSettings
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "backend/ops-service"))
-from apps.evaluations.execution_spec import evaluation_version
+from govbiz_evaluation_contracts.execution_spec import evaluation_version
 
 # 평가 코드·입력 모델·잠금 의존성이 달라지면 점수 ID도 달라진다.
-EVALUATOR_VERSION = evaluation_version(ROOT)
+EVALUATOR_VERSION = evaluation_version()
 
 INPUT_SCHEMA = pa.DataFrameSchema({
     "case_id": pa.Column(str, unique=True),

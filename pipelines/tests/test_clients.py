@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from pipelines.evaluation import clients, tasks
-import reporting
-from app.config import LangfuseSettings
+from govbiz_evaluation import reporting
+from govbiz_ai_runtime.config import LangfuseSettings
 
 HERE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
 FIXTURE = HERE / "target-coverage-fixture.json"

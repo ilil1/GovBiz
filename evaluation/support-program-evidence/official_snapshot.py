@@ -8,11 +8,8 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit
 
-from verify_flow import DEFAULT_FIXTURE, document_content, expected_chunk, verify
+from govbiz_evaluation.verify_flow import document_content, expected_chunk, verify
 
-HERE = Path(__file__).resolve().parent
-OUTPUT = HERE / "runs/official-answer-20260907-v2"
-SOURCE = HERE / "runs/official-flow-20260907-v2"
 
 
 def require(condition, message):
@@ -73,17 +70,20 @@ def validate_projection(fixture, capture):
             "projection cannot claim new calls")
 
 
-def build():
+def build(repository):
     """저장 자료만 검증·변환한다. OpenAI·DB·승인 API는 호출하지 않는다."""
+    repository = Path(repository).resolve()
+    source = repository / "evaluation/support-program-evidence/runs/official-flow-20260907-v2"
+    fixture_path = repository / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"
     # The original capture is verified before any derived fixture/answer is emitted.
-    core_raw = (SOURCE / "core/capture.json").read_bytes()
-    api_raw = (SOURCE / "api/api-capture.json").read_bytes()
+    core_raw = (source / "core/capture.json").read_bytes()
+    api_raw = (source / "api/api-capture.json").read_bytes()
     core, api = json.loads(core_raw), json.loads(api_raw)
-    verify(core, api, DEFAULT_FIXTURE)
-    original = json.loads(DEFAULT_FIXTURE.read_bytes())
+    verify(core, api, fixture_path)
+    original = json.loads(fixture_path.read_bytes())
     documents, cases = [], []
     for doc in original["documents"]:
-        html = (DEFAULT_FIXTURE.parent / doc["htmlFile"]).read_text(encoding="utf-8")
+        html = (fixture_path.parent / doc["htmlFile"]).read_text(encoding="utf-8")
         content = document_content(doc, html)
         chunk = expected_chunk(doc, content)
         documents.append({
@@ -103,7 +103,7 @@ def build():
                "documents": documents, "cases": cases}
     validate_fixture(fixture)
     # Preserve original request IDs/text and responses. Never replace them with synthetic IDs.
-    from evaluate import SupportProgramEvidenceAnswerRequest, request_digest
+    from govbiz_evaluation.evaluate import SupportProgramEvidenceAnswerRequest, request_digest
     answer_calls = [call for call in api["calls"] if call["path"] == "/v1/responses"]
     capture = {
         "schemaVersion": "support-program-evidence-capture-v2", "scope": "fixed-answer-context-only",
@@ -112,7 +112,7 @@ def build():
         "modelTimeoutSeconds": None, "runTimeoutSeconds": None, "modelApiCalls": 0,
         "startedAt": core["startedAt"], "completed": True, "caseIds": [case["id"] for case in cases],
         "provenance": {"scope": "answers-only-from-frozen-official-flow", "coreCaptureSha256": digest(core_raw),
-                       "apiCaptureSha256": digest(api_raw), "sourceFixtureSha256": digest(DEFAULT_FIXTURE.read_bytes()),
+                       "apiCaptureSha256": digest(api_raw), "sourceFixtureSha256": digest(fixture_path.read_bytes()),
                        "sourceRecorderSha256": api["recorderSha256"]},
         "apiResponses": [call["response"] for call in answer_calls],
         "cases": [{"caseId": item["id"], "requestSha256": request_digest(
@@ -125,25 +125,49 @@ def build():
     return fixture, capture
 
 
-def main():
+def registered_capture(path, regenerated, repository):
+    """검토된 원본 해시를 확인한 뒤 변환기 지문만 구분해 재생 결과를 비교한다."""
+    from govbiz_evaluation_contracts.resources import source_path
+
+    repository = Path(repository).resolve()
+    path = Path(path).resolve()
+    evidence = repository / "evaluation/support-program-evidence"
+    require(path.is_relative_to(evidence), "historical capture path escapes evidence")
+    relative = path.relative_to(evidence).as_posix()
+    catalog = json.loads(source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository).read_bytes())
+    release = json.loads(source_path("backend/ops-service/apps/evaluations/execution_release.json", repository).read_bytes())
+    accepted = [release["datasets"][dataset["id"]]["captures"][capture["id"]]
+                for dataset in catalog for capture in dataset["captures"]
+                if capture["path"] == relative]
+    raw = path.read_bytes()
+    require(bool(accepted) and all(value == digest(raw) for value in accepted),
+            "registered historical capture hash differs")
+    recorded = json.loads(raw)
+    require({**regenerated, "runnerSha256": recorded["runnerSha256"]} == recorded,
+            "historical transformation differs beyond its recorder fingerprint")
+    return recorded
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true", help="검증한 파생 자료를 저장소의 고정 경로에 작성")
-    args = parser.parse_args()
-    fixture, capture = build()
-    expected = {"fixture.json": encoded(fixture), "capture.json": encoded(capture)}
+    parser.add_argument("--repository", type=Path, required=True)
+    args = parser.parse_args(argv)
+    output = args.repository.resolve() / "evaluation/support-program-evidence/runs/official-answer-20260907-v2"
+    fixture, capture = build(args.repository)
     if args.write:
-        OUTPUT.mkdir(parents=True, exist_ok=True)
-        for name, raw in expected.items():
-            (OUTPUT / name).write_bytes(raw)
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "fixture.json").write_bytes(encoded(fixture))
+        (output / "capture.json").write_bytes(encoded(capture))
     else:
-        for name, raw in expected.items():
-            require((OUTPUT / name).read_bytes() == raw, "registered official projection differs")
-    from evaluate import load_fixture, report
-    report_raw = encoded(report(*load_fixture(OUTPUT / "fixture.json"), capture))
+        require((output / "fixture.json").read_bytes() == encoded(fixture), "registered official projection differs")
+        capture = registered_capture(output / "capture.json", capture, args.repository)
+    from govbiz_evaluation.evaluate import load_fixture, report
+    report_raw = encoded(report(*load_fixture(output / "fixture.json"), capture))
     if args.write:
-        (OUTPUT / "report.json").write_bytes(report_raw)
+        (output / "report.json").write_bytes(report_raw)
     else:
-        require((OUTPUT / "report.json").read_bytes() == report_raw, "registered report differs")
+        require((output / "report.json").read_bytes() == report_raw, "registered report differs")
     print("Official answer snapshot: verified 2 documents / 6 cases; new model calls 0")
 
 

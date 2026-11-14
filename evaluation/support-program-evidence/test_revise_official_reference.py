@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-import evaluate
-import revise_official_reference as revision
-from official_snapshot import digest, encoded
+from govbiz_evaluation import evaluate
+from govbiz_evaluation import revise_official_reference as revision
+from govbiz_evaluation.official_snapshot import digest, encoded
 
 
 def test_revision_preserves_history_and_only_changes_h01_reference_conditions():
@@ -39,12 +39,16 @@ def test_revision_preserves_history_and_only_changes_h01_reference_conditions():
 def test_registered_revision_reproduces_report_without_changing_model_input():
     fixture, capture = revision.build()
     assert (revision.OUTPUT / "fixture.json").read_bytes() == encoded(fixture)
-    assert (revision.OUTPUT / "capture.json").read_bytes() == encoded(capture)
+    saved = json.loads((revision.OUTPUT / "capture.json").read_bytes())
+    assert capture["runnerSha256"] == digest(Path(revision.__file__).read_bytes())
+    assert {**capture, "runnerSha256": saved["runnerSha256"]} == saved
     previous = evaluate.load_fixture(revision.SOURCE / "fixture.json")
     current = evaluate.load_fixture(revision.OUTPUT / "fixture.json")
     assert [request.model_dump() for _, request in previous[1]] == [request.model_dump() for _, request in current[1]]
-    report = evaluate.report(*current, capture)
-    assert (revision.OUTPUT / "report.json").read_bytes() == encoded(report)
+    # Replaying history preserves the recorded transformer rather than relabelling it.
+    report = evaluate.report(*current, saved)
+    historical_output = Path(__file__).parent / "runs" / revision.DATASET_ID
+    assert (historical_output / "report.json").read_bytes() == encoded(report)
     assert report["semanticFaithfulness"] is None and report["semanticReviewRequired"]
     assert report["measurementKind"] == "historical-answer-projection"
     assert previous[2] != current[2]

@@ -4,9 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
-from official_snapshot import digest, encoded, require, validate_fixture, validate_projection
+from govbiz_evaluation.official_snapshot import digest, encoded, require, validate_fixture, validate_projection, registered_capture
 
-HERE = Path(__file__).resolve().parent
+from govbiz_evaluation_contracts.resources import evidence_root
+
+HERE = evidence_root()
 PREVIOUS_ID = "official-answer-20260907-v2"
 DATASET_ID = "official-answer-20260907-v3"
 SOURCE = HERE / "runs" / PREVIOUS_ID
@@ -16,8 +18,9 @@ PREVIOUS_CAPTURE = "1ca19a920508f05edfec2c493781a3170bc3fa4f044027b0b3452a1a2c73
 SOURCE_QUOTE = "☞ 중소ㆍ중견 제조기업의 자발적인 스마트공장 구축 및 고도화를 유도하기 위해 스마트화 수준진단을 지원"
 
 
-def build():
-    fixture_raw, capture_raw = ((SOURCE / name).read_bytes() for name in ("fixture.json", "capture.json"))
+def build(source=None):
+    source = SOURCE if source is None else Path(source)
+    fixture_raw, capture_raw = ((source / name).read_bytes() for name in ("fixture.json", "capture.json"))
     require(digest(fixture_raw) == PREVIOUS_FIXTURE, "previous official fixture differs")
     require(digest(capture_raw) == PREVIOUS_CAPTURE, "previous historical capture differs")
     fixture, capture = json.loads(fixture_raw), json.loads(capture_raw)
@@ -44,26 +47,27 @@ def build():
     return fixture, capture
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true", help="새 자료 v3만 생성; 기존 v2와 검토 기록은 유지")
-    args = parser.parse_args()
-    fixture, capture = build()
-    expected = {"fixture.json": encoded(fixture), "capture.json": encoded(capture)}
+    parser.add_argument("--repository", type=Path, required=True)
+    args = parser.parse_args(argv)
+    evidence = evidence_root(args.repository.resolve())
+    output = evidence / "runs" / DATASET_ID
+    fixture, capture = build(evidence / "runs" / PREVIOUS_ID)
     if args.write:
-        OUTPUT.mkdir(parents=True, exist_ok=True)
-        for name, raw in expected.items():
-            (OUTPUT / name).write_bytes(raw)
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "fixture.json").write_bytes(encoded(fixture))
+        (output / "capture.json").write_bytes(encoded(capture))
     else:
-        for name, raw in expected.items():
-            require((OUTPUT / name).read_bytes() == raw, "revised official projection differs")
-    from evaluate import load_fixture, report
-
-    report_raw = encoded(report(*load_fixture(OUTPUT / "fixture.json"), capture))
+        require((output / "fixture.json").read_bytes() == encoded(fixture), "revised official projection differs")
+        capture = registered_capture(output / "capture.json", capture, args.repository)
+    from govbiz_evaluation.evaluate import load_fixture, report
+    report_raw = encoded(report(*load_fixture(output / "fixture.json"), capture))
     if args.write:
-        (OUTPUT / "report.json").write_bytes(report_raw)
+        (output / "report.json").write_bytes(report_raw)
     else:
-        require((OUTPUT / "report.json").read_bytes() == report_raw, "revised report differs")
+        require((output / "report.json").read_bytes() == report_raw, "revised report differs")
     print("Official reference v3: H01 corrected; 6 historical answers preserved; new calls 0; human review required")
 
 

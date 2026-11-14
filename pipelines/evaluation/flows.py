@@ -6,31 +6,28 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
-import sys
 from uuid import UUID
 
-ROOT = Path(__file__).resolve().parents[2]
-# Prefect는 등록된 파일을 새 프로세스에서 직접 불러올 수도 있다.
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-import pipelines  # noqa: F401 -- initialize shared source paths before loading the flow
+ROOT = None  # 명시적인 소스 검증에서만 checkout 경로를 지정한다.
+
+from govbiz_evaluation_contracts.resources import evidence_root as packaged_evidence_root
 
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.runtime import flow_run
-import evaluate
-from budget_client import BudgetClient, BudgetUnavailable
-from reporting import EVALUATOR_VERSION, load_results, write_json
+from govbiz_evaluation import evaluate
+from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
+from govbiz_evaluation.reporting import EVALUATOR_VERSION, load_results, write_json
 from pipelines.evaluation.capture import evaluate_capture
 
-from apps.evaluations.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
-from apps.evaluations.recovery_inputs import read_recovery_inputs
-from apps.evaluations.execution_spec import (
+from govbiz_evaluation_contracts.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
+from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
+from govbiz_evaluation_contracts.execution_spec import (
     ExecutionSpecMismatch, build_release, file_digest, verify_spec,
 )
-from apps.evaluations.catalog import RAG_SCOPE, evaluation_scope
-from apps.evaluations.catalog import managed_snapshot_context
-from apps.evaluations.managed_materials import materialize
+from govbiz_evaluation_contracts.catalog import RAG_SCOPE, evaluation_scope
+from govbiz_evaluation_contracts.catalog import managed_snapshot_context
+from govbiz_evaluation_contracts.managed_materials import materialize
 from pipelines.evaluation.rag import evaluate_rag_capture
 
 DATASET_ID = LEGACY_DATASET_ID
@@ -64,7 +61,7 @@ def reviewed_reference(dataset_id, config, here, output_root):
 
 def prepare_recovery(output, dataset_id, candidate_id, reference_id, reference_config, config, *, evidence_root=None):
     """완료 응답의 고정 바이트만 복사한다. 모델 실행 경로를 호출하지 않는다."""
-    here = evidence_root or (ROOT / "evaluation/support-program-evidence")
+    here = evidence_root or packaged_evidence_root(ROOT)
     marker, expected, inputs = read_recovery_inputs(
         output.parent, here, config["source_run_id"],
         reassessment=config.get("reassessment_kind") == "stored-response-reassessment",
@@ -96,8 +93,8 @@ def evaluate_saved_capture(
     request_id = str(UUID(request_id))
     config = live_config or {}
     reference_config = reference_config or {}
-    here = ROOT / "evaluation/support-program-evidence"
-    output_root = Path(os.environ.get("LLMOPS_RESULTS_DIR", ROOT / "work/llmops-ops")).resolve()
+    here = packaged_evidence_root(ROOT)
+    output_root = Path(os.environ.get("LLMOPS_RESULTS_DIR", Path.cwd() / "work/llmops-ops")).resolve()
     output = output_root / request_id
     # UUID 디렉터리의 배타 생성은 실패 기록도 보존하며 수동 재실행의 중복 호출을 차단한다.
     output.mkdir(parents=True, exist_ok=False)
@@ -171,8 +168,8 @@ def evaluate_saved_capture(
                                      "Live evaluations are disabled")
                     evaluate.require(bool(os.environ.get("OPENAI_API_KEY", "").strip()), "OpenAI key is required")
                     if evaluation_scope(dataset_id) == RAG_SCOPE:
-                        import rag_live
-                        import rag_evaluate
+                        from govbiz_evaluation import rag_live
+                        from govbiz_evaluation import rag_evaluate
                         evaluate.require(os.environ.get("LLMOPS_RAG_LIVE_ENABLED", "false").lower() == "true",
                                          "RAG live evaluations are disabled")
                         _, fixture_hash, prepared = rag_live.prepare(
@@ -224,7 +221,7 @@ def evaluate_saved_capture(
             def generate_evaluation_responses():
                 try:
                     if evaluation_scope(dataset_id) == RAG_SCOPE:
-                        import rag_live
+                        from govbiz_evaluation import rag_live
                         _, capture = asyncio.run(rag_live.execute(
                             fixture_path, output / "capture", budget=budget, execution_spec=execution_spec,
                         ))

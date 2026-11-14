@@ -3,15 +3,17 @@
 import json
 import shutil
 from types import SimpleNamespace
+from pathlib import Path
+from govbiz_evaluation_contracts.resources import source_path
 from uuid import uuid4
 
 import pytest
 
 from pipelines.evaluation import flows as ops_flow
-from apps.evaluations.execution_spec import (
+from govbiz_evaluation_contracts.execution_spec import (
     AI, OPS, EVIDENCE, PIPELINES, ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
 )
-from apps.evaluations.catalog import live_config
+from govbiz_evaluation_contracts.catalog import live_config
 
 
 @pytest.fixture
@@ -21,14 +23,14 @@ def runner(monkeypatch, tmp_path):
     names = {name for group in ("generation", "evaluation", "pipeline", "rag_evaluation", "rag_generation")
              for name in release[group]["files"]}
     names.update({OPS + "capture_catalog.json", OPS + "rag_live_plans.json"})
-    catalog = json.loads((ops_flow.ROOT / OPS / "capture_catalog.json").read_text())
+    catalog = json.loads(source_path(OPS + "capture_catalog.json").read_text())
     for dataset in catalog:
         names.add(EVIDENCE + dataset["fixture"])
         names.update(EVIDENCE + capture["path"] for capture in dataset["captures"])
     for name in names:
         destination = root / name
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ops_flow.ROOT / name, destination)
+        shutil.copyfile(source_path(name), destination)
     monkeypatch.setattr(ops_flow, "ROOT", root)
     monkeypatch.setattr(ops_flow, "flow_run", SimpleNamespace(id=str(uuid4())))
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path / "results"))
@@ -59,7 +61,9 @@ def test_checked_in_release_matches_repository():
     AI + "app/tracing.py",
     AI + "app/support_program_llm.py",
     AI + "app/support_program_identity.py",
-    AI + "uv.lock",
+    "packages/govbiz-ai-runtime/pyproject.toml",
+    "packages/govbiz-evaluation-contracts/pyproject.toml",
+    "evaluation/pyproject.toml",
     PIPELINES + "pyproject.toml",
     PIPELINES + "uv.lock",
     PIPELINES + "__init__.py",

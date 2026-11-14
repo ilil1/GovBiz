@@ -51,7 +51,7 @@ GitHub의 공개 범위를 자동으로 변경하거나 원본 병합·CI 검증
 - 모드: 현재 필수 이미지 CI가 검사하는 `portfolio`만 발행합니다. `connected` 이미지 발행은
   해당 모드의 이미지 CI를 연결한 뒤 지원합니다.
 - 결과: `msa-image-web` artifact의 `web.json`에 공개 범위, digest, 소스 입력·발행기 Git 식별자,
-  `webMode=portfolio`를 v4 receipt로 기록합니다. 실행기의 v3·백엔드 v2와 구분합니다.
+  `webMode=portfolio`를 v4 receipt로 기록합니다. 실행기의 v3·Core/Catalog의 v2·AI/Ops의 v5와 구분합니다.
 
 `sync_images.py`는 웹 발행을 백엔드 네 개 배포 기록으로 사용하지 않습니다. 웹 digest를
 수동 Argo 배포에 연결하는 단계는 [웹 전환 안내](../gitops/docs/web-kubernetes.md)를 따릅니다.
@@ -60,7 +60,7 @@ GitHub의 공개 범위를 자동으로 변경하거나 원본 병합·CI 검증
 ## Kubernetes 평가 실행기 이미지
 
 `Evaluation runner image candidate` (`evaluation-images.yml`)는 `evaluation-runner`만 별도로 발행합니다.
-기존 `MSA image candidates`의 네 서비스 matrix·v2 receipt는 유지합니다. 실행기 패키지가 아직 준비되지
+기존 `MSA image candidates`의 네 서비스 matrix는 유지합니다. 실행기 패키지가 아직 준비되지
 않았거나 발행이 실패해도 기존 네 서비스 발행 워크플로의 의존성은 바뀌지 않습니다.
 
 발행 대상은 `ghcr.io/<개인 계정>/<저장소 이름 소문자>-evaluation-runner`입니다. 기존과 같이
@@ -100,9 +100,11 @@ checkout·앱 코드·비밀 파일은 build context로 전달하지 않습니�
 빌드는 다음 추적 입력만 선택한 SHA의 `git archive`로 추출해 저장소 루트 형식의 context를 만듭니다.
 
 - `infrastructure/llmops/Dockerfile.runner`
-- AI 서비스의 `pyproject.toml`, `uv.lock`, `app/`
+- `packages/govbiz-ai-runtime/`, `packages/govbiz-evaluation-contracts/`
+- `evaluation/pyproject.toml`, `evaluation/setup.py`
 - `evaluation/support-program-evidence/`
-- Ops의 catalog·recovery·실행 명세·품질 정책·RAG replay 파일
+- `pipelines/`의 패키지 정보·잠금 파일·실행 코드
+- `infrastructure/llmops/bundle_runner_inputs.py`
 
 실제 목록은 `publish.py`의 `RUNNER_PATHS`이며 Dockerfile의 모든 `COPY` 입력과 일치하는지 테스트합니다.
 전체 checkout, 로컬 변경·미추적 파일·`.env`·`work/`는 전달하지 않습니다. 입력별 Git object ID와
@@ -112,6 +114,13 @@ checkout·앱 코드·비밀 파일은 build context로 전달하지 않습니�
 실행기 receipt는 `schemaVersion=3`이며 `sourceInputs`, `publisherTree`, `executionReleaseSha256`을
 기록합니다. 실행 명세의 Git blob SHA-256은 이미지 label에도 넣고 재사용 시 digest로 조회해 대조합니다.
 빌드 전·업로드 직전·후에 패키지 정책을 검사하고, CI나 소스가 바뀌면 업로드 또는 receipt 생성을 차단합니다.
+
+AI/Ops 이미지도 저장소 루트를 빌드 컨텍스트로 사용합니다. AI는 서비스 폴더와
+`packages/govbiz-ai-runtime`, Ops는 서비스 폴더와 `packages/govbiz-evaluation-contracts`의
+Git tree를 v5 receipt의 `sourceInputs`에 기록합니다. `publisherTree`와 모든 입력을 재사용 키에
+포함하므로 공유 패키지만 변경해도 이전 이미지를 재사용하지 않습니다. Core/Catalog는 v2를 유지합니다.
+배포 검증은 실제 소스 커밋에서 이 식별자를 다시 확인합니다. 과거 v1/v2 기록은 유지하되 공유
+패키지가 있는 소스의 AI/Ops 후보에는 v5 기록이 필요합니다.
 
 | 별도 workflow artifact | 의미 |
 | --- | --- |

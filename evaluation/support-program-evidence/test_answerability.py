@@ -6,9 +6,7 @@ import re
 
 import pytest
 
-import evaluate
-
-
+from govbiz_evaluation import evaluate
 FIXTURE_PATH = Path(__file__).with_name("answerability-fixture.json")
 
 

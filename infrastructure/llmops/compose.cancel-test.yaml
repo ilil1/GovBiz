@@ -43,7 +43,9 @@ services:
     volumes:
       - ./cancellation_runner.py:/test/cancellation_runner.py:ro
   cancellation-probe:
-    build: ../../backend/ops-service
+    build:
+      context: ../..
+      dockerfile: backend/ops-service/Dockerfile
     init: true
     command: ["python", "/test/cancellation_probe.py"]
     healthcheck:

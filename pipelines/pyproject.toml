@@ -1,10 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "govbiz-pipelines"
 version = "0.1.0"
 description = "Prefect orchestration for GovBiz evaluation pipelines"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "govbiz-ai-service",
+    "govbiz-evaluation-engine==0.1.0",
+    "govbiz-ai-runtime==0.1.0",
+    "govbiz-evaluation-contracts==0.1.0",
     "prefect==3.8.6",
     "pandas==3.0.6",
     "pandera[pandas]==0.33.1",
@@ -21,12 +27,26 @@ dev = [
 ]
 
 [tool.uv]
-package = false
+cache-keys = [{ file = "pyproject.toml" }, { file = "__init__.py" }, { file = "serve.py" }, { file = "evaluation/*.py" }]
 required-version = "==0.12.5"
+
+[dependency-groups]
+integration = ["govbiz-ai-service==0.1.0"]
 
 [tool.uv.sources]
 govbiz-ai-service = { path = "../backend/ai-service" }
+govbiz-evaluation-engine = { path = "../evaluation" }
+govbiz-ai-runtime = { path = "../packages/govbiz-ai-runtime" }
+govbiz-evaluation-contracts = { path = "../packages/govbiz-evaluation-contracts" }
 
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+
+[project.scripts]
+govbiz-pipelines = "pipelines.serve:main"
+
+[tool.setuptools]
+packages = ["pipelines", "pipelines.evaluation"]
+package-dir = { pipelines = "." }
+include-package-data = false

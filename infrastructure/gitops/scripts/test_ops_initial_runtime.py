@@ -113,6 +113,24 @@ def inspected_resource(arguments):
 
 
 class ComposeTests(unittest.TestCase):
+    def test_image_release_resolves_installed_contract_resources_without_checkout_paths(self):
+        source = rollout.database.REPOSITORY_ROOT / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/execution_release.json"
+        expected = rollout.hashlib.sha256(source.read_bytes()).hexdigest()
+        for runner in (False, True):
+            with (
+                self.subTest(runner=runner),
+                patch.object(rollout.database, "read_json", return_value=[{"Id": IMAGE, "Config": {"User": "10001:10001"}}]),
+                patch.object(rollout.storage, "run", return_value=expected.encode()) as execute,
+            ):
+                self.assertEqual(rollout.image_release(IMAGE, runner=runner)["release_sha256"], expected)
+            program = execute.call_args.args[0][-1]
+            compile(program, "image-release-probe", "exec")
+            self.assertIn("files('govbiz_evaluation_contracts')", program)
+            self.assertNotIn("/app/backend", program)
+            self.assertNotIn("/app/apps/evaluations/execution_release.json", program)
+            if runner:
+                self.assertIn("'-m','govbiz_evaluation_contracts.execution_spec'", program)
+
     def setUp(self):
         self.items = {name: container(name) for name in rollout.SERVICES}
         self.images = {"ops-artifacts": IMAGE, "evaluation-runner": RUNNER}

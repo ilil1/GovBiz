@@ -23,7 +23,7 @@ def records():
 
 
 def test_recalculates_the_saved_official_flow_without_semantic_quality_claims(records):
-    result = verify_flow.verify(*records)
+    result = verify_flow.verify(*records, fixture_path=CORE_FIXTURE)
     assert result["integrityVerified"] and result["completed"]
     assert result["caseCount"] == 6 and result["documentCount"] == 2
     assert result["officialApiCalls"] == {"total": 14, "documentEmbeddings": 2, "questionEmbeddings": 6, "answers": 6}
@@ -40,7 +40,7 @@ def test_recalculates_the_saved_official_flow_without_semantic_quality_claims(re
 def test_all_shared_official_runs_recalculate_without_api(capture_path):
     core = json.loads(capture_path.read_text(encoding="utf-8"))
     api = json.loads((capture_path.parent.parent / "api/api-capture.json").read_text(encoding="utf-8"))
-    result = verify_flow.verify(core, api)
+    result = verify_flow.verify(core, api, fixture_path=CORE_FIXTURE)
     assert result["integrityVerified"] and result["completed"]
     assert result["caseCount"] == 6
     assert result["semanticFaithfulness"] is None
@@ -74,7 +74,7 @@ def test_rejects_core_source_chunk_request_and_citation_tampering(records, mutat
     core, api = records
     mutate(core)
     with pytest.raises(ValueError):
-        verify_flow.verify(core, api)
+        verify_flow.verify(core, api, fixture_path=CORE_FIXTURE)
 
 
 @pytest.mark.parametrize("mutate", [
@@ -99,13 +99,13 @@ def test_rejects_official_api_operation_output_and_usage_tampering(records, muta
     core, api = records
     mutate(api)
     with pytest.raises(ValueError):
-        verify_flow.verify(core, api)
+        verify_flow.verify(core, api, fixture_path=CORE_FIXTURE)
 
 
 def test_missing_token_usage_is_unknown_not_zero(records):
     core, api = records
     api["calls"][2]["response"]["usage"] = None
-    result = verify_flow.verify(core, api)
+    result = verify_flow.verify(core, api, fixture_path=CORE_FIXTURE)
     assert all(value is None for value in result["tokens"]["answers"].values())
     assert result["tokens"]["combinedTotal"] is None
     assert result["tokens"]["embeddings"]["total_tokens"] == 1418
@@ -120,7 +120,7 @@ def test_consistently_recorded_false_answer_is_not_mistaken_for_semantic_success
     selection["answer"] = fabricated
     api["calls"][2]["response"]["outputTexts"] = [json.dumps(selection, ensure_ascii=False)]
 
-    result = verify_flow.verify(core, api)
+    result = verify_flow.verify(core, api, fixture_path=CORE_FIXTURE)
 
     assert result["integrityVerified"] and result["statusAccuracy"] == 1
     assert result["semanticFaithfulness"] is None and result["semanticReviewRequired"]
@@ -128,7 +128,7 @@ def test_consistently_recorded_false_answer_is_not_mistaken_for_semantic_success
 
 def test_detects_html_changes_even_when_the_capture_has_valid_document_hashes(records, tmp_path):
     core, api = records
-    fixture = verify_flow.DEFAULT_FIXTURE
+    fixture = CORE_FIXTURE
     (tmp_path / fixture.name).write_bytes(fixture.read_bytes())
     for source in fixture.parent.glob("*.html"):
         (tmp_path / source.name).write_bytes(source.read_bytes())
@@ -140,7 +140,7 @@ def test_detects_html_changes_even_when_the_capture_has_valid_document_hashes(re
 def test_historical_recorder_fingerprint_is_reported_not_silently_replaced(records):
     core, api = records
     api["recorderSha256"] = "a" * 64
-    assert not verify_flow.verify(core, api)["recorderMatchesCurrentCheckout"]
+    assert not verify_flow.verify(core, api, fixture_path=CORE_FIXTURE)["recorderMatchesCurrentCheckout"]
 
 
 def test_cli_reads_only_and_does_not_connect_to_network(monkeypatch, capsys):
@@ -149,7 +149,7 @@ def test_cli_reads_only_and_does_not_connect_to_network(monkeypatch, capsys):
     monkeypatch.setattr(socket, "socket", forbidden)
     monkeypatch.setattr(Path, "write_bytes", forbidden)
     monkeypatch.setattr(Path, "write_text", forbidden)
-    assert verify_flow.main(["--run-dir", str(RUN)]) == 0
+    assert verify_flow.main(["--run-dir", str(RUN), "--fixture", str(CORE_FIXTURE)]) == 0
     assert json.loads(capsys.readouterr().out)["completed"]
 
 
@@ -159,7 +159,7 @@ def test_cli_refuses_incomplete_capture_without_publishing_accuracy(records, tmp
     for directory, filename, value in [("core", "capture.json", core), ("api", "api-capture.json", api)]:
         (tmp_path / directory).mkdir()
         (tmp_path / directory / filename).write_text(json.dumps(value), encoding="utf-8")
-    assert verify_flow.main(["--run-dir", str(tmp_path)]) == 1
+    assert verify_flow.main(["--run-dir", str(tmp_path), "--fixture", str(CORE_FIXTURE)]) == 1
     output = capsys.readouterr()
     assert output.out == "" and "incomplete" in output.err
 
@@ -168,3 +168,5 @@ def test_cli_refuses_incomplete_capture_without_publishing_accuracy(records, tmp
 def test_json_reader_rejects_ambiguous_or_nonfinite_records(value):
     with pytest.raises(ValueError):
         verify_flow._json(value)
+
+CORE_FIXTURE = Path(__file__).resolve().parents[2] / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"

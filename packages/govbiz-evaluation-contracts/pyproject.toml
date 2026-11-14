@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77,<83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "govbiz-evaluation-contracts"
+version = "0.1.0"
+description = "Immutable evaluation contracts shared by GovBiz Ops and pipelines"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+[tool.setuptools.package-data]
+govbiz_evaluation_contracts = ["*.json", "_inputs/**/*"]
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "src/**/*.py" },
+    { file = "src/**/*.json" },
+    { file = "src/**/*.toml" },
+    { file = "src/**/*.lock" },
+]

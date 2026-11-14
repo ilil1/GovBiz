@@ -569,9 +569,9 @@ class PublicationTests(unittest.TestCase):
                 publish.package_exists("ai-service", "fixture-token", FORK, visibility)
             fetch.assert_not_called()
 
-    def test_public_reuse_produces_explicit_v2_visibility_and_rechecks_metadata(self):
+    def test_public_reuse_produces_explicit_v5_visibility_and_rechecks_metadata(self):
         with tempfile.TemporaryDirectory() as directory, \
-                patch.object(publish, "git", side_effect=[SHA, TREE, POLICY]), \
+                patch.object(publish, "git", side_effect=[SHA, TREE, TREE, POLICY]), \
                 patch.object(publish, "eligible", return_value=True), \
                 patch.object(publish, "package_exists", return_value=True) as metadata, \
                 patch.object(publish, "lookup", return_value=DIGEST), \
@@ -579,7 +579,7 @@ class PublicationTests(unittest.TestCase):
             output = Path(directory) / "receipt.json"
             publish.publish("ai-service", SHA, output, "actor", "fixture-token", FORK, "public")
             result = json.loads(output.read_text())
-            self.assertEqual(result["schemaVersion"], 2)
+            self.assertEqual(result["schemaVersion"], 5)
             self.assertEqual(result["visibility"], "public")
             self.assertEqual(metadata.call_count, 2)
             self.assertTrue(all(call.args[-1] == "public" for call in metadata.call_args_list))
@@ -630,7 +630,7 @@ class PublicationTests(unittest.TestCase):
             after_build = (io.BytesIO(json.dumps(changed).encode()) if changed else
                            HTTPError("https://api.github.com", 404, "fixture", {}, None))
             with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory, \
-                    patch.object(publish, "git", side_effect=[SHA, TREE, POLICY]), \
+                    patch.object(publish, "git", side_effect=[SHA, TREE, TREE, POLICY]), \
                     patch.object(publish, "eligible", return_value=True), \
                     patch.object(publish, "urlopen", side_effect=[io.BytesIO(json.dumps(private).encode()), after_build]) as metadata, \
                     patch.object(publish, "lookup", return_value=None), \
@@ -656,7 +656,7 @@ class PublicationTests(unittest.TestCase):
         def command(*args, **kwargs):
             steps.append(" ".join(args[:2]))
         with tempfile.TemporaryDirectory() as directory, \
-                patch.object(publish, "git", side_effect=[SHA, TREE, POLICY]), \
+                patch.object(publish, "git", side_effect=[SHA, TREE, TREE, POLICY]), \
                 patch.object(publish, "eligible", return_value=True), \
                 patch.object(publish, "urlopen", side_effect=metadata), \
                 patch.object(publish, "lookup", side_effect=[None, DIGEST]), \
@@ -674,7 +674,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_package_changed_after_push_gets_no_receipt(self):
         with tempfile.TemporaryDirectory() as directory, \
-                patch.object(publish, "git", side_effect=[SHA, TREE, POLICY]), \
+                patch.object(publish, "git", side_effect=[SHA, TREE, TREE, POLICY]), \
                 patch.object(publish, "eligible", return_value=True), \
                 patch.object(publish, "package_exists", side_effect=[True, True, ValueError("privacy changed")]), \
                 patch.object(publish, "lookup", return_value=None), \
@@ -720,7 +720,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_reuse_never_builds_or_pushes_and_token_only_on_stdin(self):
         with tempfile.TemporaryDirectory() as directory, \
-                patch.object(publish, "git", side_effect=[SHA, TREE, POLICY]), \
+                patch.object(publish, "git", side_effect=[SHA, TREE, TREE, POLICY]), \
                 patch.object(publish, "eligible", return_value=True), \
                 patch.object(publish, "package_exists", return_value=True), \
                 patch.object(publish, "lookup", return_value=DIGEST), \
@@ -737,7 +737,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_superseded_candidate_leaves_no_receipt(self):
         with tempfile.TemporaryDirectory() as directory, \
-                patch.object(publish, "git", side_effect=[SHA, TREE, POLICY]), \
+                patch.object(publish, "git", side_effect=[SHA, TREE, TREE, POLICY]), \
                 patch.object(publish, "eligible", side_effect=[True, False]), \
                 patch.object(publish, "package_exists", return_value=True), \
                 patch.object(publish, "lookup", return_value=DIGEST), \
@@ -756,6 +756,9 @@ class PublicationTests(unittest.TestCase):
                 (root / "infrastructure/release").mkdir(parents=True)
                 (root / "infrastructure/release/policy").write_text("fixture")
                 (context / "Dockerfile").write_text("FROM scratch\n")
+                shared = root / "packages/govbiz-ai-runtime"
+                shared.mkdir(parents=True)
+                (shared / "runtime.py").write_text("# shared implementation\n")
                 def git(*args):
                     return REAL_RUN(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
                 git("init")
@@ -772,7 +775,10 @@ class PublicationTests(unittest.TestCase):
                         return REAL_RUN(args, check=True, text=True, **kwargs)
                     if args[:2] == ("docker", "build"):
                         built_context = Path(args[-1])
-                        self.assertEqual(sorted(p.name for p in built_context.iterdir()), ["Dockerfile"])
+                        self.assertEqual(
+                            {p.relative_to(built_context).as_posix() for p in built_context.rglob("*") if p.is_file()},
+                            {"backend/ai-service/Dockerfile", "packages/govbiz-ai-runtime/runtime.py"},
+                        )
                     if args[:2] == ("docker", "push") and fail_push:
                         raise subprocess.CalledProcessError(1, args)
                     return subprocess.CompletedProcess(args, 0, "")

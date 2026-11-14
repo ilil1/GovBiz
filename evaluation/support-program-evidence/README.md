@@ -6,6 +6,11 @@
 검증하며, 이 전환으로 새 유료 평가나 의미 품질 측정을 수행한 것은 아닙니다. `runs/`의 과거 코드·
 캡처·보고서는 당시 구현과 설정에 대한 기록으로 유지합니다.
 
+현재 평가 코드는 `govbiz-evaluation-engine` 패키지의 `govbiz_evaluation` 모듈로 설치합니다.
+실행기는 AI·Ops 서비스 내부 모듈을 가져오지 않고 별도 공용 패키지를 사용합니다.
+설치·실행·테스트 방법은 [파이프라인 안내](../../pipelines/README.md)를 따릅니다.
+과거 `runs/` 문서의 명령은 당시 기록이며 아래 현재 명령과 구분합니다.
+
 ## 실제 공고 문단 검색 RAG 준비
 
 상세 공고의 실제 서비스 경로를 평가하기 전에는 [Core 청킹 사전 점검](../../backend/core-service/README.md#상세-공고-rag의-실제-청킹-사전-점검)을
@@ -42,10 +47,10 @@ API의 청크 길이 상한을 넘는 목록은 자료 준비 시 거절하며 �
 
 ```bash
 cd backend/ai-service
-uv run --project ../../pipelines --locked --extra dev python ../../evaluation/support-program-evidence/official_rag.py --grouped-lists
+uv run --project ../../pipelines --locked --extra dev python -m govbiz_evaluation.official_rag --repository ../.. --grouped-lists
 ```
 
-v2 재생성은 `official_rag.py --grouped-lists --write`로만 수행합니다. 자료 변경 후 카탈로그의 fixture
+v2 재생성은 `python -m govbiz_evaluation.official_rag --repository <저장소> --grouped-lists --write`로만 수행합니다. 자료 변경 후 카탈로그의 fixture
 해시, `rag_live.py --write-plans`, `execution_spec.py --write`를 함께 갱신합니다. 실행기 Docker
 포함 목록은 등록된 공식 fixture·capture·미실행 기록과 필요한 검증 모듈을 허용하며 원본 실행 폴더
 전체나 개인 환경 파일은 포함하지 않습니다.
@@ -90,12 +95,12 @@ H01~H06 질문**을 재사용하는 별도 RAG 자료입니다. 원문·출처·
 
 ```bash
 cd backend/ai-service
-uv run --project ../../pipelines --locked --extra dev python ../../evaluation/support-program-evidence/official_rag.py
-uv run --project ../../pipelines --locked --extra dev python ../../evaluation/support-program-evidence/rag_live.py
+uv run --project ../../pipelines --locked --extra dev python -m govbiz_evaluation.official_rag --repository ../..
+uv run --project ../../pipelines --locked --extra dev python -m govbiz_evaluation.rag_live
 uv run --locked python ../ops-service/apps/evaluations/execution_spec.py
 ```
 
-자료를 의도적으로 수정할 때만 `official_rag.py --write` → `rag_live.py --write-plans` →
+자료를 의도적으로 수정할 때만 `python -m govbiz_evaluation.official_rag --repository <저장소> --write` → `rag_live.py --write-plans` →
 `execution_spec.py --write` 순서로 생성하고 차이를 검토합니다. 기존 고정 근거 자료와 공유 seed는 수정하지 않습니다.
 
 실제 평가 1회 상한은 **18회**(문서 임베딩 6 + 질문 임베딩 6 + 답변 생성 6),
@@ -123,7 +128,7 @@ uv run --locked python ../ops-service/apps/evaluations/execution_spec.py
 승계하지 않으므로 v3의 기준 자료와 모든 사례를 별도로 검토해야 한다.
 
 ```bash
-uv run --project pipelines --locked python evaluation/support-program-evidence/revise_official_reference.py
+uv run --project pipelines --locked python -m govbiz_evaluation.revise_official_reference --repository "$PWD"
 ```
 
 위 명령은 저장한 v3를 재생성 결과와 대조한다. `--write`는 v3 파일만 작성하며 DB나 모델 API를
@@ -151,11 +156,11 @@ Ops·실행기의 일치하는 release 반영을 필요로 한다.
 무료 변환 검증(기존 원본이나 사람 검토 기록은 변경하지 않음):
 
 ```bash
-uv run --project pipelines --locked python evaluation/support-program-evidence/official_snapshot.py
+uv run --project pipelines --locked python -m govbiz_evaluation.official_snapshot --repository "$PWD"
 ```
 
 자료 형식을 바꿨을 때만 `--write`로 파생 파일을 다시 생성한다. 이후 카탈로그의 fixture 해시와
-`python3 backend/ops-service/apps/evaluations/execution_spec.py --write`도 함께 갱신한다.
+`pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec --root "$PWD" --write`도 함께 갱신한다.
 새 코드·자료·release를 Ops API/동기화/실행기에 함께 반영해야 한다. 등록 파일 수정만으로
 실행 중인 컨테이너에 자료가 추가되지는 않는다.
 
@@ -177,9 +182,9 @@ uv run --project pipelines --locked python evaluation/support-program-evidence/o
 계획과 실행 release를 함께 검토·갱신해야 합니다. 새로 등록한 캡처는 계획을 생성하기 전까지 replay만 제공합니다.
 
 ```bash
-pipelines/.venv/bin/python evaluation/support-program-evidence/rag_live.py --write-plans
-python3 backend/ops-service/apps/evaluations/execution_spec.py --write
-pipelines/.venv/bin/python evaluation/support-program-evidence/rag_live.py
+pipelines/.venv/bin/python -m govbiz_evaluation.rag_live --write-plans --repository "$PWD"
+pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec --root "$PWD" --write
+pipelines/.venv/bin/python -m govbiz_evaluation.rag_live
 ```
 
 `rag-synthetic-multichunk-v1`은 최초에 최대 8회(문서 2·질문 3·답변 3), 저장 벡터 재사용 시 최대 6회를 예약합니다.
@@ -223,11 +228,11 @@ RAG 자료·사례 검토와 검토 기반 품질 합격·기준 지정은 Ops�
 
 ```bash
 # 저장소 루트: 자료 검증만 수행. 모든 품질 지표는 null
-pipelines/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.rag_evaluate \
   --fixture evaluation/support-program-evidence/rag-fixture.json
 
 # API 키·DB·서버 없이 합성 기록의 점수 계산을 검증. 보고서는 표준 출력으로만 반환
-pipelines/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.rag_evaluate \
   --fixture evaluation/support-program-evidence/rag-fixture.json \
   --capture evaluation/support-program-evidence/rag-synthetic-capture.json
 ```
@@ -473,11 +478,11 @@ E12 추가 실행에서 모델이 64자리 인용 ID를 63자리로 복사한 �
 
 ```bash
 # API 키·서버 없이 새 입력 검증. 지표는 null이며 품질 평가가 아님
-pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.evaluate \
   --fixture evaluation/support-program-evidence/target-coverage-fixture.json
 
 # 명시적으로 유료 평가를 선택한 경우에만 실행: 답변 최대 6회, 임베딩 없음
-pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.evaluate \
   --fixture evaluation/support-program-evidence/target-coverage-fixture.json \
   --execute --output-dir work/evidence-target-coverage-v1
 ```
@@ -592,7 +597,7 @@ Prefect에서는 실행 준비의 `validate-evaluation-inputs`, 새 응답 생�
 
 ```bash
 # 입력 검증만: API 키 불필요, 파일 쓰기 없음, 품질 지표는 null
-pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py
+pipelines/.venv/bin/python -m govbiz_evaluation.evaluate
 
 # 테스트: 실제 Agent/SDK 경로도 HTTP 스텁으로만 검증하며 외부 호출 없음
 pipelines/.venv/bin/python -m pytest evaluation/support-program-evidence pipelines/tests
@@ -603,11 +608,11 @@ pipelines/.venv/bin/python -m pytest evaluation/support-program-evidence pipelin
 
 ```bash
 # 유료: 최대 12회 답변 생성. 기존 폴더가 아닌 새 경로를 지정
-pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.evaluate \
   --execute --output-dir work/evidence-evaluation-v1
 
 # 저장된 결과 재계산: API 호출 없음
-pipelines/.venv/bin/python evaluation/support-program-evidence/evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.evaluate \
   --capture work/evidence-evaluation-v1/capture.json
 ```
 
@@ -822,14 +827,16 @@ Ops 실행**이 전제입니다. 이 명령은 실행 접수나 예산 승인·�
 
 ```bash
 # backend/ai-service에서 실행. 아래 변수는 기존 승인/예약의 값이어야 합니다.
-uv run --project ../../pipelines --locked python ../../evaluation/support-program-evidence/serve_flow.py \
+uv run --project ../../pipelines --locked --group integration python -m integration.serve_flow \
   --execute --output-dir "$RAG_CAPTURE_DIR" --qdrant-url http://127.0.0.1:16333 \
   --max-api-calls "$RAG_MAX_MODEL_CALLS" --budget-spec "$RAG_SPEC_PATH" \
   --request-id "$RAG_RUN_ID" --flow-id "$RAG_FLOW_ID" --spec-sha256 "$RAG_SPEC_SHA256"
 ```
 
 예산 인자 4개는 함께 전달해야 하며 명세의 자료·모델·소스 해시가 현재 실행기와 다르면 시작하지
-않습니다. `--max-api-calls`는 명세 작업 수와 같아야 합니다. 서버는 loopback에서만 열리고
+않습니다. HTTP 도구의 명세는 공용 실행 코드 외에도 실제 불러온 AI 앱·라우터와
+`integration/serve_flow.py`의 해시를 별도로 고정합니다. `make_http_rag_spec`으로 만든 전체
+명세를 승인하며, 일반 평가 워커용 명세나 HTTP 지문이 없는 guard는 이 도구에서 거절합니다. `--max-api-calls`는 명세 작업 수와 같아야 합니다. 서버는 loopback에서만 열리고
 세션 종료 시 서버를 정상 종료해야 `close`를 시도합니다. claim/close 실패는 오류로 드러나며
 프로세스 강제 종료·close 유실 시 기존 Ops 종료 정리/보정 절차가 필요합니다. 출력 경로는
 artifact 조회를 사용하려면 해당 실행의 `/results/{run UUID}/capture`에 연결해야 합니다.
@@ -945,7 +952,7 @@ pipelines/.venv/bin/python infrastructure/llmops/register_core_rag.py \
   work/core-rag-new/v1 --repository "$PWD"
 pipelines/.venv/bin/python infrastructure/llmops/register_core_rag.py \
   work/core-rag-new/v2 --repository "$PWD"
-pipelines/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
+pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec --root "$PWD"
 ```
 
 원본 `fixture.json`, `capture.json`, `wire.json`, 상위 `integration.json`을 예산 준비와 같은 검증기로
@@ -1012,7 +1019,7 @@ docker run --detach --rm --name govbiz-rag-evaluation \
   --publish 127.0.0.1:17333:6333 qdrant/qdrant:v1.17.1
 
 # 저장소 루트, 터미널 1: API 비용 발생 가능. 출력은 매번 새 경로
-pipelines/.venv/bin/python evaluation/support-program-evidence/serve_flow.py \
+PYTHONPATH=backend/ai-service pipelines/.venv/bin/python -m integration.serve_flow \
   --execute --port 18009 --qdrant-url http://127.0.0.1:17333 \
   --max-api-calls 14 --output-dir work/evidence-flow-v2/api
 
@@ -1038,8 +1045,9 @@ Qdrant를 사용하면 호출 조건이 달라지므로 같은 조건 비교가 
 공유 결과는 API 없이 다시 검사할 수 있습니다.
 
 ```bash
-pipelines/.venv/bin/python evaluation/support-program-evidence/verify_flow.py \
-  --run-dir evaluation/support-program-evidence/runs/official-flow-20260907-v1
+pipelines/.venv/bin/python -m govbiz_evaluation.verify_flow \
+  --run-dir evaluation/support-program-evidence/runs/official-flow-20260907-v1 \
+  --fixture backend/core-service/src/test/resources/support-program-evidence/official-sources.json
 ```
 
 원문 HTTPS 다운로드 자체는 별도로 확인했고, 반복 가능한 전체 흐름에서는 그때 받은 HTML 조각을
@@ -1071,17 +1079,17 @@ HTTP API·원문 수집·DB·청킹·임베딩·Qdrant를 생략하므로 `scope
 
 ```bash
 # 저장소 루트: 무료 Core HTTP 테스트 산출물 등록
-pipelines/.venv/bin/python evaluation/support-program-evidence/core_flow_rag.py \
-  --core-capture backend/core-service/build/reports/evidence-flow/capture.json --register
+pipelines/.venv/bin/python -m govbiz_evaluation.core_flow_rag \
+  --core-capture backend/core-service/build/reports/evidence-flow/capture.json --register --repository "$PWD"
 
 # 이미 저장된 실제 API 실행 기록 등록; 이 명령 자체의 모델 호출은 0회
-pipelines/.venv/bin/python evaluation/support-program-evidence/core_flow_rag.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.core_flow_rag \
   --core-capture evaluation/support-program-evidence/runs/official-flow-20260907-v2/core/capture.json \
   --api-capture evaluation/support-program-evidence/runs/official-flow-20260907-v2/api/api-capture.json \
-  --register
+  --register --repository "$PWD"
 ```
 
-`--register`를 빼면 검증 결과만 출력합니다. 등록은 DB에 접속하지 않고 `capture_catalog.json`,
+`--register`를 빼고 `--fixture`로 원본 Core fixture를 지정하면 검증 결과만 출력합니다. 등록은 DB에 접속하지 않고 `capture_catalog.json`,
 `execution_release.json`과 `runs/core-official-*/`를 함께 갱신합니다. 같은 원본의 재등록은 중복을
 만들지 않으며 원본·파생 자료가 바뀌었으면 거절합니다. 갱신한 Ops·runner·sync 이미지를 적용한 뒤
 React Ops의 **Core HTTP · 공식 공고 H01~H06 · 저장 기록 · 원문당 1청크**를 선택합니다.

@@ -18,21 +18,18 @@ import importlib.abc
 from pathlib import Path
 import sys
 
-root = Path(sys.argv[1])
-module = sys.argv[2]
-evidence = root / "evaluation/support-program-evidence"
-sys.path[:0] = [
-    str(evidence), str(root / "backend/ai-service"), str(root / "backend/ops-service"),
-]
+module = sys.argv[1]
+from govbiz_evaluation_contracts.resources import evidence_root
+evidence = evidence_root()
 
 class RejectOrchestration(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"prefect", "pipelines"}:
+        if fullname.split(".", 1)[0] in {"prefect", "pipelines", "app", "apps"}:
             raise AssertionError("Evaluation imported orchestration: " + fullname)
         return None
 
 sys.meta_path.insert(0, RejectOrchestration())
-reporting = importlib.import_module(module)
+reporting = importlib.import_module("govbiz_evaluation." + module)
 if module == "reporting":
     result = reporting.load_results(
         evidence / "target-coverage-fixture.json",
@@ -41,17 +38,17 @@ if module == "reporting":
     assert result["frame"].shape == (6, 9)
     assert result["summary"]["completed"] is True
 else:
-    import rag_evaluate
+    from govbiz_evaluation import rag_evaluate
     result = rag_evaluate.evaluate(
         evidence / "rag-fixture.json", evidence / "rag-synthetic-capture.json",
     )
     frame = reporting.result_frame(result)
     assert len(frame) == 3
     assert "retrieval_recall" in frame.columns
-assert not any(name.split(".", 1)[0] in {"prefect", "pipelines"} for name in sys.modules)
+assert not any(name.split(".", 1)[0] in {"prefect", "pipelines", "app", "apps"} for name in sys.modules)
 '''
     completed = subprocess.run(
-        [sys.executable, "-I", "-c", script, str(ROOT), module],
+        [sys.executable, "-I", "-c", script, module],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -74,7 +71,8 @@ def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
 
     serve.main()
 
-    assert registrations == [{"name": "saved-capture", "limit": 1}]
+    from prefect.types.entrypoint import EntrypointType
+    assert registrations == [{"name": "saved-capture", "limit": 1, "entrypoint_type": EntrypointType.MODULE_PATH}]
 
 
 @pytest.mark.parametrize(
@@ -85,12 +83,11 @@ def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
         ("rag.py", "evaluate_rag_capture", "govbiz-rag-capture-replay"),
     ],
 )
-def test_prefect_loads_persisted_file_entrypoint_in_fresh_process(
+def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
     filename, function, name, tmp_path
 ):
-    # The server stores a file entrypoint by default. A new process must load it
-    # without relying on the serving process's sys.path or imported packages.
-    entrypoint = str(ROOT / "pipelines/evaluation" / filename) + ":" + function
+    # The deployment resolves its installed module in every fresh process.
+    entrypoint = "pipelines.evaluation." + filename.removesuffix(".py") + "." + function
     completed = subprocess.run(
         [
             sys.executable, "-I", "-c",

@@ -1,3 +1,4 @@
+from govbiz_evaluation_contracts.resources import evidence_root as packaged_evidence_root
 import json
 import inspect
 from hashlib import sha256
@@ -16,12 +17,11 @@ def stub_budget(monkeypatch):
     monkeypatch.setattr(ops_flow, "BudgetClient", lambda *args: client)
     return client
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipelines.evaluation import flows as ops_flow
 
 
 def run_live(*args, **kwargs):
-    from apps.evaluations.execution_spec import digest, make_spec, read_release
+    from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
     bound = inspect.signature(ops_flow.evaluate_saved_capture.fn).bind(*args, **kwargs)
     bound.apply_defaults()
     params = bound.arguments
@@ -36,13 +36,13 @@ def run_live(*args, **kwargs):
 
 
 def reviewed_source(tmp_path):
-    from apps.evaluations.catalog import DATASETS
+    from govbiz_evaluation_contracts.catalog import DATASETS
     source_id = str(uuid4())
     folder = tmp_path / source_id
     (folder / "evaluation").mkdir(parents=True)
     dataset = DATASETS["fixed-context-e01-v1"]
     candidate = dataset["captures"][1]
-    raw = ((ops_flow.ROOT / "evaluation/support-program-evidence") / candidate["path"]).read_bytes()
+    raw = ((packaged_evidence_root(ops_flow.ROOT)) / candidate["path"]).read_bytes()
     config = {"run_id": source_id, "capture_sha256": sha256(raw).hexdigest(),
               "fixture_sha256": dataset["fixture_sha256"]}
     (folder / "request.json").write_text(json.dumps({
@@ -60,7 +60,7 @@ def reviewed_source(tmp_path):
 @pytest.mark.parametrize("source_mode", ["replay", "live", "recovery"])
 def test_reviewed_baseline_is_snapshotted_for_free_replay(monkeypatch, tmp_path, source_mode):
     from pipelines.evaluation import capture as llmops
-    import reporting
+    from govbiz_evaluation import reporting
     config, candidate, raw = reviewed_source(tmp_path)
     if source_mode in {"live", "recovery"}:
         folder = tmp_path / config["run_id"]
@@ -90,7 +90,7 @@ def test_reviewed_baseline_is_snapshotted_for_free_replay(monkeypatch, tmp_path,
 
 @pytest.mark.parametrize("failure", ["hash", "dataset", "incomplete", "path", "missing-config"])
 def test_invalid_reviewed_baseline_never_spends(monkeypatch, tmp_path, failure):
-    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
     config, _, _ = reviewed_source(tmp_path)
     reference_id = f"run:{config['run_id']}"
     folder = tmp_path / config["run_id"]
@@ -185,7 +185,7 @@ def test_different_captures_share_explicit_cases_and_reject_cross_dataset(monkey
 
 @pytest.mark.parametrize("recovery_kwargs", [{}, {"recovery_config": None}], ids=["omitted", "null"])
 def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(monkeypatch, tmp_path, stub_budget, recovery_kwargs, isolated_prefect_tasks):
-    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
     request_id = str(uuid4())
     config = live_config("fixed-context-e01-v1")
     calls = []
@@ -230,7 +230,7 @@ def test_live_generates_selected_cases_once_and_checks_baseline_before_spending(
 
 @pytest.mark.parametrize("failure", ["disabled", "missing-key", "budget", "fixture", "baseline", "model"])
 def test_live_preflight_rejects_unapproved_or_invalid_inputs_without_calls(monkeypatch, tmp_path, failure):
-    from apps.evaluations.catalog import DATASETS, LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation_contracts.catalog import DATASETS, LIVE_CAPTURE_ID, live_config
     dataset = "fixed-context-e01-v1"
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "false" if failure == "disabled" else "true")
@@ -253,7 +253,7 @@ def test_live_preflight_rejects_unapproved_or_invalid_inputs_without_calls(monke
 
 
 def test_live_rejects_stale_loaded_evaluator_before_budget_or_model(monkeypatch, tmp_path):
-    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
 
     request_id = str(uuid4())
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
@@ -274,7 +274,7 @@ def test_live_rejects_stale_loaded_evaluator_before_budget_or_model(monkeypatch,
 
 
 def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_path, stub_budget, isolated_prefect_tasks):
-    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")
     monkeypatch.setenv("OPENAI_API_KEY", "stub-key")
@@ -307,8 +307,8 @@ def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_pa
 def test_live_response_to_report_pipeline_uses_only_stub_transport(monkeypatch, tmp_path, stub_budget, model):
     import httpx2
     from pipelines.evaluation import capture as llmops
-    import reporting
-    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation import reporting
+    from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
 
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")
@@ -359,8 +359,8 @@ def test_live_response_to_report_pipeline_uses_only_stub_transport(monkeypatch, 
 
 
 def test_budget_claim_failure_blocks_model_and_does_not_close_other_owner(monkeypatch, tmp_path, stub_budget):
-    from budget_client import BudgetUnavailable
-    from apps.evaluations.catalog import LIVE_CAPTURE_ID, live_config
+    from govbiz_evaluation.budget_client import BudgetUnavailable
+    from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")
     monkeypatch.setenv("OPENAI_API_KEY", "offline-no-model-calls")

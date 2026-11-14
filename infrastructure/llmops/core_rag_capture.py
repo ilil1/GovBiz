@@ -1,6 +1,5 @@
 """Collect real Core/AI wire records in the owned, synthetic Compose integration run."""
 
-import importlib.util
 import json
 import time
 import uuid
@@ -10,12 +9,8 @@ import core_evidence_trace as trace
 from core_search_trace import read_observations, require
 
 ROOT = Path(__file__).resolve().parents[2]
-EVIDENCE = ROOT / "evaluation/support-program-evidence"
-spec = importlib.util.spec_from_file_location(
-    "core_rag_evaluator", EVIDENCE / "rag_evaluate.py"
-)
-rag = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(rag)
+EVIDENCE = ROOT / "evaluation/support-program-evidence"  # Source integration fixtures only.
+from govbiz_evaluation import rag_evaluate as rag
 SOURCE = (
     ROOT
     / "backend/core-service/src/test/resources/support-program-evidence/rag-synthetic-source.json"

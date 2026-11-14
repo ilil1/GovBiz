@@ -285,7 +285,7 @@ Prefect 상위·하위 실행 완료를 확인했다. 평가 이력은 28건이�
 
 ```bash
 cd backend/ai-service
-uv run --locked --extra dev python ../../evaluation/support-program-evidence/evaluate.py \
+uv run --project ../../pipelines --locked --extra dev python -m govbiz_evaluation.evaluate \
   --fixture ../../evaluation/support-program-evidence/answerability-fixture.json
 ```
 

@@ -146,18 +146,20 @@ class CodeBuildReleaseTest(unittest.TestCase):
 
     def test_publish_uses_current_source_folders_and_service_ecr_names(self):
         root = Path(__file__).resolve().parents[2]
-        for service, context in [('core-service', 'backend/core-service'), ('ai-service', 'backend/ai-service')]:
+        for service, context in [('core-service', 'backend/core-service'), ('ai-service', '.')]:
             with self.subTest(service=service):
                 digest = 'sha256:' + '1' * 64
                 ref = REGISTRY + '/govbiz/' + service + ':git-' + SHA
-                self.assertTrue((root / context / 'Dockerfile').is_file())
+                dockerfile = 'backend/ai-service/Dockerfile' if service == 'ai-service' else context + '/Dockerfile'
+                options = ('--file', dockerfile) if service == 'ai-service' else ()
+                self.assertTrue((root / dockerfile).is_file())
                 with patch.object(release, 'image_digest', side_effect=[None, digest]) as lookup, \
                         patch.object(release, 'run') as run:
                     actual = release.publish(REGISTRY, service, SHA)
                 self.assertEqual(REGISTRY + '/govbiz/' + service + '@' + digest, actual)
                 self.assertEqual([
                     ('docker', 'build', '--platform', 'linux/amd64', '--label',
-                     'org.opencontainers.image.revision=' + SHA, '--tag', ref, context),
+                     'org.opencontainers.image.revision=' + SHA, '--tag', ref, *options, context),
                     ('docker', 'push', ref),
                 ], [call.args for call in run.call_args_list])
                 self.assertEqual([('govbiz/' + service, 'git-' + SHA)] * 2,

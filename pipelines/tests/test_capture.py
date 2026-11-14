@@ -9,8 +9,8 @@ import pytest
 from filelock import FileLock, Timeout
 
 from pipelines.evaluation import capture
-import reporting
-from app.config import LangfuseSettings
+from govbiz_evaluation import reporting
+from govbiz_ai_runtime.config import LangfuseSettings
 
 HERE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
 FIXTURE = HERE / "target-coverage-fixture.json"

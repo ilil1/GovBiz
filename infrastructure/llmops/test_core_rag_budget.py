@@ -96,8 +96,8 @@ def test_plan_preserves_input_order_and_is_accepted_by_existing_guard(
 ):
     from uuid import uuid4
 
-    from budget_client import BudgetClient
-    from rag_budget import RagBudget
+    from govbiz_evaluation.budget_client import BudgetClient
+    from core_rag_budget import http_adapter
 
     plan = planner.prepare(completed_capture)
     fixture, _ = planner.rag.read_json(completed_capture / "fixture.json")
@@ -111,7 +111,9 @@ def test_plan_preserves_input_order_and_is_accepted_by_existing_guard(
     assert plan["paidModelApiCalls"] == 0
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "test-only-" + "a" * 40)
     client = BudgetClient(str(uuid4()), str(uuid4()), plan["executionSpecSha256"])
-    assert RagBudget(client, spec, receipt_directory=completed_capture).spec == spec
+    assert http_adapter.create_http_budget(client, spec, receipt_directory=completed_capture).spec == {
+        key: value for key, value in spec.items() if key != "http_runtime_sha256"
+    }
     assert planner.load_plan(completed_capture) == plan
     worker = subprocess.run(
         [
@@ -186,14 +188,14 @@ def test_consumer_rechecks_source_and_runtime_before_using_plan(
         with (completed_capture / "capture.json").open("a") as target:
             target.write("\n")
     elif change == "runtime":
-        make = planner.make_rag_spec
+        make = planner.http_adapter.make_http_rag_spec
 
         def changed(cases):
             spec = deepcopy(make(cases))
             spec["runtime_sha256"]["evaluation/support-program-evidence/rag_budget.py"] = "0" * 64
             return spec
 
-        monkeypatch.setattr(planner, "make_rag_spec", changed)
+        monkeypatch.setattr(planner.http_adapter, "make_http_rag_spec", changed)
     else:
         path.write_text('{"schemaVersion":"a","schemaVersion":"b"}')
     with pytest.raises(ValueError):

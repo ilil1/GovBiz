@@ -10,21 +10,21 @@ import time
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(ROOT), str(Path(__file__).resolve().parent), str(ROOT / "backend/ai-service"), str(ROOT / "evaluation/support-program-evidence")]
+sys.path[:0] = [str(ROOT), str(Path(__file__).resolve().parent), str(ROOT / "backend/ai-service"), ]
 os.environ["DO_NOT_TRACK"] = "1"
 os.environ["PREFECT_SERVER_ANALYTICS_ENABLED"] = "false"
 os.environ.setdefault("PREFECT_HOME", str(ROOT / "work/llmops/prefect-client"))
 
 import httpx
-from app.config import LangfuseSettings
-from app.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
-from app.support_program_evidence.answer_service import SupportProgramEvidenceAnswerService
-from app.support_program_evidence.errors import SupportProgramEvidenceError
-from app.tracing import LLMTracing
+from govbiz_ai_runtime.config import LangfuseSettings
+from govbiz_ai_runtime.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
+from govbiz_ai_runtime.support_program_evidence.answer_service import SupportProgramEvidenceAnswerService
+from govbiz_ai_runtime.support_program_evidence.errors import SupportProgramEvidenceError
+from govbiz_ai_runtime.tracing import LLMTracing
 from tests.langchain_stub import ResponsesChatStub, response_message
 from tests.support_program_evidence.test_agent import answer_request, valid_selection
 from pipelines.evaluation.capture import evaluate_capture
-from reporting import write_json
+from govbiz_evaluation.reporting import write_json
 from assistant_trace_smoke import assistant_trace_examples, verify_assistant_observations
 from evidence_trace_smoke import evidence_trace_examples, verify_evidence_observations
 

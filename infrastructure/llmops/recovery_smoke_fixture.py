@@ -21,7 +21,6 @@ def source_hashes(folder):
 def prepare(source_id, root):
     assert not os.environ.get("OPENAI_API_KEY")
     assert os.environ.get("LLMOPS_LIVE_ENABLED", "false") == "false"
-    sys.path.insert(0, "/app")
     from pipelines.evaluation import flows as ops_flow
     from pipelines.evaluation import capture
 
@@ -69,10 +68,9 @@ def register(source_id, email):
 
 
 def verify(source_id, recovery_id, root):
-    sys.path[:0] = ["/app/evaluation/support-program-evidence", "/app/backend/ai-service"]
-    import reporting
+    from govbiz_evaluation import reporting
     import httpx
-    from app.config import LangfuseSettings
+    from govbiz_ai_runtime.config import LangfuseSettings
     from langfuse.api.client import LangfuseAPI
 
     source = root / source_id

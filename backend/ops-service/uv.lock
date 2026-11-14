@@ -47,6 +47,11 @@ wheels = [
 ]
 
 [[package]]
+name = "govbiz-evaluation-contracts"
+version = "0.1.0"
+source = { directory = "../../packages/govbiz-evaluation-contracts" }
+
+[[package]]
 name = "govbiz-ops-service"
 version = "0.1.0"
 source = { virtual = "." }
@@ -54,6 +59,7 @@ dependencies = [
     { name = "django" },
     { name = "django-environ" },
     { name = "djangorestframework" },
+    { name = "govbiz-evaluation-contracts" },
     { name = "gunicorn" },
     { name = "mysqlclient" },
 ]
@@ -68,6 +74,7 @@ requires-dist = [
     { name = "django", specifier = ">=5.2.17,<5.3" },
     { name = "django-environ", specifier = ">=0.12,<1" },
     { name = "djangorestframework", specifier = ">=3.16,<4" },
+    { name = "govbiz-evaluation-contracts", directory = "../../packages/govbiz-evaluation-contracts" },
     { name = "gunicorn", specifier = ">=26.2,<27" },
     { name = "mysqlclient", specifier = ">=2.2.7,<3" },
 ]

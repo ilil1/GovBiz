@@ -1,3 +1,4 @@
+from govbiz_evaluation_contracts.resources import evidence_root as packaged_evidence_root
 """보고서·전송 실패 복구는 완료된 응답을 재사용하며 모델 호출은 금지한다."""
 
 import json
@@ -9,14 +10,14 @@ from uuid import uuid4
 import pytest
 
 from pipelines.evaluation import capture as llmops
-import reporting
+from govbiz_evaluation import reporting
 from pipelines.evaluation import flows as ops_flow
-from apps.evaluations.recovery_inputs import read_recovery_inputs
+from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
 
 
 @pytest.fixture
 def source(monkeypatch, tmp_path):
-    here = (ops_flow.ROOT / "evaluation/support-program-evidence")
+    here = (packaged_evidence_root(ops_flow.ROOT))
     dataset, candidate, _ = ops_flow.selection(ops_flow.DATASET_ID, ops_flow.DATASET_ID, ops_flow.DATASET_ID)
     source_id = str(uuid4())
     folder = tmp_path / source_id
@@ -74,7 +75,7 @@ def test_recovery_after_failure_preserves_source_and_never_calls_model(source, m
     # 프로세스 재시작으로 running manifest만 남아도 입력 해시는 이미 저장되어 있다.
     manifest["status"] = "running"
     manifest_path.write_text(json.dumps(manifest))
-    _, next_config, _ = read_recovery_inputs(tmp_path, (ops_flow.ROOT / "evaluation/support-program-evidence"), attempt_id)
+    _, next_config, _ = read_recovery_inputs(tmp_path, (packaged_evidence_root(ops_flow.ROOT)), attempt_id)
     monkeypatch.setattr(llmops, "render", original_render)
     monkeypatch.setattr(llmops, "publish", lambda current: seen.add(current["run_id"]) or [])
     retry_id = str(uuid4())
@@ -130,10 +131,10 @@ def test_recovery_cannot_accept_live_parameters(source):
 
 
 def test_completed_live_capture_recovers_with_live_disabled_and_changed_default_model(source, monkeypatch, tmp_path):
-    from apps.evaluations.catalog import live_config
+    from govbiz_evaluation_contracts.catalog import live_config
     source_id, _ = source
     folder = tmp_path / source_id
-    here = (ops_flow.ROOT / "evaluation/support-program-evidence")
+    here = (packaged_evidence_root(ops_flow.ROOT))
     _, _, inputs = read_recovery_inputs(tmp_path, here, source_id)
     approved = live_config(ops_flow.DATASET_ID)
     capture = json.loads(inputs["capture"])
@@ -163,7 +164,7 @@ def test_completed_live_capture_recovers_with_live_disabled_and_changed_default_
 def test_reviewed_baseline_uses_source_snapshot_even_after_baseline_changes(source, tmp_path):
     source_id, config = source
     folder = tmp_path / source_id
-    here = (ops_flow.ROOT / "evaluation/support-program-evidence")
+    here = (packaged_evidence_root(ops_flow.ROOT))
     _, _, inputs = read_recovery_inputs(tmp_path, here, source_id)
     baseline_id = str(uuid4())
     reference_id = f"run:{baseline_id}"

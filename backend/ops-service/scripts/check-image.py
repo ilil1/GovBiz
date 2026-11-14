@@ -49,7 +49,7 @@ def main():
     built = False
     created = False
     try:
-        docker("build", "--tag", image, str(ROOT))
+        docker("build", "--tag", image, "--file", str(ROOT / "Dockerfile"), str(ROOT.parents[1]))
         built = True
         config = json.loads(docker("image", "inspect", image, capture=True).stdout)[0]["Config"]
         require(config["User"] == "10001:10001", "Image must declare a numeric non-root user.")

@@ -83,6 +83,17 @@ def fixture_api(runs, comparisons, jobs=None):
 
 
 class AffectedJobsTests(unittest.TestCase):
+    def test_shared_runtime_changes_run_all_consumers(self):
+        ai = policy.affected_jobs(["packages/govbiz-ai-runtime/src/govbiz_ai_runtime/tracing.py"])
+        self.assertIn("container-integration", ai["ci.yml"])
+        self.assertIn("ai-service", ai["ci.yml"])
+        for workflow in ("catalog-ci.yml", "ops-ci.yml", "llmops-ci.yml"):
+            self.assertEqual(ai[workflow], set(policy.WORKFLOW_JOBS[workflow]))
+        contracts = policy.affected_jobs(["packages/govbiz-evaluation-contracts/pyproject.toml"])
+        self.assertIn("ai-service", contracts["ci.yml"])
+        for workflow in ("ops-ci.yml", "llmops-ci.yml"):
+            self.assertEqual(contracts[workflow], set(policy.WORKFLOW_JOBS[workflow]))
+
     def test_pipeline_source_and_lock_require_evaluation_integrations(self):
         for path in ("pipelines/evaluation/flows.py", "pipelines/uv.lock"):
             with self.subTest(path=path):

@@ -2,24 +2,16 @@
 
 import copy
 import hashlib
-import sys
 from pathlib import Path
 
 import pytest
 import tiktoken.load
 
 ROOT = Path(__file__).resolve().parents[2]
-for path in (
-    "backend/ai-service",
-    "backend/ops-service",
-    "evaluation/support-program-evidence",
-    "infrastructure/llmops",
-):
-    sys.path.insert(0, str(ROOT / path))
 
 import check_runner_runtime as check
-import rag_live
-from apps.evaluations import catalog, execution_spec
+from govbiz_evaluation import rag_live
+from govbiz_evaluation_contracts import catalog, execution_spec
 
 BLOB = "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"
 CHECKSUM = "223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7"
@@ -45,6 +37,14 @@ def test_real_cached_tokenizer_and_catalog_plans_pass(cache):
     assert result["tokenizer"] == "cl100k_base"
     assert result["datasets"]["rag-synthetic-multichunk-v1"] == 9
     assert result["model_api_calls"] == 0 and result["evaluation_executed"] is False
+
+
+def test_installed_runner_prepares_packaged_inputs_outside_checkout(cache, monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    result = check.verify()
+    assert result["status"] == "PASS"
+    assert result["datasets"]["rag-synthetic-multichunk-v1"] == 9
+    assert result["model_api_calls"] == 0
 
 
 @pytest.mark.parametrize("corrupt", [False, True])

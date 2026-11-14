@@ -274,7 +274,7 @@ def verify_release(image, project):
     ).strip()
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", identity):
         raise ValueError("Expected a local Ops image identity")
-    digest = "import hashlib; from pathlib import Path; "
+    digest = "import hashlib; from importlib.resources import files; "
     image_hash = quiet(
         [
             "docker",
@@ -291,7 +291,7 @@ def verify_release(image, project):
             identity,
             "-c",
             digest
-            + "print(hashlib.sha256(Path('/app/apps/evaluations/execution_release.json').read_bytes()).hexdigest())",
+            + "print(hashlib.sha256(files('govbiz_evaluation_contracts').joinpath('execution_release.json').read_bytes()).hexdigest())",
         ]
     ).strip()
     runner_result = json.loads(
@@ -303,7 +303,7 @@ def verify_release(image, project):
                 "/app/pipelines/.venv/bin/python",
                 "-c",
                 digest + "import os,json; print(json.dumps({"
-                "'release':hashlib.sha256(Path('/app/backend/ops-service/apps/evaluations/execution_release.json').read_bytes()).hexdigest(),"
+                "'release':hashlib.sha256(files('govbiz_evaluation_contracts').joinpath('execution_release.json').read_bytes()).hexdigest(),"
                 "'free':os.environ.get('LLMOPS_LIVE_ENABLED','').lower()=='false' and not os.environ.get('OPENAI_API_KEY')"
                 "}))",
             ]
@@ -394,7 +394,7 @@ def check_runtime(state, settings, run_id=None, *, expected_image=None):
             raise ValueError("Expected a tagged local govbiz-ops-service image")
         pull_policy = "Never"
     source = (
-        REPOSITORY_ROOT / "backend/ops-service/apps/evaluations/execution_release.json"
+        REPOSITORY_ROOT / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/execution_release.json"
     )
     if source.is_symlink():
         raise ValueError("Source execution release must not be a symlink")
@@ -402,7 +402,9 @@ def check_runtime(state, settings, run_id=None, *, expected_image=None):
         [
             sys.executable,
             "-B",
-            source.with_name("execution_spec.py"),
+            "-c",
+            "import sys;sys.path.insert(0," + repr(str(REPOSITORY_ROOT / "packages/govbiz-evaluation-contracts/src"))
+            + ");from govbiz_evaluation_contracts.execution_spec import main;main()",
             "--root",
             REPOSITORY_ROOT,
         ],
@@ -514,7 +516,6 @@ def check_runtime(state, settings, run_id=None, *, expected_image=None):
         (
             name,
             nk + ["exec", pod["metadata"]["name"], "-c", name, "--", "python"],
-            "/app/apps/evaluations/execution_release.json",
         )
         for name in ("ops-service", "ops-sync")
     ] + [
@@ -526,19 +527,17 @@ def check_runtime(state, settings, run_id=None, *, expected_image=None):
                 runner["Id"],
                 "/app/pipelines/.venv/bin/python",
             ],
-            "/app/backend/ops-service/apps/evaluations/execution_release.json",
         ),
         (
             "ops-artifacts",
             ["docker", "exec", snapshot["containers"]["ops-artifacts"], "python"],
-            "/app/apps/evaluations/execution_release.json",
         ),
     ]
-    for name, command, path in targets:
+    for name, command in targets:
         program = (
-            "import hashlib,json,os; from pathlib import Path; print(json.dumps({'release':hashlib.sha256(Path("
-            + repr(path)
-            + ").read_bytes()).hexdigest(),'free':os.environ.get('LLMOPS_LIVE_ENABLED','').lower()=='false' and not os.environ.get('OPENAI_API_KEY')}))"
+            "import hashlib,json,os; from importlib.resources import files; print(json.dumps({"
+            "'release':hashlib.sha256(files('govbiz_evaluation_contracts').joinpath('execution_release.json').read_bytes()).hexdigest(),"
+            "'free':os.environ.get('LLMOPS_LIVE_ENABLED','').lower()=='false' and not os.environ.get('OPENAI_API_KEY')}))"
         )
         result = json.loads(quiet(command + ["-c", program]))
         if result.get("release") != expected:

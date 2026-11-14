@@ -5,8 +5,8 @@ from pathlib import Path
 from prefect import task
 from prefect.cache_policies import NO_CACHE
 
-from app.config import LangfuseSettings
-from reporting import create_report, load_results
+from govbiz_ai_runtime.config import LangfuseSettings
+from govbiz_evaluation.reporting import create_report, load_results
 from pipelines.evaluation.clients import publish_scores
 
 

@@ -144,21 +144,20 @@ def image_release(image, *, runner=False):
         raise ValueError("Use an existing immutable non-root runtime image")
     if runner:
         python = "/app/pipelines/.venv/bin/python"
-        release = "/app/backend/ops-service/apps/evaluations/execution_release.json"
         program = (
-            "import hashlib,subprocess,sys;from pathlib import Path;"
-            "subprocess.run([sys.executable,'/app/backend/ops-service/apps/evaluations/execution_spec.py',"
-            "'--root','/app'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
-            f"print(hashlib.sha256(Path({release!r}).read_bytes()).hexdigest())"
+            "import hashlib,subprocess,sys;from importlib.resources import files;"
+            "subprocess.run([sys.executable,'-m','govbiz_evaluation_contracts.execution_spec'],"
+            "check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
+            "print(hashlib.sha256(files('govbiz_evaluation_contracts').joinpath('execution_release.json').read_bytes()).hexdigest())"
         )
     else:
         python = "python"
         program = (
-            "import hashlib;from pathlib import Path\n"
+            "import hashlib;from pathlib import Path;from importlib.resources import files\n"
             + inspect.getsource(source_digest)
             + "\nassert not Path('/app/.env').exists()\n"
             + f"assert source_digest(Path('/app')) == {source_digest(database.REPOSITORY_ROOT / 'backend/ops-service')!r}\n"
-            + "print(hashlib.sha256(Path('/app/apps/evaluations/execution_release.json').read_bytes()).hexdigest())"
+            + "print(hashlib.sha256(files('govbiz_evaluation_contracts').joinpath('execution_release.json').read_bytes()).hexdigest())"
         )
     digest = (
         storage.run(
@@ -188,7 +187,7 @@ def image_release(image, *, runner=False):
     expected = hashlib.sha256(
         (
             database.REPOSITORY_ROOT
-            / "backend/ops-service/apps/evaluations/execution_release.json"
+            / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/execution_release.json"
         ).read_bytes()
     ).hexdigest()
     if digest != expected:

@@ -21,7 +21,11 @@ PLATFORM = "linux/amd64"
 RUNNER = "evaluation-runner"
 RUNNER_DOCKERFILE = "infrastructure/llmops/Dockerfile.runner"
 RUNNER_IGNORE = RUNNER_DOCKERFILE + ".dockerignore"
-RUNNER_RELEASE = "backend/ops-service/apps/evaluations/execution_release.json"
+RUNNER_RELEASE = "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/execution_release.json"
+SERVICE_PATHS = {
+    "ai-service": ("backend/ai-service", "packages/govbiz-ai-runtime"),
+    "ops-service": ("backend/ops-service", "packages/govbiz-evaluation-contracts"),
+}
 WEB = "web"
 WEB_DOCKERFILE = "frontend/web/Dockerfile"
 WEB_PATHS = (
@@ -34,19 +38,14 @@ WEB_MODE = "portfolio"
 # This image has a repository-root context. Archive its COPY inputs and build policy;
 # never send local .env files, work/, caches or an entire checkout to Docker.
 RUNNER_PATHS = (
-    RUNNER_DOCKERFILE,
-    RUNNER_IGNORE,
+    RUNNER_DOCKERFILE, RUNNER_IGNORE,
     "backend/ai-service/pyproject.toml",
-    "backend/ai-service/uv.lock",
-    "backend/ai-service/app",
+    "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
+    "evaluation/pyproject.toml", "evaluation/setup.py",
     "evaluation/support-program-evidence",
     "pipelines/pyproject.toml", "pipelines/uv.lock",
     "pipelines/__init__.py", "pipelines/serve.py", "pipelines/evaluation",
-    *("backend/ops-service/apps/evaluations/" + name for name in (
-        "catalog.py", "capture_catalog.json", "rag_live_plans.json", "recovery_inputs.py",
-        "execution_spec.py", "execution_release.json", "quality_policy.py", "rag_replay.py",
-        "vector_cache.py", "artifact_files.py", "managed_materials.py",
-    )),
+    "infrastructure/llmops/bundle_runner_inputs.py",
 )
 
 
@@ -79,14 +78,15 @@ def runner_input_key(inputs, publisher_tree):
 
 def workspace_input_key(service, inputs, publisher_tree):
     """Hash the actual workspace inputs and the tested build mode."""
-    if service not in (RUNNER, WEB):
+    if service not in (RUNNER, WEB, *SERVICE_PATHS):
         raise ValueError("Unknown workspace image")
-    paths = RUNNER_PATHS if service == RUNNER else WEB_PATHS
+    paths = RUNNER_PATHS if service == RUNNER else WEB_PATHS if service == WEB else SERVICE_PATHS[service]
     if (set(inputs) != set(paths) or not valid_sha(publisher_tree)
             or any(not valid_sha(value) for value in inputs.values())):
         raise ValueError("Incomplete workspace source identities")
     payload = json.dumps(inputs, sort_keys=True, separators=(",", ":"))
-    version = "evaluation-runner-v1" if service == RUNNER else f"web-{WEB_MODE}-v1"
+    version = ("evaluation-runner-v1" if service == RUNNER else f"web-{WEB_MODE}-v1"
+               if service == WEB else f"{service}-shared-runtime-v1")
     return hashlib.sha256(
         f"{version}\n{PLATFORM}\n{payload}\n{publisher_tree}\n".encode()
     ).hexdigest()
@@ -239,6 +239,12 @@ def publish(service, sha, output, actor, token, fork, visibility="private", *, r
         receipt_source = {"schemaVersion": 4, "sourceInputs": inputs,
                           "publisherTree": publisher_tree, "webMode": WEB_MODE}
         archive_paths = WEB_PATHS
+    elif service in SERVICE_PATHS:
+        inputs = {path: git("rev-parse", f"{sha}:{path}") for path in SERVICE_PATHS[service]}
+        publisher_tree = git("rev-parse", f"{sha}:infrastructure/release")
+        key = workspace_input_key(service, inputs, publisher_tree)
+        receipt_source = {"schemaVersion": 5, "sourceInputs": inputs, "publisherTree": publisher_tree}
+        archive_paths = SERVICE_PATHS[service]
     else:
         tree = git("rev-parse", f"{sha}:backend/{service}")
         key = input_key(tree, git("rev-parse", f"{sha}:infrastructure/release"))
@@ -264,8 +270,9 @@ def publish(service, sha, output, actor, token, fork, visibility="private", *, r
                 reference = uri + ":" + tag
                 context = temporary / "source"
                 build_options = []
-                if service in (RUNNER, WEB):
-                    dockerfile = RUNNER_DOCKERFILE if service == RUNNER else WEB_DOCKERFILE
+                if service in (RUNNER, WEB, *SERVICE_PATHS):
+                    dockerfile = (RUNNER_DOCKERFILE if service == RUNNER else WEB_DOCKERFILE
+                                  if service == WEB else f"backend/{service}/Dockerfile")
                     build_options += ["--file", str(context / dockerfile)]
                     for name, value in extra_labels.items():
                         build_options += ["--label", name + "=" + value]

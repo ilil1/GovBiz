@@ -21,6 +21,22 @@ REAL_RUN = subprocess.run
 
 
 class RunnerSourceTests(unittest.TestCase):
+    def test_shared_service_builds_bind_every_copy_input_and_reject_missing_packages(self):
+        for service, paths in publish.SERVICE_PATHS.items():
+            source = (publish.ROOT / "backend" / service / "Dockerfile").read_text()
+            for line in source.splitlines():
+                if not line.startswith("COPY ") or "--from=" in line:
+                    continue
+                inputs = [part for part in shlex.split(line)[1:-1] if not part.startswith("--")]
+                for path in inputs:
+                    self.assertTrue(any(path == root or path.startswith(root + "/") for root in paths), path)
+            inputs = dict.fromkeys(paths, "a" * 40)
+            key = publish.workspace_input_key(service, inputs, "b" * 40)
+            for path in paths:
+                self.assertNotEqual(key, publish.workspace_input_key(service, inputs | {path: "c" * 40}, "b" * 40))
+            with self.assertRaises(ValueError):
+                publish.workspace_input_key(service, {paths[0]: "a" * 40}, "b" * 40)
+
     def test_web_copy_inputs_and_build_mode_are_bound_to_publication(self):
         source = (publish.ROOT / publish.WEB_DOCKERFILE).read_text(encoding="utf-8")
         for line in source.splitlines():
@@ -67,11 +83,13 @@ class RunnerSourceTests(unittest.TestCase):
                 inputs.update(words[1:-1])
         self.assertEqual(inputs, set(publish.RUNNER_PATHS))
         self.assertNotIn("pipelines", inputs, "Do not copy the host pipeline environment")
+        self.assertEqual(
+            {path for path in inputs if path.startswith("backend/")},
+            {"backend/ai-service/pyproject.toml"},
+            "The unselected integration group needs metadata, not service source",
+        )
         self.assertIn(
-            "RUN /app/pipelines/.venv/bin/python /app/"
-            + publish.RUNNER_RELEASE.replace(
-                "execution_release.json", "execution_spec.py"
-            ),
+            "RUN --network=none /app/pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec",
             source,
         )
         self.assertNotIn("execution_spec.py --write", source)
@@ -228,7 +246,8 @@ class RunnerPublishTests(unittest.TestCase):
                 name + "/fixture.py"
                 if name
                 in (
-                    "backend/ai-service/app",
+                    "backend/ai-service", "backend/ops-service",
+                    "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
                     "evaluation/support-program-evidence",
                     "pipelines/evaluation",
                     "frontend/web",
@@ -242,8 +261,9 @@ class RunnerPublishTests(unittest.TestCase):
                 else "tracked input\n"
             )
             self.files[target] = raw
-        if self.service == publish.WEB:
-            self.files[publish.WEB_DOCKERFILE] = "tracked Dockerfile\n"
+        self.files[self.dockerfile] = "tracked Dockerfile\n"
+        if self.service == publish.RUNNER:
+            self.files[publish.RUNNER_RELEASE] = '{"schema_version": 1}\n'
         self.files["infrastructure/release/policy.py"] = "tracked policy\n"
         # Even a tracked unrelated file must not enter the runner build context.
         self.files["work/unrelated.txt"] = "not a build input\n"
@@ -267,15 +287,15 @@ class RunnerPublishTests(unittest.TestCase):
         self.sha = self.git("rev-parse", "HEAD")
         (self.root / ".env").write_text("PRIVATE=not-for-build\n")
         source_dir = (
-            "backend/ai-service/app"
+            "packages/govbiz-ai-runtime"
             if self.service == publish.RUNNER
-            else "frontend/web"
+            else "frontend/web" if self.service == publish.WEB else "backend/" + self.service
         )
         (self.root / source_dir / "untracked.py").write_text("not-for-build\n")
         dirty = (
             publish.RUNNER_RELEASE
             if self.service == publish.RUNNER
-            else publish.WEB_DOCKERFILE
+            else self.dockerfile
         )
         (self.root / dirty).write_text("dirty manifest must not be used\n")
         self.output = self.root / "receipt.json"
@@ -289,7 +309,7 @@ class RunnerPublishTests(unittest.TestCase):
         self.labels = (
             {"ai.govbiz.execution-release-sha256": self.expected_release}
             if self.service == publish.RUNNER
-            else {"ai.govbiz.web-mode": "portfolio"}
+            else {"ai.govbiz.web-mode": "portfolio"} if self.service == publish.WEB else {}
         )
 
     def git(self, *args):
@@ -398,7 +418,7 @@ class RunnerPublishTests(unittest.TestCase):
             )
             self.assertTrue(
                 all(
-                    call.kwargs["expected_labels"] == self.labels
+                    call.kwargs.get("expected_labels", {}) == self.labels
                     for call in lookup.call_args_list
                 )
             )
@@ -407,12 +427,12 @@ class RunnerPublishTests(unittest.TestCase):
     def test_real_archive_excludes_dirty_untracked_and_unrelated_files(self):
         receipt = self.publish()
         self.assertEqual(
-            receipt["schemaVersion"], 3 if self.service == publish.RUNNER else 4
+            receipt["schemaVersion"], 3 if self.service == publish.RUNNER else 4 if self.service == publish.WEB else 5
         )
         self.assertNotIn("sourceTree", receipt)
         if self.service == publish.RUNNER:
             self.assertEqual(receipt["executionReleaseSha256"], self.expected_release)
-        else:
+        elif self.service == publish.WEB:
             self.assertEqual(receipt["webMode"], "portfolio")
             self.assertNotIn("executionReleaseSha256", receipt)
         self.assertEqual(
@@ -485,6 +505,18 @@ class WebPublishTests(RunnerPublishTests):
     service = publish.WEB
     paths = publish.WEB_PATHS
     dockerfile = publish.WEB_DOCKERFILE
+
+
+class AiPublishTests(RunnerPublishTests):
+    service = "ai-service"
+    paths = publish.SERVICE_PATHS[service]
+    dockerfile = "backend/ai-service/Dockerfile"
+
+
+class OpsPublishTests(RunnerPublishTests):
+    service = "ops-service"
+    paths = publish.SERVICE_PATHS[service]
+    dockerfile = "backend/ops-service/Dockerfile"
 
 
 if __name__ == "__main__":

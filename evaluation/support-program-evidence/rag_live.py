@@ -8,16 +8,17 @@ from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
-import rag_evaluate as rag
-from rag_budget import RagBudget, make_rag_spec
+from govbiz_evaluation import rag_evaluate as rag
+from govbiz_evaluation.rag_budget import RagBudget, make_rag_spec
 
-ROOT = Path(__file__).resolve().parents[2]
-PLANS = ROOT / "backend/ops-service/apps/evaluations/rag_live_plans.json"
+from govbiz_evaluation_contracts.resources import evidence_root, source_path
+
+PLANS_ID = "backend/ops-service/apps/evaluations/rag_live_plans.json"
 
 
 def checked_vectors(value, chunks, dimensions):
     """저장 벡터가 승인한 청크의 ID·본문·순서와 정확히 일치하는지 확인한다."""
-    from app.support_program_evidence.service import _point_id_of
+    from govbiz_ai_runtime.support_program_evidence.service import _point_id_of
 
     rag.require(value["dimensions"] == dimensions, "Cached embedding dimensions differ")
     rag.require(
@@ -69,17 +70,17 @@ def prepare(fixture_path, *, model, document_vectors=None):
     return fixture, fingerprint, plan
 
 
-def catalog_plans():
+def catalog_plans(root=None):
     """빌드 시 토큰 배치만 고정한다. 원문·질문·청크는 Ops 이미지에 복제하지 않는다."""
-    from evaluate import DEFAULT_OPENAI_MODEL
+    from govbiz_evaluation.evaluate import DEFAULT_OPENAI_MODEL
 
-    catalog = json.loads((PLANS.parent / "capture_catalog.json").read_text())
+    catalog = json.loads(source_path("backend/ops-service/apps/evaluations/capture_catalog.json", root).read_text())
     result = {}
     for dataset in catalog:
         if dataset.get("evaluation_scope") != rag.SCOPE or dataset.get("replay_only"):
             continue
         _, fingerprint, plan = prepare(
-            ROOT / "evaluation/support-program-evidence" / dataset["fixture"],
+            evidence_root(root) / dataset["fixture"],
             model=DEFAULT_OPENAI_MODEL,
         )
         rag.require(fingerprint == dataset["fixture_sha256"], "Catalog fixture changed")
@@ -96,28 +97,28 @@ def catalog_plans():
 async def execute(fixture_path, output_dir, *, budget, execution_spec):
     """실행마다 격리된 메모리 색인을 사용한다. 외부 Core 원문 수집·재청킹은 수행하지 않는다."""
     import httpx2
-    from app.config import LangfuseSettings
-    from app.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
-    from app.support_program_evidence.answer_service import (
+    from govbiz_ai_runtime.config import LangfuseSettings
+    from govbiz_ai_runtime.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
+    from govbiz_ai_runtime.support_program_evidence.answer_service import (
         SupportProgramEvidenceAnswerService,
     )
-    from app.support_program_evidence.models import (
+    from govbiz_ai_runtime.support_program_evidence.models import (
         SupportProgramEvidenceAnswerRequest,
         SupportProgramEvidenceBatchRequest,
         SupportProgramEvidenceSearchRequest,
     )
-    from app.support_program_evidence.service import SupportProgramEvidenceService
-    from app.tracing import LLMTracing
-    from evaluate import (
+    from govbiz_ai_runtime.support_program_evidence.service import SupportProgramEvidenceService
+    from govbiz_ai_runtime.tracing import LLMTracing
+    from govbiz_evaluation.evaluate import (
         DEFAULT_LLM_MODEL_TIMEOUT_SECONDS,
         DEFAULT_LLM_RUN_TIMEOUT_SECONDS,
         SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS,
     )
     from langchain_openai import ChatOpenAI
-    from reporting import write_json
+    from govbiz_evaluation.reporting import write_json
     from openai import AsyncOpenAI
     from qdrant_client import AsyncQdrantClient
-    from apps.evaluations import vector_cache
+    from govbiz_evaluation_contracts import vector_cache
 
     config = execution_spec["live_config"]
     fixture, fingerprint, plan = prepare(
@@ -353,10 +354,14 @@ if __name__ == "__main__":
         description="RAG 호출 계획 생성·검증. 모델 호출 없음."
     )
     parser.add_argument("--write-plans", action="store_true")
+    parser.add_argument("--repository", type=Path, help="원본 카탈로그와 호출 계획을 갱신할 저장소")
     args = parser.parse_args()
-    plans = catalog_plans()
+    if args.write_plans and args.repository is None:
+        parser.error("--write-plans requires --repository")
+    plans = catalog_plans(args.repository)
+    plans_path = source_path(PLANS_ID, args.repository)
     if args.write_plans:
-        PLANS.write_text(json.dumps(plans, ensure_ascii=False, indent=2) + "\n")
+        plans_path.write_text(json.dumps(plans, ensure_ascii=False, indent=2) + "\n")
     else:
-        rag.require(plans == json.loads(PLANS.read_text()), "RAG call plans are stale")
+        rag.require(plans == json.loads(plans_path.read_text()), "RAG call plans are stale")
     print("RAG call plans verified; model calls: 0")

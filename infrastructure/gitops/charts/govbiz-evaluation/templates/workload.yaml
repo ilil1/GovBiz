@@ -116,7 +116,8 @@ spec:
             - |
               import shutil
               from pathlib import Path
-              source, target = Path('/app/evaluation/support-program-evidence'), Path('/evidence')
+              from govbiz_evaluation_contracts.resources import evidence_root
+              source, target = evidence_root(), Path('/evidence')
               # The mount root belongs to Kubernetes; only copy children we own.
               for entry in source.iterdir():
                   destination = target / entry.name

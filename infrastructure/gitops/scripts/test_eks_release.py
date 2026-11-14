@@ -57,6 +57,39 @@ def receipt():
 
 
 class EksReleaseTests(unittest.TestCase):
+    def test_publication_archives_shared_packages_and_builds_from_repository_root(self):
+        commands, archives = [], {}
+
+        def command(*args, **kwargs):
+            commands.append(args)
+            return subprocess.CompletedProcess(args, 0, SHA if args[:2] == ("git", "rev-parse") else "fixture")
+
+        def archive(sha, paths, target):
+            self.assertEqual(sha, SHA)
+            archives[target.name] = (paths, target)
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(release, "check"),
+            patch.object(release, "settings", return_value=(ENV["AWS_ACCOUNT_ID"], ENV["AWS_REGION"], ENV["EKS_CLUSTER_NAME"])),
+            patch.object(release, "run", side_effect=command),
+            patch.object(release, "aws", return_value={"repositories": [{"imageTagMutability": "IMMUTABLE"}]}),
+            patch.object(release, "digest", side_effect=[None, "sha256:" + "b" * 64] * len(release.COMPONENTS)),
+            patch.object(release, "archive", side_effect=archive),
+        ):
+            release.publish(SHA, Path(directory) / "receipt.json")
+        builds = [args for args in commands if args[:2] == ("docker", "build")]
+        self.assertEqual(len(builds), len(release.COMPONENTS))
+        for service, build in zip(release.COMPONENTS, builds, strict=True):
+            paths, source = archives[service]
+            runner = service == "evaluation-runner"
+            expected = release.RUNNER_PATHS if runner else release.SERVICE_PATHS.get(service, ("backend/" + service,))
+            self.assertEqual(paths, expected)
+            context = source if runner or service in release.SERVICE_PATHS else source / "backend" / service
+            self.assertEqual(Path(build[-1]), context)
+            dockerfile = source / ("infrastructure/llmops/Dockerfile.runner" if runner else "backend/" + service + "/Dockerfile")
+            self.assertEqual(Path(build[build.index("--file") + 1]), dockerfile)
+
     def test_only_explicitly_enabled_selected_main_can_release(self):
         self.assertEqual(release.SOURCE, "ilil1/SKN34-4th-1Team")
         self.assertEqual(deploy.SOURCE, release.SOURCE)

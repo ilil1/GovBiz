@@ -26,7 +26,8 @@ class EvaluationReleaseTests(SourceFixture):
         files = dict(cls.source)
         for path in release.RUNNER_PATHS:
             if path in (
-                "backend/ai-service/app",
+                "packages/govbiz-ai-runtime",
+                "packages/govbiz-evaluation-contracts",
                 "evaluation/support-program-evidence",
                 "pipelines/evaluation",
             ):
@@ -65,6 +66,8 @@ class EvaluationReleaseTests(SourceFixture):
             for path in (
                 "infrastructure/release",
                 *("backend/" + s for s in source.SERVICES),
+                "packages/govbiz-ai-runtime",
+                "packages/govbiz-evaluation-contracts",
             )
         ]
 
@@ -224,7 +227,7 @@ class EvaluationReleaseTests(SourceFixture):
                 "sourceInputs": {
                     key: value
                     for key, value in self.inputs.items()
-                    if key != release.RUNNER_RELEASE
+                    if key != "packages/govbiz-evaluation-contracts"
                 }
             },
         ]

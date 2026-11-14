@@ -429,9 +429,7 @@ def test_rag_disabled_check_rejects_acceptance_budget_rejection_or_created_run(s
 def rag_run():
     # Use the real offline evaluator and committed capture, without a server or model call.
     root = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
-    module_spec = importlib.util.spec_from_file_location("smoke_rag_evaluate", root / "rag_evaluate.py")
-    evaluator = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(evaluator)
+    from govbiz_evaluation import rag_evaluate as evaluator
     report = evaluator.evaluate(root / "rag-fixture.json", root / "rag-synthetic-capture.json")
     return {
         "dataset_id": "rag-synthetic-multichunk-v1", "execution_mode": "replay",
@@ -534,9 +532,7 @@ def test_rag_smoke_rejects_failed_cases_or_changed_measurements(rag_run, mutatio
 def core_rag_run(request):
     version = request.param
     root = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
-    module_spec = importlib.util.spec_from_file_location("core_smoke_evaluator", root / "rag_evaluate.py")
-    evaluator = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(evaluator)
+    from govbiz_evaluation import rag_evaluate as evaluator
     folder = root / f"runs/core-rag-20261002/{version}"
     report = evaluator.evaluate(folder / "fixture.json", folder / "capture.json")
     cases = [case["caseId"] for case in report["cases"]]

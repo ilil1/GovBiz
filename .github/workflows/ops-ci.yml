@@ -87,10 +87,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev build-essential pkg-config
       - name: Check lock file
         run: uv lock --check
-      - name: Verify execution release against repository sources and inputs
-        run: python apps/evaluations/execution_spec.py
       - name: Sync dependencies
         run: uv sync --locked
+      - name: Verify execution release against repository sources and inputs
+        run: uv run --locked python -m govbiz_evaluation_contracts.execution_spec --root ../..
       - name: Check installed dependencies
         run: uv pip check --python .venv/bin/python
       - name: Lint
@@ -146,9 +146,12 @@ jobs:
           connection.close()
           PY
           uv run --locked python scripts/check-schema.py --legacy-evaluations
+      - name: Bundle registered evaluation inputs
+        working-directory: .
+        run: python3 infrastructure/llmops/bundle_runner_inputs.py
       - name: Install locked pipeline environment for mixed RAG HTTP checks
         working-directory: pipelines
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --group integration
       - name: Check mixed RAG integration sources
         run: |
           uv run --locked ruff check ../../infrastructure/llmops/rag_budget_http_checks.py ../../infrastructure/llmops/rag_budget_http_worker.py

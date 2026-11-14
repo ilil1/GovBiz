@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "GovBiz 4차 프로젝트 Django 서비스"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "govbiz-evaluation-contracts",
     "Django>=5.2.17,<5.3",
     "django-environ>=0.12,<1",
     "djangorestframework>=3.16,<4",
@@ -17,6 +18,9 @@ dev = ["ruff>=0.12,<1"]
 [tool.uv]
 package = false
 required-version = "==0.12.5"
+
+[tool.uv.sources]
+govbiz-evaluation-contracts = { path = "../../packages/govbiz-evaluation-contracts" }
 
 [tool.ruff]
 target-version = "py312"

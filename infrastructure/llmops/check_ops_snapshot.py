@@ -336,7 +336,9 @@ def main():
                 "build",
                 "-t",
                 image,
-                str(Path(__file__).resolve().parents[2] / "backend/ops-service"),
+                "-f",
+                str(Path(__file__).resolve().parents[2] / "backend/ops-service/Dockerfile"),
+                str(Path(__file__).resolve().parents[2]),
             ],
             timeout=600,
         )

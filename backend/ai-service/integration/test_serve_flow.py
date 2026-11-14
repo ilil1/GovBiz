@@ -6,8 +6,8 @@ import httpx2
 from fastapi.testclient import TestClient
 import pytest
 
-import evaluate
-import serve_flow
+from govbiz_evaluation import evaluate
+from integration import serve_flow
 
 
 @pytest.mark.parametrize("url", [
@@ -125,7 +125,7 @@ def test_unexpected_service_error_stops_the_run_and_preserves_http_500(tmp_path,
 
 def test_embedding_guard_is_wired_before_sdk_transmission(tmp_path, monkeypatch):
     from unittest.mock import Mock
-    from embedding_budget import EmbeddingBudget, embedding_operations
+    from govbiz_evaluation.embedding_budget import EmbeddingBudget, embedding_operations
 
     operations = embedding_operations(["hello"], kind="document_embedding", label="doc",
         model="text-embedding-3-small", dimensions=1536, request_token_limit=8191)

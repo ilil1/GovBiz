@@ -36,7 +36,7 @@ class LocalReleaseTests(unittest.TestCase):
         for name in release.SERVICES:
             files[f"backend/{name}/source.txt"] = name.encode()
         tree_paths = {
-            "backend/ai-service/app",
+            "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
             "evaluation/support-program-evidence",
             "pipelines/evaluation",
             "frontend/web",
@@ -44,31 +44,31 @@ class LocalReleaseTests(unittest.TestCase):
         }
         for path in (*release.RUNNER_PATHS, *release.WEB_PATHS):
             files[path + "/fixture.txt" if path in tree_paths else path] = b"fixture"
+        files[release.RUNNER_RELEASE] = b"fixture"
         cls.sha = commit_tree(cls.root, files)
         git_bytes(cls.root, "update-ref", "HEAD", cls.sha)
         publisher = cls.git_identity("infrastructure/release")
         cls.receipts = {}
         for name in release.COMPONENTS:
-            if name in release.SERVICES:
+            if name in release.SERVICES and name not in release.SERVICE_PATHS:
                 tree = cls.git_identity("backend/" + name)
                 key = release.input_key(tree, publisher)
                 source = {"schemaVersion": 2, "sourceTree": tree}
             else:
                 paths = (
-                    release.RUNNER_PATHS
-                    if name == release.RUNNER
-                    else release.WEB_PATHS
+                    release.SERVICE_PATHS[name] if name in release.SERVICE_PATHS
+                    else release.RUNNER_PATHS if name == release.RUNNER else release.WEB_PATHS
                 )
                 inputs = {path: cls.git_identity(path) for path in paths}
                 key = release.workspace_input_key(name, inputs, publisher)
                 source = {
-                    "schemaVersion": 3 if name == release.RUNNER else 4,
+                    "schemaVersion": 5 if name in release.SERVICE_PATHS else 3 if name == release.RUNNER else 4,
                     "sourceInputs": inputs,
                     "publisherTree": publisher,
                 }
                 if name == release.RUNNER:
                     source["executionReleaseSha256"] = release.digest(b"fixture")
-                else:
+                elif name == release.WEB:
                     source["webMode"] = release.WEB_MODE
             cls.receipts[name] = {
                 **source,
@@ -104,7 +104,7 @@ class LocalReleaseTests(unittest.TestCase):
                     release.validate_receipt(
                         self.root, FORK, self.sha, name, receipt | {key: value}
                     )
-        for name in (release.WEB, release.RUNNER):
+        for name in (release.WEB, release.RUNNER, *release.SERVICE_PATHS):
             with self.assertRaises(ValueError):
                 release.validate_receipt(
                     self.root,

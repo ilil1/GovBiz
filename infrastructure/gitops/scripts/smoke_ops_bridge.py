@@ -301,7 +301,7 @@ def main():
             fixture = json.loads(
                 (
                     REPOSITORY_ROOT
-                    / "backend/ops-service/apps/evaluations/capture_catalog.json"
+                    / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json"
                 ).read_text()
             )[0]["fixture"]
             digest = hashlib.sha256(

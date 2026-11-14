@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { getEvaluationCatalog, type EvaluationCatalog } from '../../../data/ops/opsApi'
 import { EvaluationDatasetPicker } from './EvaluationDatasetPicker'
-import registeredJson from '../../../../../../backend/ops-service/apps/evaluations/capture_catalog.json?raw'
+import registeredJson from '../../../../../../packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json?raw'
 
 type Dataset = EvaluationCatalog['datasets'][number]
 let datasets: Dataset[]

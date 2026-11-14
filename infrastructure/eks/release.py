@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "infrastructure/release"))
 import gate
-from publish import RUNNER_PATHS, WEB_PATHS
+from publish import RUNNER_PATHS, SERVICE_PATHS, WEB_PATHS
 from repository import from_ci
 
 SOURCE = "ilil1/SKN34-4th-1Team"
@@ -180,14 +180,16 @@ def publish(sha, output):
                 source = Path(temp) / service
                 source.mkdir()
                 runner = service == "evaluation-runner"
+                shared = service in SERVICE_PATHS
                 archive(
-                    sha, RUNNER_PATHS if runner else ("backend/" + service,), source
+                    sha, RUNNER_PATHS if runner else SERVICE_PATHS[service] if shared
+                    else ("backend/" + service,), source
                 )
-                context = source if runner else source / "backend" / service
+                context = source if runner or shared else source / "backend" / service
                 dockerfile = (
                     source / "infrastructure/llmops/Dockerfile.runner"
                     if runner
-                    else context / "Dockerfile"
+                    else source / "backend" / service / "Dockerfile"
                 )
                 ref = f"{registry}/{repository}:{tag}"
                 run(

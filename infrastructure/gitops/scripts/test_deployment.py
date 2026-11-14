@@ -96,16 +96,23 @@ class SourceFixture(unittest.TestCase):
                 .strip()
             )
             key = bundle.digest(f"v1\nlinux/amd64\n{tree}\n{release}\n".encode())
+            shared = {path: bundle.git_bytes(cls.root, "rev-parse", sha + ":" + path).decode().strip()
+                      for path in bundle.SERVICE_PATHS.get(service, ())
+                      if bundle.git_bytes(cls.root, "ls-tree", sha, "--", path).strip()}
+            provenance = {"schemaVersion": 2, "sourceTree": tree}
+            if len(shared) > 1:
+                from publish import workspace_input_key
+                key = workspace_input_key(service, shared, release)
+                provenance = {"schemaVersion": 5, "sourceInputs": shared, "publisherTree": release}
             result.append(
                 {
-                    "schemaVersion": 2,
+                    **provenance,
                     "visibility": "public",
                     "service": service,
                     "repository": FORK.image(service),
                     "digest": "sha256:" + str(index) * 64,
                     "platform": "linux/amd64",
                     "verifiedRevision": sha,
-                    "sourceTree": tree,
                     "inputKey": key,
                     "tag": "src-" + key,
                 }

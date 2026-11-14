@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "govbiz-evaluation-engine"
+version = "0.1.0"
+description = "GovBiz evaluation, budgeting and reports without web-service imports"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "govbiz-ai-runtime==0.1.0",
+    "govbiz-evaluation-contracts==0.1.0",
+    "pandas==3.0.6",
+    "pandera[pandas]==0.33.1",
+    "evidently==0.7.23",
+]
+
+[tool.setuptools]
+packages = ["govbiz_evaluation"]
+package-dir = { govbiz_evaluation = "support-program-evidence" }
+include-package-data = false
+
+[tool.uv.sources]
+govbiz-ai-runtime = { path = "../packages/govbiz-ai-runtime" }
+govbiz-evaluation-contracts = { path = "../packages/govbiz-evaluation-contracts" }
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "support-program-evidence/*.py" }]

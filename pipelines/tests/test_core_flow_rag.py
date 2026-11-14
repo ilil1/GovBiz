@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-import core_flow_rag as importer
+from govbiz_evaluation import core_flow_rag as importer
 import pytest
-from apps.evaluations import execution_spec
+from govbiz_evaluation_contracts import execution_spec
 
 RUN = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence/runs/official-flow-20260907-v2"
 
@@ -23,7 +23,7 @@ def records():
 
 @pytest.fixture
 def repository(tmp_path):
-    root = importer.ROOT
+    root = SOURCE_ROOT
     release = execution_spec.build_release(root)
     paths = {
         path
@@ -45,7 +45,7 @@ def repository(tmp_path):
         )
     )
     for entry in json.loads(
-        (root / execution_spec.OPS / "capture_catalog.json").read_bytes()
+        source_path(execution_spec.OPS + "capture_catalog.json", root).read_bytes()
     ):
         paths.add(execution_spec.EVIDENCE + entry["fixture"])
         paths.update(
@@ -55,8 +55,10 @@ def repository(tmp_path):
     for name in paths:
         path = target / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(root / name, path)
-    catalog_path = target / execution_spec.OPS / "capture_catalog.json"
+        shutil.copyfile(source_path(name, root), path)
+    core_fixtures = target / "backend/core-service/src/test/resources/support-program-evidence"
+    shutil.copytree(CORE_FIXTURE.parent, core_fixtures)
+    catalog_path = source_path(execution_spec.OPS + "capture_catalog.json", target)
     catalog_path.write_bytes(
         importer.encode(
             [
@@ -68,14 +70,14 @@ def repository(tmp_path):
     )
     for existing in (target / importer.EVIDENCE / "runs").glob("core-official-*"):
         shutil.rmtree(existing)
-    (target / execution_spec.OPS / "execution_release.json").write_bytes(
+    source_path(execution_spec.OPS + "execution_release.json", target).write_bytes(
         importer.encode(execution_spec.build_release(target))
     )
     return target
 
 
 def test_preserves_actual_core_search_answers_and_historical_usage(records):
-    fixture, capture, provenance = importer.convert(*records)
+    fixture, capture, provenance = importer.convert(*records, fixture_path=CORE_FIXTURE)
     original = json.loads(records[0])
     assert len(fixture["documents"]) == 2
     assert all(len(doc["chunks"]) == 1 for doc in fixture["documents"])
@@ -106,7 +108,7 @@ def test_http_fixture_cannot_claim_a_model_or_usage(records):
         observed["publicResponse"]["answer"] = case["stubAnswer"]
         observed["aiCalls"][2]["response"]["answer"] = case["stubAnswer"]
     raw = importer.encode(core)
-    _, capture, provenance = importer.convert(raw)
+    _, capture, provenance = importer.convert(raw, fixture_path=CORE_FIXTURE)
     assert capture["execution"] == {
         "kind": "synthetic",
         "model": None,
@@ -116,9 +118,9 @@ def test_http_fixture_cannot_claim_a_model_or_usage(records):
     }
     assert provenance["recordedApiCalls"] == 0 and provenance["recordedTokens"] is None
     with pytest.raises(ValueError, match="transport"):
-        importer.convert(raw, records[1])
+        importer.convert(raw, records[1], fixture_path=CORE_FIXTURE)
     with pytest.raises(ValueError, match="transport"):
-        importer.convert(records[0])
+        importer.convert(records[0], fixture_path=CORE_FIXTURE)
 
 
 def _http_fixture_core(records, source_label):
@@ -136,13 +138,13 @@ def _http_fixture_core(records, source_label):
 
 
 def test_http_fixture_accepts_core_citations_with_the_bizinfo_source_label(records):
-    _, capture, _ = importer.convert(importer.encode(_http_fixture_core(records, "기업마당 상세 본문")))
+    _, capture, _ = importer.convert(importer.encode(_http_fixture_core(records, "기업마당 상세 본문")), fixture_path=CORE_FIXTURE)
     assert capture["execution"]["kind"] == "synthetic"
 
 
 def test_http_fixture_rejects_core_citations_with_another_source_label(records):
     with pytest.raises(ValueError):
-        importer.convert(importer.encode(_http_fixture_core(records, "K-Startup 상세 본문")))
+        importer.convert(importer.encode(_http_fixture_core(records, "K-Startup 상세 본문")), fixture_path=CORE_FIXTURE)
 
 
 @pytest.mark.parametrize(
@@ -168,13 +170,13 @@ def test_partial_or_tampered_capture_is_rejected_without_output(records, change)
     core = json.loads(records[0])
     change(core)
     with pytest.raises(ValueError):
-        importer.convert(importer.encode(core), records[1])
+        importer.convert(importer.encode(core), records[1], fixture_path=CORE_FIXTURE)
 
 
 def test_unknown_usage_stays_unknown(records):
     api = json.loads(records[1])
     api["calls"][2]["response"]["usage"] = None
-    _, _, provenance = importer.convert(records[0], importer.encode(api))
+    _, _, provenance = importer.convert(records[0], importer.encode(api), fixture_path=CORE_FIXTURE)
     assert provenance["recordedTokens"]["combinedTotal"] is None
 
 
@@ -182,7 +184,7 @@ def test_registration_preserves_sources_and_is_idempotent_replay_only(repository
     receipt = importer.register(
         RUN / "core/capture.json", RUN / "api/api-capture.json", repository=repository
     )
-    before = (repository / importer.OPS / "capture_catalog.json").read_bytes()
+    before = (source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository)).read_bytes()
     entry = json.loads(before)[-1]
     assert entry["replay_only"]
     assert (receipt.parent / "core-capture.json").read_bytes() == (
@@ -203,7 +205,7 @@ def test_registration_preserves_sources_and_is_idempotent_replay_only(repository
         )
         == receipt
     )
-    assert (repository / importer.OPS / "capture_catalog.json").read_bytes() == before
+    assert (source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository)).read_bytes() == before
     (receipt.parent / "core-capture.json").write_text("{}")
     with pytest.raises(ValueError, match="Registered source"):
         importer.register(
@@ -214,8 +216,8 @@ def test_registration_preserves_sources_and_is_idempotent_replay_only(repository
 
 
 def test_failed_registration_rolls_back_catalog_and_new_files(repository, monkeypatch):
-    catalog = repository / importer.OPS / "capture_catalog.json"
-    release = repository / importer.OPS / "execution_release.json"
+    catalog = source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository)
+    release = source_path("backend/ops-service/apps/evaluations/execution_release.json", repository)
     before = (catalog.read_bytes(), release.read_bytes())
     original = execution_spec.build_release
     count = 0
@@ -236,7 +238,7 @@ def test_failed_registration_rolls_back_catalog_and_new_files(repository, monkey
         )
     assert (catalog.read_bytes(), release.read_bytes()) == before
     assert not list((repository / importer.EVIDENCE / "runs").glob("core-official-*"))
-    assert not (repository / importer.OPS / ".core-rag-registration.lock").exists()
+    assert not (source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository).parent / ".core-rag-registration.lock").exists()
 
 
 def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
@@ -244,13 +246,13 @@ def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
 ):
     from pipelines.evaluation import flows as ops_flow
     from pipelines.evaluation import rag as rag_replay_flow
-    from apps.evaluations import catalog, rag_replay
+    from govbiz_evaluation_contracts import catalog, rag_replay
 
     importer.register(
         RUN / "core/capture.json", RUN / "api/api-capture.json", repository=repository
     )
     datasets = json.loads(
-        (repository / importer.OPS / "capture_catalog.json").read_bytes()
+        (source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository)).read_bytes()
     )
     item = datasets[-1]
     release = execution_spec.build_release(repository)
@@ -258,7 +260,7 @@ def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
     monkeypatch.setattr(
         execution_spec,
         "RELEASE_PATH",
-        repository / importer.OPS / "execution_release.json",
+        source_path("backend/ops-service/apps/evaluations/execution_release.json", repository),
     )
     monkeypatch.setattr(ops_flow, "ROOT", repository)
     monkeypatch.setattr(rag_replay_flow, "ROOT", repository)
@@ -313,3 +315,7 @@ def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
     assert summary["semanticFaithfulness"] is None and not summary["baselineEligible"]
     assert len(scores) == 16
     assert all("session_id" in score and "trace_id" not in score for score in scores)
+
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
+CORE_FIXTURE = SOURCE_ROOT / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"
+from govbiz_evaluation_contracts.resources import source_path

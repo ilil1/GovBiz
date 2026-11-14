@@ -3,18 +3,16 @@
 import argparse
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import core_rag_budget as planner
-
-sys.path.insert(0, str(planner.ROOT / "backend/ops-service"))
-from apps.evaluations.execution_spec import (  # noqa: E402
+from govbiz_evaluation_contracts.execution_spec import (
     EVIDENCE,
     OPS,
     build_release,
     digest,
 )
+from govbiz_evaluation_contracts.resources import source_path
 
 
 def encode(value):
@@ -27,16 +25,16 @@ def register(directory, repository):
     plan = planner.build_plan(directory)
     for relative, expected in plan["preparationSha256"].items():
         planner.rag.require(
-            planner.rag.digest((repository / relative).read_bytes()) == expected,
+            planner.rag.digest(source_path(relative, repository).read_bytes()) == expected,
             "Registration checkout differs from the validating source",
         )
     identifier = "core-rag-" + digest(plan["sourceSha256"])
     relative = Path("runs") / identifier
     destination = repository / EVIDENCE / relative
-    catalog_path = repository / OPS / "capture_catalog.json"
-    release_path = repository / OPS / "execution_release.json"
+    catalog_path = source_path(OPS + "capture_catalog.json", repository)
+    release_path = source_path(OPS + "execution_release.json", repository)
     # Concurrent registrations must not overwrite each other's catalog or release.
-    lock = repository / OPS / ".core-rag-registration.lock"
+    lock = catalog_path.with_name(".core-rag-registration.lock")
     with lock.open("x") as registration_lock:
         try:
             original_catalog, original_release = (
@@ -50,7 +48,7 @@ def register(directory, repository):
             )
             planner.rag.require(
                 all(
-                    planner.rag.digest((planner.ROOT / path).read_bytes()) == expected
+                    planner.rag.digest(source_path(path, planner.ROOT).read_bytes()) == expected
                     for path, expected in release["rag_evaluation"]["files"].items()
                 ),
                 "Registration evaluator differs from the deployment release",

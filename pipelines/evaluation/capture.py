@@ -6,19 +6,14 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
-import sys
 
-ROOT = Path(__file__).resolve().parents[2]
-# Prefect의 파일 진입점 로더에서도 평가 모듈을 찾을 수 있게 한다.
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-import pipelines  # noqa: F401 -- initialize shared source paths before loading the flow
+ROOT = None  # 명시적인 소스 검증에서만 checkout 경로를 지정한다.
 
 from filelock import FileLock
 from prefect import flow
 from prefect.runtime import flow_run
 
-from reporting import EVALUATOR_VERSION, validate_reassessment, write_json
+from govbiz_evaluation.reporting import EVALUATOR_VERSION, validate_reassessment, write_json
 from pipelines.evaluation.tasks import prepare, publish, render
 
 
@@ -26,9 +21,9 @@ from pipelines.evaluation.tasks import prepare, publish, render
 def evaluate_capture(fixture: str, capture: str, reference: str, output_dir: str, case_ids: list[str] | None = None,
                      execution_spec_sha256: str | None = None, reassessment: dict | None = None) -> dict:
     reassessment = validate_reassessment(reassessment)
-    lock_dir = ROOT / "work/llmops"
+    lock_dir = Path(os.environ.get("LLMOPS_WORK_DIR", (ROOT or Path.cwd()) / "work/llmops"))
     lock_dir.mkdir(parents=True, exist_ok=True)
-    # 수동 실행 프로세스도 같은 checkout에서 겹치지 않는다. 배포 시에도 serve(limit=1)을 적용한다.
+    # 수동 실행 프로세스도 같은 작업 디렉터리에서 겹치지 않는다. 배포 시에도 serve(limit=1)을 적용한다.
     with FileLock(str(lock_dir / "evaluation.lock"), timeout=0):
         output = Path(output_dir)
         output.mkdir(parents=True, exist_ok=False)

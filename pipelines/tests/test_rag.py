@@ -10,12 +10,12 @@ from uuid import uuid4
 from pipelines.evaluation import flows as ops_flow
 import pytest
 from pipelines.evaluation import rag
-import rag_reporting
-from apps.evaluations import rag_replay
-from apps.evaluations.catalog import public_datasets, validate_execution
-from apps.evaluations.execution_spec import digest, make_spec, read_release
-from apps.evaluations.rag_material import material_from_sources
-from apps.evaluations.recovery_inputs import read_recovery_inputs
+from govbiz_evaluation import rag_reporting
+from govbiz_evaluation_contracts import rag_replay
+from govbiz_evaluation_contracts.catalog import public_datasets, validate_execution
+from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
+from govbiz_evaluation_contracts.rag_material import material_from_sources
+from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
 
 DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
@@ -151,7 +151,7 @@ def test_official_preparation_can_render_unmeasured_report_without_model_calls(r
 
 
 def test_catalog_and_runner_reject_live_and_unpinned_rag_before_spending(runner, monkeypatch):
-    monkeypatch.setattr("apps.evaluations.vector_cache.discover", lambda _: None)
+    monkeypatch.setattr("govbiz_evaluation_contracts.vector_cache.discover", lambda _: None)
     item = next(item for item in public_datasets() if item["id"] == DATASET)
     assert item["live_config"]["max_model_calls"] == 8 and item["execution_profiles"]["live"]
     with pytest.raises(ValueError):

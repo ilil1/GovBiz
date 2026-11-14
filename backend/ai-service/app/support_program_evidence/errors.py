@@ -1,6 +1,7 @@
-class SupportProgramEvidenceError(RuntimeError):
-    """상세 공고 근거 검색·답변 경계의 안전한 오류."""
+"""Compatibility import for the shared AI runtime implementation."""
 
-    def __init__(self, code: str = "EVIDENCE_UNAVAILABLE") -> None:
-        super().__init__(code)
-        self.code = code
+import sys
+from importlib import import_module
+
+# Preserve module globals and class identity for existing consumers and patches.
+sys.modules[__name__] = import_module("govbiz_ai_runtime.support_program_evidence.errors")

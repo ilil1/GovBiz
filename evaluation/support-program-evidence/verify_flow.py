@@ -13,9 +13,6 @@ import sys
 import unicodedata
 
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent.parent
-DEFAULT_FIXTURE = ROOT / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"
 HASH = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -143,7 +140,7 @@ def _usage_sum(calls, field, names):
     return totals
 
 
-def verify(core, api, fixture_path=DEFAULT_FIXTURE):
+def verify(core, api, fixture_path, *, recorder_path=None):
     fixture_path = Path(fixture_path)
     fixture_bytes = fixture_path.read_bytes()
     fixture = _json(fixture_bytes)
@@ -257,7 +254,7 @@ def verify(core, api, fixture_path=DEFAULT_FIXTURE):
                        "combinedTotal": sum(totals) if all(value is not None for value in totals) else None},
             "recordedModel": api["model"], "promptSha256": api["promptSha256"],
             "apiElapsedMsSum": round(sum(call["elapsedMs"] for call in api_calls), 3),
-            "recorderMatchesCurrentCheckout": api["recorderSha256"] == digest((HERE / "serve_flow.py").read_bytes()),
+            "recorderMatchesCurrentCheckout": (api["recorderSha256"] == digest(Path(recorder_path).read_bytes()) if recorder_path is not None else False),
             "apiRequestBodiesRecorded": False, "apiLinkage": "fresh-collection operation sequence and model-output mapping only",
             "limitations": ["Not an independent proof that API requests occurred; upstream request bodies and vectors are not recorded.",
                             "Valid IDs, original excerpts and expected statuses do not establish semantic faithfulness.",
@@ -268,7 +265,7 @@ def verify(core, api, fixture_path=DEFAULT_FIXTURE):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
+    parser.add_argument("--fixture", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         result = verify(_json((args.run_dir / "core/capture.json").read_bytes()),

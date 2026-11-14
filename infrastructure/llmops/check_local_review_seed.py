@@ -47,7 +47,7 @@ def main():
     project = "govbiz-git-seed-test-" + uuid4().hex[:12]
     image = args.ops_image or project + ":ops"
     if not args.ops_image:
-        run(["docker", "build", "-t", image, str(ROOT / "backend/ops-service")])
+        run(["docker", "build", "-t", image, "-f", str(ROOT / "backend/ops-service/Dockerfile"), str(ROOT)])
     # Explicit disposable values only; do not load the developer's .env or .env.ops.
     env = {
         **os.environ,

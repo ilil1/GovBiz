@@ -4,10 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
-import official_snapshot
-import rag_evaluate as rag
+from govbiz_evaluation import official_snapshot
+from govbiz_evaluation import rag_evaluate as rag
+from govbiz_evaluation_contracts.resources import evidence_root
 
-HERE = Path(__file__).resolve().parent
+HERE = evidence_root()
 SOURCE = HERE / "runs/official-answer-20260907-v3/fixture.json"
 OUTPUT = HERE / "runs/official-rag-20261006-v1"
 DATASET = "official-rag-20261006-v1"
@@ -48,8 +49,8 @@ def paragraphs(content, *, grouped_lists=False):
     return chunks
 
 
-def build(*, grouped_lists=False):
-    original, _ = rag.read_json(SOURCE)
+def build(*, grouped_lists=False, source=None):
+    original, _ = rag.read_json(SOURCE if source is None else source)
     official_snapshot.validate_fixture(original)
     documents = []
     for doc in original["documents"]:
@@ -114,13 +115,15 @@ def build(*, grouped_lists=False):
     return fixture, pending
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--grouped-lists", action="store_true", help="연속 목록을 보존하는 별도 v2 자료")
-    args = parser.parse_args()
-    fixture, pending = build(grouped_lists=args.grouped_lists)
-    output = GROUPED_OUTPUT if args.grouped_lists else OUTPUT
+    parser.add_argument("--repository", type=Path, required=True)
+    args = parser.parse_args(argv)
+    evidence = evidence_root(args.repository.resolve())
+    fixture, pending = build(grouped_lists=args.grouped_lists, source=evidence / "runs/official-answer-20260907-v3/fixture.json")
+    output = evidence / "runs" / (GROUPED_DATASET if args.grouped_lists else DATASET)
     for name, value in (("fixture.json", fixture), ("not-started.json", pending)):
         path = output / name
         if args.write:

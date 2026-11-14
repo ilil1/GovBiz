@@ -2,15 +2,20 @@
 
 import argparse
 import json
-import sys
+import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "evaluation/support-program-evidence"))
-sys.path.insert(0, str(ROOT / "backend/ai-service"))
 
-import rag_evaluate as rag  # noqa: E402
-from rag_budget import digest, make_rag_spec  # noqa: E402
+from govbiz_evaluation import rag_evaluate as rag
+from govbiz_evaluation.rag_budget import digest
+
+# This source-only tool prepares the explicitly installed AI HTTP integration app.
+_adapter_spec = importlib.util.spec_from_file_location(
+    "govbiz_http_evaluation_adapter", ROOT / "backend/ai-service/integration/serve_flow.py"
+)
+http_adapter = importlib.util.module_from_spec(_adapter_spec)
+_adapter_spec.loader.exec_module(http_adapter)
 
 PLAN_NAME = "budget-plan.json"
 
@@ -84,7 +89,7 @@ def build_plan(directory):
                 "limit": rag.search_request(case, document)["limit"],
             }
         )
-    execution = make_rag_spec(material)
+    execution = http_adapter.make_http_rag_spec(material)
     # A plan fixes future inputs. It does not retroactively approve or settle the captured calls.
     return {
         "schemaVersion": "core-rag-budget-plan-v1",
@@ -98,10 +103,9 @@ def build_plan(directory):
             for path in (
                 Path(__file__).resolve(),
                 Path(__file__).with_name("core_rag_capture.py"),
-                Path(rag.__file__),
                 CHUNKER,
             )
-        },
+        } | {"evaluation/support-program-evidence/rag_evaluate.py": rag.digest(Path(rag.__file__).read_bytes())},
         "executionSpecSha256": digest(execution),
         "executionSpec": execution,
     }

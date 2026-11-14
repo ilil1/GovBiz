@@ -3,24 +3,20 @@
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
-import sys
+import os
 
-ROOT = Path(__file__).resolve().parents[2]
-# Prefect의 파일 진입점 로더에서도 평가 모듈을 찾을 수 있게 한다.
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-import pipelines  # noqa: F401 -- initialize shared source paths before loading the flow
+ROOT = None  # 명시적인 소스 검증에서만 checkout 경로를 지정한다.
 
 from filelock import FileLock
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.runtime import flow_run
 
-import rag_evaluate
-from app.config import LangfuseSettings
-from apps.evaluations import rag_replay
-from reporting import write_json
-from rag_reporting import render, score_payloads
+from govbiz_evaluation import rag_evaluate
+from govbiz_ai_runtime.config import LangfuseSettings
+from govbiz_evaluation_contracts import rag_replay
+from govbiz_evaluation.reporting import write_json
+from govbiz_evaluation.rag_reporting import render, score_payloads
 from pipelines.evaluation.clients import publish_payloads
 
 
@@ -34,7 +30,7 @@ def evaluate_rag_capture(
     fixture, capture, reference, output_dir, *, execution_spec, execution_spec_sha256
 ):
     spec = execution_spec
-    lock_dir = ROOT / "work/llmops"
+    lock_dir = Path(os.environ.get("LLMOPS_WORK_DIR", (ROOT or Path.cwd()) / "work/llmops"))
     lock_dir.mkdir(parents=True, exist_ok=True)
     with FileLock(str(lock_dir / "evaluation.lock"), timeout=0):
         output = Path(output_dir)

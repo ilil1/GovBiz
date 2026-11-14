@@ -9,14 +9,14 @@ from uuid import uuid4
 
 import pytest
 
-import evaluate
+from govbiz_evaluation import evaluate
 from pipelines.evaluation import capture as llmops
-import reporting
+from govbiz_evaluation import reporting
 from pipelines.evaluation import flows as ops_flow
-from app.config import LangfuseSettings
-from apps.evaluations.catalog import DATASETS, get_dataset, managed_snapshot_context
-from apps.evaluations.execution_spec import build_release, digest, make_spec, read_release, verify_spec
-from apps.evaluations.managed_materials import build_snapshot, encoded, materialize, release_dataset
+from govbiz_ai_runtime.config import LangfuseSettings
+from govbiz_evaluation_contracts.catalog import DATASETS, get_dataset, managed_snapshot_context
+from govbiz_evaluation_contracts.execution_spec import build_release, digest, make_spec, read_release, verify_spec
+from govbiz_evaluation_contracts.managed_materials import build_snapshot, encoded, materialize, release_dataset
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def specification(snapshot, mode="replay"):
     config = {}
     candidate = "manual"
     if mode == "live":
-        from apps.evaluations.catalog import live_config
+        from govbiz_evaluation_contracts.catalog import live_config
         with managed_snapshot_context(snapshot):
             config = live_config(dataset_id)
         candidate = "new-model-response"
@@ -253,7 +253,7 @@ def test_database_json_key_order_preserves_hashes_and_request_contract(snapshot,
 
 
 def test_managed_replay_can_reuse_reviewed_source_and_recover_report(snapshot, tmp_path, monkeypatch):
-    from apps.evaluations import recovery_inputs
+    from govbiz_evaluation_contracts import recovery_inputs
 
     release = build_release(ops_flow.ROOT)
     dataset_id = snapshot["catalog"]["id"]
@@ -299,7 +299,7 @@ def test_managed_replay_can_reuse_reviewed_source_and_recover_report(snapshot, t
 
 
 def test_stored_response_reassessment_preserves_source_and_never_calls_model(snapshot, tmp_path, monkeypatch):
-    from apps.evaluations import recovery_inputs
+    from govbiz_evaluation_contracts import recovery_inputs
 
     dataset_id = snapshot["catalog"]["id"]
     source_id = str(uuid4())

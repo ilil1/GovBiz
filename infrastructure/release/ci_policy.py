@@ -102,6 +102,15 @@ def affected_jobs(paths):
         elif path.startswith("backend/ops-service/"):
             add("ops-ci.yml")
             add("llmops-ci.yml")
+        elif path.startswith("packages/govbiz-ai-runtime/"):
+            add("ci.yml", "container-integration")
+            add("catalog-ci.yml")
+            add("ops-ci.yml")
+            add("llmops-ci.yml")
+        elif path.startswith("packages/govbiz-evaluation-contracts/"):
+            add("ci.yml", "ai-service")
+            add("ops-ci.yml")
+            add("llmops-ci.yml")
         elif path.startswith("frontend/web/"):
             add("ci.yml", "frontend")
             test_only = ("/__tests__/" in path or re.search(r"\.(test|spec)\.[cm]?[jt]sx?$", path))

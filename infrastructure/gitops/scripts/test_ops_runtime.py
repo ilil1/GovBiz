@@ -1191,7 +1191,7 @@ class ReadOnlyRuntimeTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.state = Path(temporary.name)
         self.source = (
-            self.state / "backend/ops-service/apps/evaluations/execution_release.json"
+            self.state / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/execution_release.json"
         )
         self.source.parent.mkdir(parents=True)
         self.source.write_text('{"version": 1}')

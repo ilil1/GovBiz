@@ -68,11 +68,13 @@ jobs:
           version: '0.12.5'
           python-version: '3.12'
           working-directory: pipelines
+      - name: Bundle registered evaluation inputs
+        run: python3 infrastructure/llmops/bundle_runner_inputs.py
       - name: Install locked evaluation dependencies
         working-directory: pipelines
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --group integration
       - name: Verify execution release
-        run: pipelines/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
+        run: pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec --root "$PWD"
       - name: Verify Kubernetes Ops DB archive guards and isolated MySQL restore
         shell: bash
         run: |
@@ -82,10 +84,10 @@ jobs:
           OPS_DB_SNAPSHOT_MYSQL_IMAGE="$snapshot_mysql_image" PYTHONPATH=infrastructure/gitops/scripts pipelines/.venv/bin/python -B -m unittest test_ops_db_snapshot
       - name: Test offline runner preparation checks
         working-directory: .
-        run: uv run --project pipelines --locked --extra dev python -m pytest infrastructure/llmops/test_check_runner_runtime.py infrastructure/llmops/test_restore_image.py -q
+        run: uv run --project pipelines --locked --extra dev --group integration python -m pytest infrastructure/llmops/test_check_runner_runtime.py infrastructure/llmops/test_restore_image.py -q
       - name: Test smoke assertions and offline HTTP model fixtures
         working-directory: .
-        run: uv run --project pipelines --locked --extra dev python -m pytest infrastructure/llmops/test_ops_smoke.py infrastructure/llmops/test_cancellation_smoke.py infrastructure/llmops/test_search_trace_smoke.py infrastructure/llmops/test_core_search_trace.py infrastructure/llmops/test_core_assistant_trace.py infrastructure/llmops/test_core_evidence_trace.py infrastructure/llmops/test_core_rag_capture.py infrastructure/llmops/test_core_rag_budget.py infrastructure/llmops/test_register_core_rag.py infrastructure/scripts/test_catalog_separation_config.py -q
+        run: uv run --project pipelines --locked --extra dev --group integration python -m pytest infrastructure/llmops/test_ops_smoke.py infrastructure/llmops/test_cancellation_smoke.py infrastructure/llmops/test_search_trace_smoke.py infrastructure/llmops/test_core_search_trace.py infrastructure/llmops/test_core_assistant_trace.py infrastructure/llmops/test_core_evidence_trace.py infrastructure/llmops/test_core_rag_capture.py infrastructure/llmops/test_core_rag_budget.py infrastructure/llmops/test_register_core_rag.py infrastructure/scripts/test_catalog_separation_config.py -q
       - name: Verify default and LAN Prefect Compose settings
         run: python3 -B infrastructure/llmops/check_prefect_compose.py
       - name: Generate isolated development credentials
@@ -167,7 +169,7 @@ jobs:
             receipt=$(pipelines/.venv/bin/python -B infrastructure/llmops/register_core_rag.py "work/llmops-ci/core-rag/$version" --repository "$PWD")
             cp "$receipt" "work/llmops-ci/core-registration-$version.json"
           done
-          pipelines/.venv/bin/python backend/ops-service/apps/evaluations/execution_spec.py
+          pipelines/.venv/bin/python -m govbiz_evaluation_contracts.execution_spec --root "$PWD"
       - name: Build isolated HTTP artifact storage, Core auth fixture, Ops and runner
         run: |
           docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation config --format json | python3 infrastructure/llmops/check_artifact_compose.py
@@ -178,15 +180,19 @@ jobs:
         run: |
           docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation run --rm --no-deps evaluation-runner /app/pipelines/.venv/bin/python -c '
           from pathlib import Path
-          assert not list(Path("/app/evaluation/support-program-evidence/runs").glob("official-flow-*"))
-          bundles = list(Path("/app/evaluation/support-program-evidence/runs").glob("core-rag-*"))
+          from importlib.util import find_spec
+          from govbiz_evaluation_contracts.resources import evidence_root
+          assert find_spec("app") is None and find_spec("apps") is None
+          assert not Path("/app/backend").exists()
+          assert not list((evidence_root() / "runs").glob("official-flow-*"))
+          bundles = list((evidence_root() / "runs").glob("core-rag-*"))
           assert len(bundles) >= 3
           assert any(bundle.name == "core-rag-20261002" for bundle in bundles)
           for bundle in bundles:
               expected = ({f"{version}/{name}.json" for version in ("v1", "v2") for name in ("fixture", "capture")}
                           if bundle.name == "core-rag-20261002" else {"source/fixture.json", "source/capture.json"})
               assert {str(p.relative_to(bundle)) for p in bundle.rglob("*") if p.is_file()} == expected
-          for bundle in Path("/app/evaluation/support-program-evidence/runs").glob("core-official-*"):
+          for bundle in (evidence_root() / "runs").glob("core-official-*"):
               expected = {"fixture.json"} | {str(p.relative_to(bundle)) for p in bundle.glob("core-http-*/capture.json")}
               assert len(expected) >= 2
               assert {str(p.relative_to(bundle)) for p in bundle.rglob("*") if p.is_file()} == expected
@@ -201,7 +207,7 @@ jobs:
           test -n "$image_id"
           docker run --rm --interactive --network none --read-only --memory 768m --pids-limit 64 \
             --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
-            --entrypoint /app/pipelines/.venv/bin/python "$image_id" -B - --root /app \
+            --entrypoint /app/pipelines/.venv/bin/python "$image_id" -B - \
             < infrastructure/llmops/check_runner_runtime.py
       - name: Start background Ops status synchronization after migrations
         run: docker compose --env-file infrastructure/llmops/.env --env-file infrastructure/llmops/.env.ops --env-file infrastructure/llmops/.env.artifacts -f infrastructure/llmops/compose.yaml -f infrastructure/llmops/compose.ops.yaml -f infrastructure/llmops/compose.artifacts.yaml -f infrastructure/llmops/compose.auth-test.yaml --profile evaluation up -d --build ops-sync
@@ -344,9 +350,11 @@ jobs:
           version: '0.12.5'
           python-version: '3.12'
           working-directory: pipelines
+      - name: Bundle registered evaluation inputs
+        run: python3 infrastructure/llmops/bundle_runner_inputs.py
       - name: Install locked evaluation dependencies
         working-directory: pipelines
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --group integration
       - name: Verify execution, cancellation, budget and free RAG recovery with offline model HTTP
         # Includes cold startup, 13 fixed-context and 6 RAG scenarios; deadlines stay strict.
         timeout-minutes: 20
@@ -376,9 +384,11 @@ jobs:
           version: '0.12.5'
           python-version: '3.12'
           working-directory: pipelines
+      - name: Bundle registered evaluation inputs
+        run: python3 infrastructure/llmops/bundle_runner_inputs.py
       - name: Install locked evaluation dependencies
         working-directory: pipelines
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --group integration
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2.0.2
         with:

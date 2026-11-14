@@ -1689,7 +1689,9 @@ SKN34-4th-1Team/
 │  ├─ catalog-service/       공고 수집·원본·색인 공개
 │  ├─ ai-service/            내부 검색·AI·문서 도구
 │  └─ ops-service/           평가 운영 API·전용 DB
-├─ evaluation/               검색·근거 답변·문서 등의 평가 자료·실행기
+├─ packages/                 AI 실행 로직·평가 계약 공통 Python 패키지
+├─ evaluation/               평가 엔진·지표·자료·실험 기록
+├─ pipelines/                Prefect 평가 순서·작업·실행 진입점
 ├─ infrastructure/
 │  ├─ llmops/                Langfuse·Prefect·실행기·복구 도구
 │  ├─ gitops/                Helm·kind·인프라 검증·기존 Argo 설정

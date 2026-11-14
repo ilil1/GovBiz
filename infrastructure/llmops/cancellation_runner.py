@@ -13,7 +13,6 @@ from uuid import UUID
 PROBE = "http://cancellation-probe:8099"
 RESULTS = Path("/results")
 PARENT = RESULTS / ".cancellation-parent.json"
-sys.path[:0] = ["/app", "/app/evaluation/support-program-evidence"]
 
 
 def process_info(pid):
@@ -57,7 +56,7 @@ def barrier(run_id, stage):
 
 def install_http_double(run_id):
     import httpx2
-    from budget_client import BudgetClient
+    from govbiz_evaluation.budget_client import BudgetClient
 
     class OfflineTransport(httpx2.AsyncBaseTransport):
         def __init__(self):
@@ -175,7 +174,7 @@ def process_command():
         pid = json.loads(PARENT.read_text())["pid"]
         os.kill(pid, {"STOP": signal.SIGSTOP, "CONT": signal.SIGCONT}[sys.argv[2]])
     elif sys.argv[1] == "duplicate":
-        from budget_client import BudgetClient, BudgetUnavailable
+        from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
 
         run_id, flow_id, spec_hash = sys.argv[2:]
         client = BudgetClient(run_id, flow_id, spec_hash)

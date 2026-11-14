@@ -234,11 +234,45 @@ wheels = [
 ]
 
 [[package]]
+name = "govbiz-ai-runtime"
+version = "0.1.0"
+source = { directory = "../../packages/govbiz-ai-runtime" }
+dependencies = [
+    { name = "httpx" },
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "langfuse" },
+    { name = "langsmith" },
+    { name = "openai" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "pydantic" },
+    { name = "qdrant-client" },
+    { name = "tiktoken" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "langchain-core", specifier = "==1.6.3" },
+    { name = "langchain-openai", specifier = "==1.6.2" },
+    { name = "langfuse", specifier = "==4.15.6" },
+    { name = "langsmith", specifier = "==0.12.4" },
+    { name = "openai", specifier = "==3.3.1" },
+    { name = "opentelemetry-api", specifier = "==1.44.0" },
+    { name = "opentelemetry-sdk", specifier = "==1.44.0" },
+    { name = "pydantic", specifier = "==2.13.4" },
+    { name = "qdrant-client", specifier = "==1.17.1" },
+    { name = "tiktoken", specifier = "==0.12.0" },
+]
+
+[[package]]
 name = "govbiz-ai-service"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "govbiz-ai-runtime" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "langchain-core" },
@@ -264,6 +298,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.139.2,<0.140.0" },
+    { name = "govbiz-ai-runtime", directory = "../../packages/govbiz-ai-runtime" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.0.0,<3.0.0" },
     { name = "jsonschema", specifier = ">=4.23,<5" },

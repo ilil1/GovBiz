@@ -626,18 +626,22 @@ flowchart LR
 
 Ops 이미지와 실행기는 같은 `execution_release.json`을 사용해야 한다. 생성 도구는 SDK 없이
 소스·uv.lock·등록 자료를 읽어 결정적인 manifest를 만든다. 생성 시각이나 manifest 자체는 해시하지 않는다.
+카탈로그·RAG 계획·릴리스 JSON 원본은 `packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/`에 있다.
 해시 대상은 명시적 목록이며 생성 경로의 새 import·설정 책임이 생기면 목록도 함께 검토한다.
 잠금 파일은 빌드 시 `uv sync --locked`로 설치한다. 이 검증은 동일 응답의 완전 재현이나 모델 품질을 보장하지 않는다.
 
 ```bash
 # 저장소 루트. 해당 코드/설정을 의도적으로 바꾼 뒤 생성 결과를 함께 검토한다.
-python3 backend/ops-service/apps/evaluations/execution_spec.py --write
+PYTHONPATH=packages/govbiz-evaluation-contracts/src python3 -m govbiz_evaluation_contracts.execution_spec --root . --write
 # 기본 실행은 비교만 하며 불일치하면 실패한다.
-python3 backend/ops-service/apps/evaluations/execution_spec.py
+PYTHONPATH=packages/govbiz-evaluation-contracts/src python3 -m govbiz_evaluation_contracts.execution_spec --root .
+# 실행기에 필요한 등록 자료만 설치 패키지에 포함한다. 과거 실행 폴더 전체를 복사하지 않는다.
+python3 infrastructure/llmops/bundle_runner_inputs.py
 ```
 
 Ops CI·LLMOps CI와 실행기 Docker 빌드에서 manifest가 소스와 일치하는지 검사한다.
-실행기는 접수 때 저장된 명세를 실제 파일로 다시 계산해 비교한다. 생성 경로만 바뀌면 무료
+실행기는 설치된 공통 패키지의 코드·등록 자료를 실제 바이트로 읽어 접수 명세와 비교한다.
+`backend/ai-service`, `backend/ops-service` 소스 폴더를 실행기에 복사하지 않는다. 생성 경로만 바뀌면 무료
 저장 응답 재평가를 막지 않으며, 평가 코드·입력 변경은 재평가에서도 감지한다.
 
 실행기 이미지에는 임베딩 입력 계산에 필요한 `cl100k_base` 데이터를 빌드 시 포함한다.
@@ -1078,7 +1082,7 @@ pipelines/.venv/bin/python -B infrastructure/scripts/verify-catalog-separation.p
   --rag-capture-output work/core-rag-new
 # 전체 서버 실행은 --config-only를 제외. 기존 개발 환경을 교체하지 않고 임시 프로젝트를 만듭니다.
 # 수집한 파일은 서버·모델 호출 없이 다시 계산할 수 있습니다.
-pipelines/.venv/bin/python evaluation/support-program-evidence/rag_evaluate.py \
+pipelines/.venv/bin/python -m govbiz_evaluation.rag_evaluate \
   --fixture work/core-rag-new/v1/fixture.json --capture work/core-rag-new/v1/capture.json
 # 전체 수집 성공 후 생성된 예산 준비 파일을 모델·Ops 호출 없이 대조합니다.
 pipelines/.venv/bin/python infrastructure/llmops/core_rag_budget.py check work/core-rag-new/v1

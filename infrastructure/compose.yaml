@@ -89,8 +89,8 @@ services:
 
   ai-service:
     build:
-      context: ../backend/ai-service
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/ai-service/Dockerfile
     init: true
     environment:
       DOCUMENT_INTERNAL_TOKEN: ${DOCUMENT_INTERNAL_TOKEN:-}

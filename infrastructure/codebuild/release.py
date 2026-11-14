@@ -8,7 +8,7 @@ import time
 
 BUILD_CONTEXTS = {
     'core-service': 'backend/core-service',
-    'ai-service': 'backend/ai-service',
+    'ai-service': '.',
 }
 
 
@@ -57,8 +57,9 @@ def publish(registry, service, sha):
     digest = image_digest(repository, tag)
     if digest is None:
         ref = registry + '/' + repository + ':' + tag
+        options = ['--file', 'backend/ai-service/Dockerfile'] if service == 'ai-service' else []
         run('docker', 'build', '--platform', 'linux/amd64', '--label',
-            'org.opencontainers.image.revision=' + sha, '--tag', ref, context)
+            'org.opencontainers.image.revision=' + sha, '--tag', ref, *options, context)
         run('docker', 'push', ref)
         digest = image_digest(repository, tag)
     if not digest or not re.fullmatch('sha256:[0-9a-f]{64}', digest):

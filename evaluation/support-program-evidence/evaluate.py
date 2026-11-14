@@ -14,22 +14,22 @@ from time import perf_counter
 
 MAX_INPUT_TOKENS = 32768
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "backend/ai-service"))
+from govbiz_evaluation_contracts.resources import evidence_root, source_path
 
-from app.config import (  # noqa: E402
+HERE = evidence_root()
+
+from govbiz_ai_runtime.config import (  # noqa: E402
     DEFAULT_LLM_MODEL_TIMEOUT_SECONDS,
     DEFAULT_LLM_RUN_TIMEOUT_SECONDS,
     DEFAULT_OPENAI_MODEL,
 )
-from app.support_program_evidence.models import (  # noqa: E402
+from govbiz_ai_runtime.support_program_evidence.models import (  # noqa: E402
     SupportProgramEvidenceAnswerRequest,
     SupportProgramEvidenceAnswerResponse,
     SupportProgramEvidenceAnswerSelection,
     SupportProgramEvidenceAnswerChunk,
 )
-from app.support_program_evidence.prompt import (  # noqa: E402
+from govbiz_ai_runtime.support_program_evidence.prompt import (  # noqa: E402
     SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS,
 )
 
@@ -53,7 +53,7 @@ def load_fixture(path: Path) -> tuple[dict, list[tuple[dict, SupportProgramEvide
     require(fixture.get("scope", "fixed-answer-context-only") == "fixed-answer-context-only", "unsupported fixture scope")
     require(fixture.get("dataType") == ("official-html-snapshot" if official else "admin-provided" if managed else "synthetic"), "fixture source type differs")
     if official:
-        from official_snapshot import validate_fixture
+        from govbiz_evaluation.official_snapshot import validate_fixture
         validate_fixture(fixture)
     require(fixture.get("referenceSource") == ("admin-authored" if managed else "ai-authored"), "reference source must be disclosed")
     documents = fixture.get("documents")
@@ -159,7 +159,7 @@ def report(fixture: dict, prepared: list, fixture_hash: str, capture: dict | Non
         result["measurementKind"] = "admin-entered-answer"
         result["modelMeasured"] = False
     if historical:
-        from official_snapshot import validate_projection
+        from govbiz_evaluation.official_snapshot import validate_projection
         validate_projection(fixture, capture)
         result["measurementKind"] = "historical-answer-projection"
         result["provenance"] = capture["provenance"]
@@ -285,10 +285,10 @@ async def execute(prepared: list, fixture_hash: str, output_dir: Path, *,
     from langchain_openai import ChatOpenAI
     import httpx2
     from openai import AsyncOpenAI
-    from app.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
-    from app.support_program_evidence.answer_service import SupportProgramEvidenceAnswerService
-    from app.config import LangfuseSettings
-    from app.tracing import LLMTracing
+    from govbiz_ai_runtime.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
+    from govbiz_ai_runtime.support_program_evidence.answer_service import SupportProgramEvidenceAnswerService
+    from govbiz_ai_runtime.config import LangfuseSettings
+    from govbiz_ai_runtime.tracing import LLMTracing
     from uuid import uuid4
 
     key = os.environ.get("OPENAI_API_KEY", "").strip()

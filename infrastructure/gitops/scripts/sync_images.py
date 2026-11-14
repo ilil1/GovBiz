@@ -11,7 +11,7 @@ import zipfile
 from urllib.parse import quote
 
 import yaml
-from promote_image import ROOT, SERVICES, UniqueLoader, updated_values, validate_receipt
+from promote_image import ROOT, SERVICES, UniqueLoader, updated_values, validate_receipt, validate_source
 
 # promote_image initializes the shared release-module path before these imports.
 # isort: split
@@ -107,10 +107,7 @@ def checked_receipts(sha, release, fork, get=api):
     for artifact in artifacts:
         payload = get(f"repos/{fork.repository}/actions/artifacts/{artifact['id']}/zip", binary=True)
         receipt = decode_receipt(payload, artifact, sha, fork)
-        service_tree = identities["backend/" + receipt["service"]]
-        key = hashlib.sha256(f"v1\nlinux/amd64\n{service_tree}\n{release_tree}\n".encode()).hexdigest()
-        if receipt["sourceTree"] != service_tree or receipt["inputKey"] != key:
-            raise ValueError("Receipt tracked-input identity mismatch")
+        validate_source(receipt, identities, release_tree)
         receipts.append(receipt)
     return receipts
 

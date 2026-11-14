@@ -3,16 +3,12 @@
 import argparse
 import json
 import shutil
-import sys
 from pathlib import Path
 
-import rag_evaluate as rag
-import verify_flow
-
-ROOT = Path(__file__).resolve().parents[2]
+from govbiz_evaluation import rag_evaluate as rag
+from govbiz_evaluation import verify_flow
 EVIDENCE = Path("evaluation/support-program-evidence")
-OPS = Path("backend/ops-service/apps/evaluations")
-sys.path.insert(0, str(ROOT / "backend/ops-service"))
+from govbiz_evaluation_contracts.resources import source_path
 
 
 def encode(value):
@@ -33,7 +29,7 @@ def _expected_public_citations(public_response, citations):
     return citations
 
 
-def convert(core_raw, api_raw=None, *, fixture_path=verify_flow.DEFAULT_FIXTURE):
+def convert(core_raw, api_raw=None, *, fixture_path):
     """실제 wire와 공개 응답을 대조한다. 기록에 없는 trace·사용량·사람 승인을 만들지 않는다."""
     core = verify_flow._json(core_raw)
     fixture_raw = Path(fixture_path).read_bytes()
@@ -255,14 +251,14 @@ def convert(core_raw, api_raw=None, *, fixture_path=verify_flow.DEFAULT_FIXTURE)
     return fixture, capture, provenance
 
 
-def register(core_path, api_path=None, *, repository=ROOT):
+def register(core_path, api_path=None, *, repository):
     """목록·해시 명세와 원본을 함께 갱신한다. 중복 등록은 검증 후 같은 경로를 반환한다."""
-    from apps.evaluations.execution_spec import build_release
+    from govbiz_evaluation_contracts.execution_spec import build_release
 
     repository = Path(repository).resolve()
     core_raw = Path(core_path).read_bytes()
     api_raw = None if api_path is None else Path(api_path).read_bytes()
-    fixture, capture, provenance = convert(core_raw, api_raw)
+    fixture, capture, provenance = convert(core_raw, api_raw, fixture_path=repository / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json")
     dataset_id = "core-official-" + capture["fixtureSha256"][:24]
     capture_id = (
         "core-http-"
@@ -281,10 +277,10 @@ def register(core_path, api_path=None, *, repository=ROOT):
     run_dir = destination / capture_id
     receipt_path = run_dir / "provenance.json"
     paths = {
-        "catalog": repository / OPS / "capture_catalog.json",
-        "release": repository / OPS / "execution_release.json",
+        "catalog": source_path("backend/ops-service/apps/evaluations/capture_catalog.json", repository),
+        "release": source_path("backend/ops-service/apps/evaluations/execution_release.json", repository),
     }
-    lock = repository / OPS / ".core-rag-registration.lock"
+    lock = paths["catalog"].parent / ".core-rag-registration.lock"
     with lock.open("x"):
         try:
             originals = {key: path.read_bytes() for key, path in paths.items()}
@@ -295,7 +291,7 @@ def register(core_path, api_path=None, *, repository=ROOT):
             )
             rag.require(
                 all(
-                    rag.digest((ROOT / name).read_bytes()) == expected
+                    rag.digest(source_path(name).read_bytes()) == expected
                     for name, expected in release["rag_evaluation"]["files"].items()
                 ),
                 "Import evaluator differs from the deployment checkout",
@@ -391,13 +387,20 @@ def main():
         action="store_true",
         help="검증 후 저장소의 Ops 재평가 목록에 등록",
     )
+    parser.add_argument("--repository", type=Path, help="등록할 원본 저장소")
+    parser.add_argument("--fixture", type=Path, help="검증할 Core HTML fixture")
     args = parser.parse_args()
+    if args.register and args.repository is None:
+        parser.error("--register requires --repository")
+    if not args.register and args.fixture is None:
+        parser.error("--fixture is required for verification")
     if args.register:
-        print(register(args.core_capture, args.api_capture))
+        print(register(args.core_capture, args.api_capture, repository=args.repository))
     else:
         _, _, provenance = convert(
             args.core_capture.read_bytes(),
             None if args.api_capture is None else args.api_capture.read_bytes(),
+            fixture_path=args.fixture,
         )
         print(encode(provenance).decode())
 

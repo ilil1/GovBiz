@@ -41,9 +41,8 @@ import json, os, sys
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-sys.path.insert(0, "/app")
 from pipelines.evaluation import flows as ops_flow
-from apps.evaluations.execution_spec import ExecutionSpecMismatch, build_release
+from govbiz_evaluation_contracts.execution_spec import ExecutionSpecMismatch, build_release
 os.environ["OPENAI_API_KEY"] = "not-a-real-key-model-function-is-forbidden"
 os.environ["LLMOPS_LIVE_ENABLED"] = "true"
 os.environ["LLMOPS_RESULTS_DIR"] = "/tmp/spec-mismatch-results"
@@ -52,7 +51,7 @@ def forbidden(*args, **kwargs):
     raise AssertionError("Model and evaluation execution are forbidden in this probe")
 ops_flow.evaluate.execute = forbidden
 ops_flow.evaluate_capture = forbidden
-actual = build_release(ops_flow.ROOT)
+actual = build_release()
 assert actual["generation"] != parameters["execution_spec"]["generation"]
 assert actual["evaluation"] == parameters["execution_spec"]["evaluation"]
 try:
@@ -70,7 +69,8 @@ assert json.loads((folder / "request.json").read_text())["execution_spec"] == pa
 print(json.dumps({**receipt, "ops_generation": parameters["execution_spec"]["generation"]["sha256"],
     "runner_generation": actual["generation"]["sha256"], "request_id": parameters["request_id"]}))
 '''
-    prompt = "backend/ai-service/app/support_program_evidence/prompt.py"
+    prompt = "packages/govbiz-ai-runtime/src/govbiz_ai_runtime/support_program_evidence/prompt.py"
+    mounted_prompt = "/app/pipelines/.venv/lib/python3.12/site-packages/govbiz_ai_runtime/support_program_evidence/prompt.py"
     with tempfile.TemporaryDirectory(prefix="govbiz-spec-smoke-") as temporary:
         directory = Path(temporary)
         directory.chmod(0o755)
@@ -79,7 +79,7 @@ print(json.dumps({**receipt, "ops_generation": parameters["execution_spec"]["gen
         changed.chmod(0o644)
         completed = subprocess.run(
             COMPOSE + ["run", "--rm", "--no-deps", "-T", "-e", "OPENAI_API_KEY=",
-                       "-v", f"{changed}:/app/{prompt}:ro", "--entrypoint", "/app/pipelines/.venv/bin/python",
+                       "-v", f"{changed}:{mounted_prompt}:ro", "--entrypoint", "/app/pipelines/.venv/bin/python",
                        "evaluation-runner", "-"],
             cwd=ROOT, input="parameters = " + repr(parameters) + "\n" + code,
             check=True, text=True, capture_output=True,

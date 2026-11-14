@@ -16,6 +16,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "release"))
 from repository import from_origin  # noqa: E402
+from publish import SERVICE_PATHS, input_key, workspace_input_key  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVICES = ("core-service", "catalog-service", "ai-service", "ops-service")
@@ -40,9 +41,11 @@ UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, uni
 
 def validate_receipt(receipt, fork):
     keys = {"schemaVersion", "service", "repository", "digest", "tag", "platform",
-            "verifiedRevision", "sourceTree", "inputKey"}
+            "verifiedRevision", "inputKey"}
     version = receipt.get("schemaVersion")
-    if type(version) is not int or version not in (1, 2) or set(receipt) != (keys | {"visibility"} if version == 2 else keys):
+    keys |= ({"sourceInputs", "publisherTree", "visibility"} if version == 5
+             else {"sourceTree", "visibility"} if version == 2 else {"sourceTree"})
+    if type(version) is not int or version not in (1, 2, 5) or set(receipt) != keys:
         raise ValueError("Unsupported or unexpected image receipt fields")
     if receipt.get("visibility", "private") not in ("private", "public"):
         raise ValueError("Invalid receipt visibility")
@@ -52,13 +55,37 @@ def validate_receipt(receipt, fork):
     patterns = {
         "repository": re.escape(fork.image(service)),
         "digest": r"sha256:[0-9a-f]{64}", "verifiedRevision": r"[0-9a-f]{40}",
-        "sourceTree": r"[0-9a-f]{40}", "inputKey": r"[0-9a-f]{64}",
+        "inputKey": r"[0-9a-f]{64}",
     }
+    patterns["publisherTree" if version == 5 else "sourceTree"] = r"[0-9a-f]{40}"
     for key, pattern in patterns.items():
         if not isinstance(receipt[key], str) or not re.fullmatch(pattern, receipt[key]):
             raise ValueError("Invalid receipt field: " + key)
     if receipt["tag"] != "src-" + receipt["inputKey"]:
         raise ValueError("Receipt tag differs from build input identity")
+    if version == 5:
+        if service not in SERVICE_PATHS or not isinstance(receipt["sourceInputs"], dict):
+            raise ValueError("Unexpected shared runtime receipt")
+        if receipt["inputKey"] != workspace_input_key(service, receipt["sourceInputs"], receipt["publisherTree"]):
+            raise ValueError("Receipt shared inputs differ from build identity")
+
+
+def validate_source(receipt, identities, publisher_tree):
+    """Compare receipt claims with independently loaded Git identities."""
+    service = receipt["service"]
+    if receipt["schemaVersion"] == 5:
+        inputs = {path: identities.get(path) for path in SERVICE_PATHS[service]}
+        if (receipt["sourceInputs"] != inputs or receipt["publisherTree"] != publisher_tree
+                or receipt["inputKey"] != workspace_input_key(service, inputs, publisher_tree)):
+            raise ValueError("Receipt tracked-input identity mismatch")
+        return
+    # Historical v1/v2 receipts remain readable. A source containing a shared
+    # runtime must prove that package's identity with the new receipt schema.
+    if any(path in identities for path in SERVICE_PATHS.get(service, ())[1:]):
+        raise ValueError("Shared runtime source requires a version 5 receipt")
+    tree = identities.get("backend/" + service)
+    if receipt["sourceTree"] != tree or receipt["inputKey"] != input_key(tree, publisher_tree):
+        raise ValueError("Receipt tracked-input identity mismatch")
 
 
 def updated_values(values, receipt, expected_digest, fork):

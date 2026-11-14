@@ -1,11 +1,4 @@
 """외부 모델 호출 없이 파이프라인의 계약과 실패 처리를 검증한다."""
-from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-import pipelines  # noqa: F401 -- shared source paths and local Prefect settings
-
-
 # Flow 함수 단위 테스트는 Prefect 서버 없이 내부 Task의 본문을 실행한다.
 
 import pytest

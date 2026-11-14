@@ -174,7 +174,7 @@ def test_execute_uses_production_agent_with_mock_http_only(
     if tracing_enabled:
         from langfuse import Langfuse
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-        from app import tracing as tracing_module
+        from govbiz_ai_runtime import tracing as tracing_module
 
         exporter = InMemorySpanExporter()
         monkeypatch.setattr(tracing_module, "Langfuse", lambda **kwargs: Langfuse(**kwargs, span_exporter=exporter))
@@ -332,7 +332,7 @@ def test_execute_requires_explicit_key_and_new_directory(loaded, tmp_path, monke
 
 @pytest.mark.parametrize("failure", ["partial-write", "replace"])
 def test_capture_write_failure_preserves_previous_record_and_closes_client(loaded, tmp_path, monkeypatch, failure):
-    import app.support_program_evidence.answer_service as answer_module
+    import govbiz_ai_runtime.support_program_evidence.answer_service as answer_module
     import openai
 
     class FakeClient:
@@ -436,7 +436,7 @@ def test_live_rejects_too_small_call_budget_before_client_creation(loaded, tmp_p
 
 @pytest.mark.parametrize("failure", ["authorize", "settle", "unknown", "timeout", "none", "duplicate-case"])
 def test_ops_budget_precedes_http_and_uncertain_usage_blocks_next_case(loaded, tmp_path, monkeypatch, failure):
-    from budget_client import BudgetClient, BudgetUnavailable
+    from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
     monkeypatch.setenv("OPENAI_API_KEY", "offline-no-real-call")
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "offline-test-budget-token-32-characters")

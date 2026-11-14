@@ -2,17 +2,14 @@
 
 from hashlib import sha256
 from pathlib import Path
-import sys
 
 import pandas as pd
 import pandera.pandas as pa
 from evidently import Report
 from evidently.metrics import MeanValue, RowCount
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend/ops-service"))
-from apps.evaluations import rag_replay
-from reporting import add_paired_change_metrics, compact_report_charts
+from govbiz_evaluation_contracts import rag_replay
+from govbiz_evaluation.reporting import add_paired_change_metrics, compact_report_charts
 
 RESULT_SCHEMA = pa.DataFrameSchema(
     {

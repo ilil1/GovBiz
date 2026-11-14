@@ -10,11 +10,10 @@ from types import SimpleNamespace
 import pytest
 
 EVIDENCE = Path(__file__).resolve().parent
-sys.path.insert(0, str(EVIDENCE))
-import rag_evaluate
-import rag_reporting
-from apps.evaluations import rag_replay
-from apps.evaluations.rag_material import material_from_sources
+from govbiz_evaluation import rag_evaluate
+from govbiz_evaluation import rag_reporting
+from govbiz_evaluation_contracts import rag_replay
+from govbiz_evaluation_contracts.rag_material import material_from_sources
 
 
 @pytest.mark.parametrize("kind", ["synthetic", "integration-stub", "recorded"])

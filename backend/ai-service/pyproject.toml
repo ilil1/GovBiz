@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Internal AI analysis service for GovBiz"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "govbiz-ai-runtime==0.1.0",
     "mcp==2.1.0",
     "jsonschema>=4.23,<5",
     "fastapi>=0.139.2,<0.140.0",
@@ -38,3 +39,6 @@ include = ["app*"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+
+[tool.uv.sources]
+govbiz-ai-runtime = { path = "../../packages/govbiz-ai-runtime" }

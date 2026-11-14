@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "govbiz-ai-runtime"
+version = "0.1.0"
+description = "Shared GovBiz evidence retrieval, answer generation, and tracing"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx==0.28.1",
+    "langchain-core==1.6.3",
+    "langchain-openai==1.6.2",
+    "langfuse==4.15.6",
+    "langsmith==0.12.4",
+    "openai==3.3.1",
+    "opentelemetry-api==1.44.0",
+    "opentelemetry-sdk==1.44.0",
+    "pydantic==2.13.4",
+    "qdrant-client==1.17.1",
+    "tiktoken==0.12.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["govbiz_ai_runtime*"]
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.py" }]

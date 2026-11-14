@@ -25,7 +25,7 @@ def copy_evidence(target):
     source = repository / "evaluation/support-program-evidence"
     catalog = json.loads(
         (
-            repository / "backend/ops-service/apps/evaluations/capture_catalog.json"
+            repository / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json"
         ).read_text(encoding="utf-8")
     )
     names = {

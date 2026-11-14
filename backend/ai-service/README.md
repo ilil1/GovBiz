@@ -3,6 +3,20 @@
 FastAPI, OpenAI 임베딩, Qdrant로 전체 공고에서 관련 후보를 찾고 LangChain으로 후보를
 점수화하고 원문 근거 답변을 생성하는 내부 RAG 서비스입니다. 브라우저에 직접 공개하지 않고 Spring Core API만 호출합니다.
 
+근거 검색·답변, 공통 모델·임베딩·추적 구현은
+[`govbiz-ai-runtime`](../../packages/govbiz-ai-runtime/README.md) 패키지에 있습니다.
+AI 서비스와 평가 실행기가 같은 구현을 설치하며, 기존 `app.*` import는 같은 모듈 객체로
+연결됩니다. HTTP 라우터와 애플리케이션 조립은 AI 서비스가 계속 소유합니다.
+
+컨테이너는 공유 패키지를 함께 설치하므로 저장소 루트에서 빌드합니다.
+
+```bash
+docker build -f backend/ai-service/Dockerfile -t govbiz-ai-service .
+```
+
+`Dockerfile.dockerignore`가 AI 서비스·공유 런타임·문서 도구 입력만 빌드에 포함합니다.
+최종 이미지의 실행 환경은 `/app/.venv`, 애플리케이션 경로는 `/app/app`입니다.
+
 ## 관리자 Gov 에이전트 경로 선택
 
 `POST /internal/v1/gov-agent/decide`는 `GovAgentSupervisor → 기존 LangChain 호출 → OpenAI → strict action 검증`으로
