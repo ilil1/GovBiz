@@ -66,16 +66,17 @@ def repository(tmp_path):
         paths.update(execution_spec.EVIDENCE + c["path"] for c in item["captures"])
     target = tmp_path / "checkout"
     for name in paths:
-        path = target / name
+        source = source_path(name, root)
+        path = target / source.relative_to(root)
         path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source_path(name, root), path)
+        shutil.copyfile(source, path)
     return target
 
 
 def test_register_preserves_bytes_and_existing_catalog_and_pins_free_replay(
     repository, completed_capture
 ):
-    catalog_path = repository / execution_spec.OPS / "capture_catalog.json"
+    catalog_path = source_path(execution_spec.OPS + "capture_catalog.json", repository)
     before = json.loads(catalog_path.read_bytes())
     receipt_path = registration.register(completed_capture, repository)
     receipt = json.loads(receipt_path.read_bytes())
@@ -85,14 +86,14 @@ def test_register_preserves_bytes_and_existing_catalog_and_pins_free_replay(
     assert entry["id"] == receipt["dataset_id"]
     assert entry["fixture"] == f"runs/{entry['id']}/source/fixture.json"
     assert entry["captures"][0]["path"] == f"runs/{entry['id']}/source/capture.json"
-    assert not (repository / execution_spec.OPS / ".core-rag-registration.lock").exists()
+    assert not (source_path(execution_spec.OPS + "capture_catalog.json", repository).with_name(".core-rag-registration.lock")).exists()
     for name in ("fixture", "capture", "wire"):
         assert (receipt_path.parent / "source" / f"{name}.json").read_bytes() == (
             completed_capture / f"{name}.json"
         ).read_bytes()
     release = execution_spec.build_release(repository)
     assert release == json.loads(
-        (repository / execution_spec.OPS / "execution_release.json").read_bytes()
+        (source_path(execution_spec.OPS + "execution_release.json", repository)).read_bytes()
     )
     spec = execution_spec.make_spec(release, entry["id"], "replay", {}, entry["id"], entry["id"])
     assert spec["model_operations"] == [] and spec["generation"] is None
@@ -114,7 +115,7 @@ def test_failed_registration_preserves_catalog_release_and_no_partial_bundle(
     repository, completed_capture, monkeypatch, failure
 ):
     paths = [
-        repository / execution_spec.OPS / name
+        source_path(execution_spec.OPS + name, repository)
         for name in ("capture_catalog.json", "execution_release.json")
     ]
     runs = repository / execution_spec.EVIDENCE / "runs"
@@ -127,7 +128,7 @@ def test_failed_registration_preserves_catalog_release_and_no_partial_bundle(
     elif failure == "stale-release":
         paths[1].write_bytes(b"{}")
     elif failure == "changed-evaluator":
-        model = repository / "backend/ai-service/app/support_program_evidence/models.py"
+        model = source_path(execution_spec.AI + "app/support_program_evidence/models.py", repository)
         with model.open("ab") as target:
             target.write(b"\n# different deployment contract\n")
         paths[1].write_bytes(registration.encode(execution_spec.build_release(repository)))
@@ -160,11 +161,11 @@ def test_failed_registration_preserves_catalog_release_and_no_partial_bundle(
     assert {
         path: path.read_bytes() for path in runs.rglob("*") if path.is_file()
     } == original_bundles
-    assert not (repository / execution_spec.OPS / ".core-rag-registration.lock").exists()
+    assert not (source_path(execution_spec.OPS + "capture_catalog.json", repository).with_name(".core-rag-registration.lock")).exists()
 
 
 def test_registration_refuses_concurrent_writer(repository, completed_capture):
-    lock = repository / execution_spec.OPS / ".core-rag-registration.lock"
+    lock = source_path(execution_spec.OPS + "capture_catalog.json", repository).with_name(".core-rag-registration.lock")
     lock.write_text("other writer")
     with pytest.raises(FileExistsError):
         registration.register(completed_capture, repository)
@@ -178,8 +179,8 @@ def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
     import core_rag_capture as collector
     import ops_smoke
     from govbiz_evaluation_contracts import catalog, rag_replay
-    from pipelines.evaluation import flows as ops_flow
-    from pipelines.evaluation import rag as rag_replay_flow
+    from pipelines.flows.evaluation import flows as ops_flow
+    from pipelines.flows.evaluation import rag as rag_replay_flow
 
     if source_failed:
         wire_path = completed_capture / "wire.json"
@@ -212,14 +213,14 @@ def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
     datasets = {
         item["id"]: item
         for item in json.loads(
-            (repository / execution_spec.OPS / "capture_catalog.json").read_bytes()
+            (source_path(execution_spec.OPS + "capture_catalog.json", repository)).read_bytes()
         )
     }
     monkeypatch.setattr(catalog, "DATASETS", datasets)
     monkeypatch.setattr(
         execution_spec,
         "RELEASE_PATH",
-        repository / execution_spec.OPS / "execution_release.json",
+        source_path(execution_spec.OPS + "execution_release.json", repository),
     )
     monkeypatch.setattr(ops_flow, "ROOT", repository)
     monkeypatch.setattr(rag_replay_flow, "ROOT", repository)

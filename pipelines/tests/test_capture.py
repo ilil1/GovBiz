@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 from filelock import FileLock, Timeout
 
-from pipelines.evaluation import capture
-from govbiz_evaluation import reporting
+from pipelines.flows.evaluation import capture
+from govbiz_evaluation.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 
 HERE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"

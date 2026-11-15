@@ -29,7 +29,7 @@ def test_preparation_preserves_official_sources_questions_and_existing_seed():
         assert doc["source"]["collectedAt"] == source["source"]["collectedAt"]
     for case, original_case in zip(fixture["cases"], original["cases"], strict=True):
         assert all(case[key] == original_case[key] for key in ("id", "question", "expectedStatus"))
-    seed = json.loads((Path(__file__).resolve().parents[2] / "backend/ops-service/apps/evaluations/seed/official-v3/seed.json").read_bytes())
+    seed = json.loads((Path(__file__).resolve().parents[3] / "backend/ops-service/apps/evaluations/seed/official-v3/seed.json").read_bytes())
     assert seed["source_run_id"] == "628ae52a-f417-4b53-b400-d90405e6a7d8"
     assert official_rag.DATASET not in json.dumps(seed)
 

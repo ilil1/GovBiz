@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 
 def verify(root=None):
-    from govbiz_evaluation import rag_live
+    from govbiz_evaluation.integrations import rag_live
     import tiktoken
     import tiktoken.registry
     from govbiz_evaluation_contracts.catalog import DATASETS, RAG_SCOPE, live_config

@@ -5,7 +5,7 @@
 
 from prefect.types.entrypoint import EntrypointType
 
-from pipelines.evaluation.flows import evaluate_saved_capture
+from pipelines.flows.evaluation.flows import evaluate_saved_capture
 
 
 def main():

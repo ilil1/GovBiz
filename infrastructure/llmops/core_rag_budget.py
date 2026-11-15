@@ -5,8 +5,8 @@ import importlib.util
 import json
 from pathlib import Path
 
-from govbiz_evaluation import rag_evaluate as rag
-from govbiz_evaluation.rag_budget import digest
+from govbiz_evaluation.evaluators import rag_evaluate as rag
+from govbiz_evaluation.integrations.rag_budget import digest
 
 ROOT = Path(__file__).resolve().parents[2]
 

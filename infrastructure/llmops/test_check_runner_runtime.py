@@ -10,7 +10,7 @@ import tiktoken.load
 ROOT = Path(__file__).resolve().parents[2]
 
 import check_runner_runtime as check
-from govbiz_evaluation import rag_live
+from govbiz_evaluation.integrations import rag_live
 from govbiz_evaluation_contracts import catalog, execution_spec
 
 BLOB = "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"

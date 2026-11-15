@@ -210,7 +210,7 @@ jobs:
 
       - name: Test evidence evaluation tools without model calls
         working-directory: .
-        run: uv run --project pipelines --locked --extra dev --group integration --no-editable python -m pytest evaluation/support-program-evidence pipelines/tests backend/ai-service/integration
+        run: uv run --project pipelines --locked --extra dev --group integration --no-editable python -m pytest pipelines/evals/tests pipelines/tests backend/ai-service/integration
 
       - name: Test conversation evaluation cases and replay tools without model calls
         run: uv run --locked --extra dev python -m pytest ../../evaluation/support-program-conversation

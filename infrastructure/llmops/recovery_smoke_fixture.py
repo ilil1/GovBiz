@@ -21,8 +21,8 @@ def source_hashes(folder):
 def prepare(source_id, root):
     assert not os.environ.get("OPENAI_API_KEY")
     assert os.environ.get("LLMOPS_LIVE_ENABLED", "false") == "false"
-    from pipelines.evaluation import flows as ops_flow
-    from pipelines.evaluation import capture
+    from pipelines.flows.evaluation import flows as ops_flow
+    from pipelines.flows.evaluation import capture
 
     def forbid_model(*args, **kwargs):
         raise AssertionError("Model calls are forbidden in recovery smoke")
@@ -68,7 +68,7 @@ def register(source_id, email):
 
 
 def verify(source_id, recovery_id, root):
-    from govbiz_evaluation import reporting
+    from govbiz_evaluation.reports import reporting
     import httpx
     from govbiz_ai_runtime.config import LangfuseSettings
     from langfuse.api.client import LangfuseAPI

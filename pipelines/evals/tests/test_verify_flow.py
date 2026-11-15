@@ -9,9 +9,10 @@ import socket
 import pytest
 
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
+ENGINE = Path(__file__).resolve().parents[1] / "govbiz_evaluation"
 RUN = HERE / "runs/official-flow-20260907-v1"
-spec = importlib.util.spec_from_file_location("verify_evidence_flow", HERE / "verify_flow.py")
+spec = importlib.util.spec_from_file_location("verify_evidence_flow", ENGINE / "preparation" / "verify_flow.py")
 verify_flow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify_flow)
 
@@ -169,4 +170,4 @@ def test_json_reader_rejects_ambiguous_or_nonfinite_records(value):
     with pytest.raises(ValueError):
         verify_flow._json(value)
 
-CORE_FIXTURE = Path(__file__).resolve().parents[2] / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"
+CORE_FIXTURE = Path(__file__).resolve().parents[3] / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"

@@ -7,10 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from pipelines.evaluation import flows as ops_flow
+from pipelines.flows.evaluation import flows as ops_flow
 import pytest
-from pipelines.evaluation import rag
-from govbiz_evaluation import rag_reporting
+from pipelines.flows.evaluation import rag
+from govbiz_evaluation.reports import rag_reporting
 from govbiz_evaluation_contracts import rag_replay
 from govbiz_evaluation_contracts.catalog import public_datasets, validate_execution
 from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release

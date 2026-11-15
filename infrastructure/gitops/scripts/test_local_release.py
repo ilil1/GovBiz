@@ -38,7 +38,7 @@ class LocalReleaseTests(unittest.TestCase):
         tree_paths = {
             "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
             "evaluation/support-program-evidence",
-            "pipelines/evaluation",
+            "pipelines/evaluation", "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
             "frontend/web",
             "frontend/packages/shared",
         }

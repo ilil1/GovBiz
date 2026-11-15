@@ -17,10 +17,10 @@ import httpx2
 from openai import AsyncOpenAI
 from starlette.responses import JSONResponse, Response
 
-from govbiz_evaluation.budget_client import BudgetUnavailable
-from govbiz_evaluation.rag_budget import RagBudget, digest as spec_digest, make_rag_spec
+from govbiz_evaluation.integrations.budget_client import BudgetUnavailable
+from govbiz_evaluation.integrations.rag_budget import RagBudget, digest as spec_digest, make_rag_spec
 
-from govbiz_evaluation.evaluate import (
+from govbiz_evaluation.evaluators.evaluate import (
     DEFAULT_LLM_MODEL_TIMEOUT_SECONDS, DEFAULT_LLM_RUN_TIMEOUT_SECONDS, DEFAULT_OPENAI_MODEL,
     SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS, digest, require, response_record,
 )
@@ -244,7 +244,7 @@ def main():
         parser.error("RAG budget mode requires --budget-spec, --request-id, --flow-id and --spec-sha256")
     guard = None
     if args.budget_spec:
-        from govbiz_evaluation.budget_client import BudgetClient
+        from govbiz_evaluation.integrations.budget_client import BudgetClient
 
         with args.budget_spec.open("rb") as source:
             raw = source.read(8 * 1024 * 1024 + 1)

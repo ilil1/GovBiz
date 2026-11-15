@@ -89,10 +89,10 @@ def test_publish_gate_fails_only_at_rag_publication_before_sending_scores(
     state.configure(run_id, {"fault": fault})
     publish = Mock(return_value=["score-id"])
     module = SimpleNamespace(publish_payloads=publish)
-    import pipelines.evaluation
+    import pipelines.flows.evaluation
 
-    monkeypatch.setitem(sys.modules, "pipelines.evaluation.rag", module)
-    monkeypatch.setattr(pipelines.evaluation, "rag", module, raising=False)
+    monkeypatch.setitem(sys.modules, "pipelines.flows.evaluation.rag", module)
+    monkeypatch.setattr(pipelines.flows.evaluation, "rag", module, raising=False)
     runner = load_runner()
     monkeypatch.setattr(runner, "PROBE", base)
     runner.install_publish_gate(run_id)
@@ -419,8 +419,8 @@ def test_real_sdk_and_evaluator_accept_http_double(monkeypatch, tmp_path, server
     import httpx2
 
     evaluation_dir = HERE.parents[1] / "evaluation/support-program-evidence"
-    from govbiz_evaluation import evaluate
-    from govbiz_evaluation.budget_client import BudgetClient
+    from govbiz_evaluation.evaluators import evaluate
+    from govbiz_evaluation.integrations.budget_client import BudgetClient
 
     runner = load_runner()
     state, base = server
@@ -500,11 +500,11 @@ def test_rag_service_and_sdk_use_http_double_and_preserve_mixed_budget(
     import httpx2
 
     evaluation_dir = HERE.parents[1] / "evaluation/support-program-evidence"
-    from govbiz_evaluation import rag_live
+    from govbiz_evaluation.integrations import rag_live
     from govbiz_evaluation_contracts.catalog import live_config
     from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
     from govbiz_evaluation_contracts.rag_replay import validate_live_capture
-    from govbiz_evaluation.budget_client import BudgetClient
+    from govbiz_evaluation.integrations.budget_client import BudgetClient
 
     state, base = server
     run_id = str(uuid4())

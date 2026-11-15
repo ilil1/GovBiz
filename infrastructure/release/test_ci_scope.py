@@ -95,7 +95,11 @@ class AffectedJobsTests(unittest.TestCase):
             self.assertEqual(contracts[workflow], set(policy.WORKFLOW_JOBS[workflow]))
 
     def test_pipeline_source_and_lock_require_evaluation_integrations(self):
-        for path in ("pipelines/evaluation/flows.py", "pipelines/uv.lock"):
+        for path in (
+            "pipelines/evaluation/flows.py", "pipelines/flows/evaluation/flows.py", "pipelines/uv.lock",
+            "pipelines/evals/govbiz_evaluation/evaluators/evaluate.py",
+            "pipelines/evals/pyproject.toml",
+        ):
             with self.subTest(path=path):
                 selected = policy.affected_jobs([path])
                 self.assertIn("ai-service", selected["ci.yml"])

@@ -9,22 +9,30 @@ packages/
 ├── govbiz-ai-runtime/                # AI 서비스와 실행기가 공유하는 모델·생성·검색 코드
 └── govbiz-evaluation-contracts/      # Ops와 실행기가 공유하는 카탈로그·검증·파일 계약
 
-evaluation/
-├── pyproject.toml                   # govbiz-evaluation-engine 설치 정의
-└── support-program-evidence/        # govbiz_evaluation 모듈로 설치
-    ├── evaluate.py, rag_evaluate.py  # 입력 검증·지표 계산
-    ├── reporting.py, rag_reporting.py # 비교 보고서·점수 데이터 생성
-    ├── budget_client.py, rag_live.py # 승인된 모델 호출·Ops 예산 통신
-    └── fixture·runs·tests           # 원본 입력·실험 기록·평가 테스트
+evaluation/support-program-evidence/  # 기존 평가 자료와 실험 기록
+├── fixture·runs                     # 기존 경로 유지
+└── *.py                             # 구 CLI 경로 호환 진입점
 
 pipelines/
 ├── pyproject.toml, uv.lock           # 실행 의존성과 잠금 파일
 ├── serve.py                         # 평가 Deployment 등록·실행 대기
-├── evaluation/
-│   ├── flows.py                     # Ops 요청 검증·실행·복구 순서
-│   ├── capture.py, rag.py            # 고정 근거·RAG 평가 흐름
-│   ├── tasks.py                     # Prefect 작업과 재시도 정책
-│   └── clients.py                   # Langfuse 점수 전송·저장 확인
+├── flows/                           # Prefect 실행 흐름
+│   ├── evaluation/                  # 구현된 평가 파이프라인
+│   │   ├── flows.py                 # Ops 요청 검증·실행·복구 순서
+│   │   ├── capture.py, rag.py       # 고정 근거·RAG 평가 흐름
+│   │   ├── tasks.py                 # Prefect 작업과 재시도 정책
+│   │   └── clients.py               # Langfuse 점수 전송·저장 확인
+│   ├── catalog_ingestion/README.md   # 추후 검토 후 개발 예정
+│   └── daily_report/README.md       # 추후 검토 후 개발 예정
+├── evaluation/                      # 이전 Python import 경로 호환
+├── evals/                           # 독립 설치되는 평가 기능
+│   ├── pyproject.toml
+│   ├── govbiz_evaluation/
+│   │   ├── evaluators/              # 답변·RAG 지표 계산
+│   │   ├── reports/                 # 비교 보고서와 점수
+│   │   ├── integrations/            # 모델 호출과 예산 연계
+│   │   └── preparation/             # 평가 자료 준비 및 검증
+│   └── tests/                       # 평가 기능 테스트
 └── tests/                           # 실행 순서·실패·복구 검증
 ```
 
@@ -39,6 +47,8 @@ pipelines/
 경로를 요구하지 않는다. CLI로 원본 데이터를 재생성할 때는 저장소 경로를 명시한다.
 실행 명세에 남은 `backend/...` 문자열은 과거 평가 기록과 연결하는 식별자다.
 실제 검증 파일은 설치된 공용 패키지에서 찾으므로 해당 저장소 경로가 필요하지 않다.
+평가 코드의 과거 논리 파일 식별자는 유지하고, 실행 시 이동한 실제 모듈과 구 import
+호환 파일의 해시를 모두 확인한다. 기존 경로의 모듈은 새 역할별 모듈을 연결한다.
 실제 AI HTTP 앱을 띄우는 캡처 도구는 `backend/ai-service/integration/serve_flow.py`에
 있으며 실행기 패키지에는 포함하지 않는다.
 
@@ -56,6 +66,8 @@ uv run --project pipelines --locked --no-editable govbiz-pipelines
 위치는 `LLMOPS_WORK_DIR`로 지정한다. 미지정 시 현재 작업 디렉터리 아래 `work/`를
 사용한다. Prefect 자체 저장 위치는 `PREFECT_HOME`으로 설정할 수 있다.
 
+`catalog_ingestion/`과 `daily_report/`는 개발 예정 안내만 있으며 실행 코드나 Prefect 배포가 없다.
+
 현재는 `govbiz-ops-evidence-evaluation/saved-capture` 하나를 모듈 진입점으로 등록하고
 `limit=1`로 운영한다. 같은 Deployment에서 저장 캡처 재계산·승인된 실행·복구를
 처리하며, 등록만으로 유료 평가를 시작하지 않는다.
@@ -63,7 +75,7 @@ uv run --project pipelines --locked --no-editable govbiz-pipelines
 외부 모델 호출 없는 평가·파이프라인 회귀 검증:
 
 ```bash
-uv run --project pipelines --locked --no-editable --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
+uv run --project pipelines --locked --no-editable --extra dev python -m pytest pipelines/evals/tests pipelines/tests
 ```
 
 AI HTTP 앱과의 통합 검증에는 테스트 전용 의존성 그룹을 별도로 설치한다.

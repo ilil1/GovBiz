@@ -10,7 +10,7 @@ from core_search_trace import read_observations, require
 
 ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE = ROOT / "evaluation/support-program-evidence"  # Source integration fixtures only.
-from govbiz_evaluation import rag_evaluate as rag
+from govbiz_evaluation.evaluators import rag_evaluate as rag
 SOURCE = (
     ROOT
     / "backend/core-service/src/test/resources/support-program-evidence/rag-synthetic-source.json"

@@ -30,7 +30,7 @@ PY
   uv build
 )
 python3 infrastructure/llmops/bundle_runner_inputs.py
-uv run --project pipelines --locked --no-editable --extra dev python -m pytest evaluation/support-program-evidence pipelines/tests
+uv run --project pipelines --locked --no-editable --extra dev python -m pytest pipelines/evals/tests pipelines/tests
 PYTHONPATH=backend/ai-service uv run --project pipelines --locked --no-editable --extra dev --group integration python -m pytest backend/ai-service/integration
 cleanup_qdrant
 trap - EXIT

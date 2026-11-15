@@ -11,8 +11,9 @@ import httpx2
 import pytest
 
 
-HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("evidence_evaluate", HERE / "evaluate.py")
+HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
+ENGINE = Path(__file__).resolve().parents[1] / "govbiz_evaluation"
+spec = importlib.util.spec_from_file_location("evidence_evaluate", ENGINE / "evaluators" / "evaluate.py")
 evaluate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluate)
 

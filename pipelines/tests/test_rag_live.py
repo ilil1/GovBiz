@@ -8,16 +8,16 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx2
-from pipelines.evaluation import flows as ops_flow
+from pipelines.flows.evaluation import flows as ops_flow
 import pytest
-from govbiz_evaluation import rag_live
-from pipelines.evaluation import rag as rag_replay_flow
+from govbiz_evaluation.integrations import rag_live
+from pipelines.flows.evaluation import rag as rag_replay_flow
 from govbiz_evaluation_contracts.catalog import live_config
 from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
 from govbiz_evaluation_contracts.rag_material import material_from_sources
 from govbiz_evaluation_contracts.rag_replay import read_result, validate_live_capture, validate_report
 from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
-from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
+from govbiz_evaluation.integrations.budget_client import BudgetClient, BudgetUnavailable
 
 DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
@@ -180,7 +180,7 @@ def test_official_paragraph_rag_uses_guarded_search_and_keeps_reference_unmeasur
     assert material["reference_source"] == "ai-authored-not-human-reviewed"
     assert material["baseline_eligible"] is False
     if version == "v2":
-        from govbiz_evaluation import official_rag
+        from govbiz_evaluation.preparation import official_rag
         for record in capture["cases"]:
             quotes = official_rag.QUOTES.get(record["caseId"], [])
             if quotes:
@@ -338,7 +338,7 @@ def test_unknown_embedding_usage_never_publishes_reusable_vectors(runner):
 
 
 def test_vector_identity_ignores_answer_changes_but_tracks_sources_and_chunks(runner):
-    from govbiz_evaluation.rag_budget import make_rag_spec
+    from govbiz_evaluation.integrations.rag_budget import make_rag_spec
     _, _, plan = rag_live.prepare(HERE / "rag-fixture.json", model="gpt-6-luna")
     cases, sources = deepcopy(plan["rag_cases"]), deepcopy(plan["document_sources"])
     cases[0]["question"] += " 자세히"

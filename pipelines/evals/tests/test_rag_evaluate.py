@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("rag_evaluate", HERE / "rag_evaluate.py")
+HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
+ENGINE = Path(__file__).resolve().parents[1] / "govbiz_evaluation"
+spec = importlib.util.spec_from_file_location("rag_evaluate", ENGINE / "evaluators" / "rag_evaluate.py")
 rag = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rag)
 FIXTURE = HERE / "rag-fixture.json"
@@ -301,7 +302,7 @@ def test_recorded_trace_must_be_a_nonzero_w3c_trace_id(records, tmp_path):
 
 def test_fixed_context_evaluator_does_not_accept_rag_fixture():
     fixed_spec = importlib.util.spec_from_file_location(
-        "fixed_evaluate_for_rag_test", HERE / "evaluate.py"
+        "fixed_evaluate_for_rag_test", ENGINE / "evaluators" / "evaluate.py"
     )
     fixed = importlib.util.module_from_spec(fixed_spec)
     fixed_spec.loader.exec_module(fixed)

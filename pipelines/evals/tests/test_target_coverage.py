@@ -8,9 +8,10 @@ import re
 import pytest
 
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
+ENGINE = Path(__file__).resolve().parents[1] / "govbiz_evaluation"
 FIXTURE_PATH = HERE / "target-coverage-fixture.json"
-spec = importlib.util.spec_from_file_location("target_coverage_evaluate", HERE / "evaluate.py")
+spec = importlib.util.spec_from_file_location("target_coverage_evaluate", ENGINE / "evaluators" / "evaluate.py")
 evaluate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluate)
 

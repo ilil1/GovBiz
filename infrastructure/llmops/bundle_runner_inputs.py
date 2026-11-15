@@ -15,6 +15,11 @@ METADATA = (
     "pipelines/pyproject.toml",
     "pipelines/uv.lock",
 )
+# Preserve the historical resource identifier in saved execution manifests;
+# package metadata itself now lives with the evaluation engine.
+METADATA_SOURCES = {
+    "evaluation/pyproject.toml": "pipelines/evals/pyproject.toml",
+}
 
 
 def bundle(root):
@@ -42,7 +47,7 @@ def bundle(root):
             if hashlib.sha256(raw).hexdigest() != expected:
                 raise ValueError("Registered evaluation input differs from approved release")
             inputs[str(EVIDENCE / path)] = raw
-    inputs.update({name: (root / name).read_bytes() for name in METADATA})
+    inputs.update({name: (root / METADATA_SOURCES.get(name, name)).read_bytes() for name in METADATA})
     destination = owner / "_inputs"
     staged = owner / "_inputs.build"
     if staged.exists():

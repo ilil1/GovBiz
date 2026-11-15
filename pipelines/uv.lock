@@ -647,7 +647,7 @@ source = { directory = "../packages/govbiz-evaluation-contracts" }
 [[package]]
 name = "govbiz-evaluation-engine"
 version = "0.1.0"
-source = { directory = "../evaluation" }
+source = { directory = "evals" }
 dependencies = [
     { name = "evidently" },
     { name = "govbiz-ai-runtime" },
@@ -699,7 +699,7 @@ requires-dist = [
     { name = "filelock", specifier = "==4.0.3" },
     { name = "govbiz-ai-runtime", directory = "../packages/govbiz-ai-runtime" },
     { name = "govbiz-evaluation-contracts", directory = "../packages/govbiz-evaluation-contracts" },
-    { name = "govbiz-evaluation-engine", directory = "../evaluation" },
+    { name = "govbiz-evaluation-engine", directory = "evals" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.0.0,<3.0.0" },
     { name = "langfuse", specifier = "==4.15.6" },

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from pipelines.evaluation import flows as ops_flow
+from pipelines.flows.evaluation import flows as ops_flow
 from govbiz_evaluation_contracts.execution_spec import (
     AI, OPS, EVIDENCE, PIPELINES, ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
 )
@@ -28,7 +28,8 @@ def runner(monkeypatch, tmp_path):
         names.add(EVIDENCE + dataset["fixture"])
         names.update(EVIDENCE + capture["path"] for capture in dataset["captures"])
     for name in names:
-        destination = root / name
+        source_root = Path(__file__).resolve().parents[2]
+        destination = root / source_path(name, source_root).relative_to(source_root)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source_path(name), destination)
     monkeypatch.setattr(ops_flow, "ROOT", root)
@@ -75,6 +76,12 @@ def test_checked_in_release_matches_repository():
     PIPELINES + "evaluation/clients.py",
     EVIDENCE + "reporting.py",
     EVIDENCE + "budget_client.py",
+    EVIDENCE + "_compat/reporting.py",
+    EVIDENCE + "_compat/budget_client.py",
+    EVIDENCE + "evaluators/__init__.py",
+    EVIDENCE + "reports/__init__.py",
+    EVIDENCE + "integrations/__init__.py",
+    EVIDENCE + "preparation/__init__.py",
     OPS + "quality_policy.py",
     EVIDENCE + "target-coverage-fixture.json",
     EVIDENCE + "runs/target-coverage-20260907-v1/capture.json",
@@ -82,7 +89,7 @@ def test_checked_in_release_matches_repository():
 def test_changed_actual_bytes_block_before_model_and_preserve_receipt(runner, name):
     root, results = runner
     params = parameters()
-    path = root / name
+    path = source_path(name, root)
     path.write_bytes(path.read_bytes() + b"\n")
     with pytest.raises(ExecutionSpecMismatch, match="EXECUTION_SPEC_MISMATCH"):
         ops_flow.evaluate_saved_capture.fn(**params)
@@ -96,7 +103,7 @@ def test_changed_actual_bytes_block_before_model_and_preserve_receipt(runner, na
 
 def test_reordered_cases_block_even_when_all_cases_are_present(runner):
     root, _ = runner
-    path = root / OPS / "capture_catalog.json"
+    path = source_path(OPS + "capture_catalog.json", root)
     catalog = json.loads(path.read_text())
     catalog[0]["case_ids"].reverse()
     path.write_text(json.dumps(catalog))
@@ -125,7 +132,7 @@ def test_registered_core_bytes_are_pinned_before_replay(runner, monkeypatch, ver
 def test_generation_change_does_not_prevent_free_replay(runner, monkeypatch):
     root, _ = runner
     params = parameters("replay")
-    path = root / AI / "app/support_program_evidence/prompt.py"
+    path = source_path(AI + "app/support_program_evidence/prompt.py", root)
     path.write_bytes(path.read_bytes() + b"\n# future generation version\n")
     monkeypatch.setenv("LLMOPS_LIVE_MODEL", "future-model")
     calls = []

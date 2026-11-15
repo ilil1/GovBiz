@@ -47,7 +47,7 @@ def test_registered_revision_reproduces_report_without_changing_model_input():
     assert [request.model_dump() for _, request in previous[1]] == [request.model_dump() for _, request in current[1]]
     # Replaying history preserves the recorded transformer rather than relabelling it.
     report = evaluate.report(*current, saved)
-    historical_output = Path(__file__).parent / "runs" / revision.DATASET_ID
+    historical_output = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence/runs" / revision.DATASET_ID
     assert (historical_output / "report.json").read_bytes() == encoded(report)
     assert report["semanticFaithfulness"] is None and report["semanticReviewRequired"]
     assert report["measurementKind"] == "historical-answer-projection"

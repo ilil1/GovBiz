@@ -17,7 +17,7 @@ def stub_budget(monkeypatch):
     monkeypatch.setattr(ops_flow, "BudgetClient", lambda *args: client)
     return client
 
-from pipelines.evaluation import flows as ops_flow
+from pipelines.flows.evaluation import flows as ops_flow
 
 
 def run_live(*args, **kwargs):
@@ -59,8 +59,8 @@ def reviewed_source(tmp_path):
 
 @pytest.mark.parametrize("source_mode", ["replay", "live", "recovery"])
 def test_reviewed_baseline_is_snapshotted_for_free_replay(monkeypatch, tmp_path, source_mode):
-    from pipelines.evaluation import capture as llmops
-    from govbiz_evaluation import reporting
+    from pipelines.flows.evaluation import capture as llmops
+    from govbiz_evaluation.reports import reporting
     config, candidate, raw = reviewed_source(tmp_path)
     if source_mode in {"live", "recovery"}:
         folder = tmp_path / config["run_id"]
@@ -306,8 +306,8 @@ def test_live_failure_preserves_capture_and_never_reexecutes(monkeypatch, tmp_pa
 @pytest.mark.parametrize("model", ["gpt-6-luna", "gpt-6-sol", "gpt-5.6-luna"])
 def test_live_response_to_report_pipeline_uses_only_stub_transport(monkeypatch, tmp_path, stub_budget, model):
     import httpx2
-    from pipelines.evaluation import capture as llmops
-    from govbiz_evaluation import reporting
+    from pipelines.flows.evaluation import capture as llmops
+    from govbiz_evaluation.reports import reporting
     from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
 
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
@@ -359,7 +359,7 @@ def test_live_response_to_report_pipeline_uses_only_stub_transport(monkeypatch, 
 
 
 def test_budget_claim_failure_blocks_model_and_does_not_close_other_owner(monkeypatch, tmp_path, stub_budget):
-    from govbiz_evaluation.budget_client import BudgetUnavailable
+    from govbiz_evaluation.integrations.budget_client import BudgetUnavailable
     from govbiz_evaluation_contracts.catalog import LIVE_CAPTURE_ID, live_config
     monkeypatch.setenv("LLMOPS_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("LLMOPS_LIVE_ENABLED", "true")

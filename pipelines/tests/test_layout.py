@@ -1,6 +1,7 @@
 """평가 계산의 독립 실행과 기존 Deployment 등록 계약을 검증한다."""
 
 from pathlib import Path
+import importlib
 import subprocess
 import sys
 
@@ -29,7 +30,7 @@ class RejectOrchestration(importlib.abc.MetaPathFinder):
         return None
 
 sys.meta_path.insert(0, RejectOrchestration())
-reporting = importlib.import_module("govbiz_evaluation." + module)
+reporting = importlib.import_module("govbiz_evaluation.reports." + module)
 if module == "reporting":
     result = reporting.load_results(
         evidence / "target-coverage-fixture.json",
@@ -38,7 +39,7 @@ if module == "reporting":
     assert result["frame"].shape == (6, 9)
     assert result["summary"]["completed"] is True
 else:
-    from govbiz_evaluation import rag_evaluate
+    from govbiz_evaluation.evaluators import rag_evaluate
     result = rag_evaluate.evaluate(
         evidence / "rag-fixture.json", evidence / "rag-synthetic-capture.json",
     )
@@ -60,7 +61,7 @@ assert not any(name.split(".", 1)[0] in {"prefect", "pipelines", "app", "apps"} 
 
 def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
     from pipelines import serve
-    from pipelines.evaluation.flows import evaluate_saved_capture
+    from pipelines.flows.evaluation.flows import evaluate_saved_capture
 
     assert serve.evaluate_saved_capture is evaluate_saved_capture
     assert evaluate_saved_capture.name == "govbiz-ops-evidence-evaluation"
@@ -75,6 +76,7 @@ def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
     assert registrations == [{"name": "saved-capture", "limit": 1, "entrypoint_type": EntrypointType.MODULE_PATH}]
 
 
+@pytest.mark.parametrize("prefix", ["pipelines.flows.evaluation.", "pipelines.evaluation."])
 @pytest.mark.parametrize(
     "filename,function,name",
     [
@@ -84,10 +86,10 @@ def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
     ],
 )
 def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
-    filename, function, name, tmp_path
+    filename, function, name, prefix, tmp_path
 ):
     # The deployment resolves its installed module in every fresh process.
-    entrypoint = "pipelines.evaluation." + filename.removesuffix(".py") + "." + function
+    entrypoint = prefix + filename.removesuffix(".py") + "." + function
     completed = subprocess.run(
         [
             sys.executable, "-I", "-c",
@@ -103,3 +105,19 @@ def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
         check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+@pytest.mark.parametrize("module", ["flows", "capture", "rag", "tasks", "clients"])
+def test_legacy_import_resolves_to_current_module(module):
+    legacy = importlib.import_module("pipelines.evaluation." + module)
+    current = importlib.import_module("pipelines.flows.evaluation." + module)
+    assert legacy is current
+
+
+def test_legacy_capture_command_keeps_cli_entrypoint(tmp_path):
+    completed = subprocess.run(
+        [sys.executable, "-I", "-m", "pipelines.evaluation.capture", "--help"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "--fixture" in completed.stdout

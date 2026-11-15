@@ -9,10 +9,10 @@ from uuid import uuid4
 
 import pytest
 
-from govbiz_evaluation import evaluate
-from pipelines.evaluation import capture as llmops
-from govbiz_evaluation import reporting
-from pipelines.evaluation import flows as ops_flow
+from govbiz_evaluation.evaluators import evaluate
+from pipelines.flows.evaluation import capture as llmops
+from govbiz_evaluation.reports import reporting
+from pipelines.flows.evaluation import flows as ops_flow
 from govbiz_ai_runtime.config import LangfuseSettings
 from govbiz_evaluation_contracts.catalog import DATASETS, get_dataset, managed_snapshot_context
 from govbiz_evaluation_contracts.execution_spec import build_release, digest, make_spec, read_release, verify_spec

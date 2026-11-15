@@ -7,7 +7,7 @@ import re
 import pytest
 
 from govbiz_evaluation import evaluate
-FIXTURE_PATH = Path(__file__).with_name("answerability-fixture.json")
+FIXTURE_PATH = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence/answerability-fixture.json"
 
 
 @pytest.fixture

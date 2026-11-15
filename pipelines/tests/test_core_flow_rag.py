@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from govbiz_evaluation import core_flow_rag as importer
+from govbiz_evaluation.preparation import core_flow_rag as importer
 import pytest
 from govbiz_evaluation_contracts import execution_spec
 
@@ -53,9 +53,10 @@ def repository(tmp_path):
         )
     target = tmp_path / "checkout"
     for name in paths:
-        path = target / name
+        source = source_path(name, root)
+        path = target / source.relative_to(root)
         path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source_path(name, root), path)
+        shutil.copyfile(source, path)
     core_fixtures = target / "backend/core-service/src/test/resources/support-program-evidence"
     shutil.copytree(CORE_FIXTURE.parent, core_fixtures)
     catalog_path = source_path(execution_spec.OPS + "capture_catalog.json", target)
@@ -244,8 +245,8 @@ def test_failed_registration_rolls_back_catalog_and_new_files(repository, monkey
 def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
     repository, monkeypatch, tmp_path
 ):
-    from pipelines.evaluation import flows as ops_flow
-    from pipelines.evaluation import rag as rag_replay_flow
+    from pipelines.flows.evaluation import flows as ops_flow
+    from pipelines.flows.evaluation import rag as rag_replay_flow
     from govbiz_evaluation_contracts import catalog, rag_replay
 
     importer.register(

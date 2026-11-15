@@ -56,7 +56,7 @@ def barrier(run_id, stage):
 
 def install_http_double(run_id):
     import httpx2
-    from govbiz_evaluation.budget_client import BudgetClient
+    from govbiz_evaluation.integrations.budget_client import BudgetClient
 
     class OfflineTransport(httpx2.AsyncBaseTransport):
         def __init__(self):
@@ -130,7 +130,7 @@ def install_http_double(run_id):
 
 
 def install_publish_gate(run_id):
-    import pipelines.evaluation.rag as rag_replay_flow
+    import pipelines.flows.evaluation.rag as rag_replay_flow
 
     original = rag_replay_flow.publish_payloads
 
@@ -174,7 +174,7 @@ def process_command():
         pid = json.loads(PARENT.read_text())["pid"]
         os.kill(pid, {"STOP": signal.SIGSTOP, "CONT": signal.SIGCONT}[sys.argv[2]])
     elif sys.argv[1] == "duplicate":
-        from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
+        from govbiz_evaluation.integrations.budget_client import BudgetClient, BudgetUnavailable
 
         run_id, flow_id, spec_hash = sys.argv[2:]
         client = BudgetClient(run_id, flow_id, spec_hash)
@@ -208,7 +208,7 @@ def cancellation_evaluation(
     execution_spec: dict | None = None,
     execution_spec_sha256: str | None = None,
 ):
-    from pipelines.evaluation.flows import evaluate_saved_capture
+    from pipelines.flows.evaluation.flows import evaluate_saved_capture
 
     marker_path(request_id).write_text(json.dumps(process_info(os.getpid())))
     install_http_double(request_id)

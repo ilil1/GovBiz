@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-EVIDENCE = Path(__file__).resolve().parent
+EVIDENCE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
 from govbiz_evaluation import rag_evaluate
 from govbiz_evaluation import rag_reporting
 from govbiz_evaluation_contracts import rag_replay

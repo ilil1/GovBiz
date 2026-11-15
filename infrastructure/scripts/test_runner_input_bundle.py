@@ -44,7 +44,7 @@ class RunnerInputBundleTests(unittest.TestCase):
             }
         }
         for name in bundle.METADATA:
-            path = self.root / name
+            path = self.root / bundle.METADATA_SOURCES.get(name, name)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(name)
         self.save()
@@ -58,6 +58,10 @@ class RunnerInputBundleTests(unittest.TestCase):
         installed = self.owner / "_inputs"
         self.assertEqual((installed / bundle.EVIDENCE / "capture.json").read_bytes(), self.capture)
         self.assertFalse((installed / bundle.EVIDENCE / "raw-private.json").exists())
+        self.assertEqual(
+            (installed / "evaluation/pyproject.toml").read_text(),
+            (self.root / "pipelines/evals/pyproject.toml").read_text(),
+        )
         self.assertEqual(len(list(installed.rglob("*.*"))), len(bundle.METADATA) + 2)
 
     def test_tampered_capture_is_rejected_before_replacing_an_existing_bundle(self):

@@ -21,7 +21,7 @@ def main():
     from govbiz_evaluation_contracts.resources import evidence_root
 
     from pipelines import serve
-    from pipelines.evaluation import tasks
+    from pipelines.flows.evaluation import tasks
 
     actual = build_release()
     if actual != read_release():

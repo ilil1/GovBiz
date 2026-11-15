@@ -96,7 +96,7 @@ def test_new_answer_capture_uses_v1_and_keeps_official_source_identity():
     assert report["dataType"] == "official-html-snapshot"
     assert "measurementKind" not in report
 
-SOURCE_ROOT = Path(__file__).resolve().parents[2]
+SOURCE_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT = SOURCE_ROOT / "evaluation/support-program-evidence/runs/official-answer-20260907-v2"
 SOURCE = SOURCE_ROOT / "evaluation/support-program-evidence/runs/official-flow-20260907-v2"
 

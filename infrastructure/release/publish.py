@@ -41,10 +41,9 @@ RUNNER_PATHS = (
     RUNNER_DOCKERFILE, RUNNER_IGNORE,
     "backend/ai-service/pyproject.toml",
     "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
-    "evaluation/pyproject.toml", "evaluation/setup.py",
     "evaluation/support-program-evidence",
     "pipelines/pyproject.toml", "pipelines/uv.lock",
-    "pipelines/__init__.py", "pipelines/serve.py", "pipelines/evaluation",
+    "pipelines/__init__.py", "pipelines/serve.py", "pipelines/evaluation", "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
     "infrastructure/llmops/bundle_runner_inputs.py",
 )
 

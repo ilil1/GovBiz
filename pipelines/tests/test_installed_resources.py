@@ -60,7 +60,7 @@ PROBE = textwrap.dedent("""
         ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
     )
     from govbiz_evaluation_contracts.resources import evidence_root, source_path
-    from pipelines.evaluation import flows
+    from pipelines.flows.evaluation import flows
 
     for package in ('govbiz_ai_runtime', 'govbiz_evaluation_contracts', 'govbiz_evaluation', 'pipelines'):
         assert Path(sys.modules[package].__file__).resolve().is_relative_to(installed)

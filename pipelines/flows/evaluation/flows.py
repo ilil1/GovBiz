@@ -1,0 +1,265 @@
+"""Ops 평가 요청. 명시적으로 승인한 live 실행만 새 응답을 생성한다."""
+
+import asyncio
+from contextlib import ExitStack
+from hashlib import sha256
+import json
+import os
+from pathlib import Path
+from uuid import UUID
+
+ROOT = None  # 명시적인 소스 검증에서만 checkout 경로를 지정한다.
+
+from govbiz_evaluation_contracts.resources import evidence_root as packaged_evidence_root
+
+from prefect import flow, task
+from prefect.cache_policies import NO_CACHE
+from prefect.runtime import flow_run
+from govbiz_evaluation.evaluators import evaluate
+from govbiz_evaluation.integrations.budget_client import BudgetClient, BudgetUnavailable
+from govbiz_evaluation.reports.reporting import EVALUATOR_VERSION, load_results, write_json
+from pipelines.flows.evaluation.capture import evaluate_capture
+
+from govbiz_evaluation_contracts.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
+from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
+from govbiz_evaluation_contracts.execution_spec import (
+    ExecutionSpecMismatch, build_release, file_digest, verify_spec,
+)
+from govbiz_evaluation_contracts.catalog import RAG_SCOPE, evaluation_scope
+from govbiz_evaluation_contracts.catalog import managed_snapshot_context
+from govbiz_evaluation_contracts.managed_materials import materialize
+from pipelines.flows.evaluation.rag import evaluate_rag_capture
+
+DATASET_ID = LEGACY_DATASET_ID
+
+
+def reviewed_reference(dataset_id, config, here, output_root):
+    """요청 접수 때 고정한 기준 응답만 읽는다. 파일 경로는 서버에서 구성한다."""
+    folder = output_root / str(UUID(config["run_id"]))
+    def read(name):
+        path = (folder / name).resolve()
+        evaluate.require(path.is_relative_to(folder), "Reference path escapes run directory")
+        return path.read_bytes()
+    marker = json.loads(read("request.json"))
+    manifest = json.loads(read("evaluation/manifest.json"))
+    evaluate.require(marker["request_id"] == config["run_id"] and marker["dataset_id"] == dataset_id,
+                     "Reference dataset differs")
+    evaluate.require(manifest["status"] == "completed" and
+                     manifest["capture_sha256"] == config["capture_sha256"] and
+                     manifest["fixture_sha256"] == config["fixture_sha256"], "Reference result differs")
+    if marker.get("execution_mode", "replay") in {"live", "recovery"}:
+        raw = read("capture/capture.json")
+    else:
+        _, candidate, _ = selection(dataset_id, marker.get("candidate_capture_id", DATASET_ID),
+                                     marker.get("reference_capture_id", DATASET_ID))
+        path = (here / candidate["path"]).resolve()
+        evaluate.require(path.is_relative_to(here), "Reference path escapes catalog")
+        raw = path.read_bytes()
+    evaluate.require(sha256(raw).hexdigest() == config["capture_sha256"], "Reference capture changed")
+    return raw
+
+
+def prepare_recovery(output, dataset_id, candidate_id, reference_id, reference_config, config, *, evidence_root=None):
+    """완료 응답의 고정 바이트만 복사한다. 모델 실행 경로를 호출하지 않는다."""
+    here = evidence_root or packaged_evidence_root(ROOT)
+    marker, expected, inputs = read_recovery_inputs(
+        output.parent, here, config["source_run_id"],
+        reassessment=config.get("reassessment_kind") == "stored-response-reassessment",
+    )
+    evaluate.require(config == expected, "Recovery inputs changed after dispatch")
+    evaluate.require(
+        marker["dataset_id"] == dataset_id and marker["candidate_capture_id"] == candidate_id
+        and marker["reference_capture_id"] == reference_id
+        and marker.get("reference_config", {}) == reference_config,
+        "Recovery selection differs from source",
+    )
+    (output / "capture").mkdir()
+    paths = (output / "recovery-fixture.json", output / "capture/capture.json",
+             output / "reference-capture.json")
+    for path, name in zip(paths, ("fixture", "capture", "reference_capture")):
+        path.write_bytes(inputs[name])
+    return paths
+
+
+@flow(name="govbiz-ops-evidence-evaluation", retries=0, persist_result=False)
+def evaluate_saved_capture(
+    request_id: str, dataset_id: str,
+    candidate_capture_id: str = DATASET_ID, reference_capture_id: str = DATASET_ID,
+    execution_mode: str = "replay", live_config: dict | None = None,
+    reference_config: dict | None = None,
+    recovery_config: dict | None = None,
+    execution_spec: dict | None = None, execution_spec_sha256: str | None = None,
+) -> dict:
+    request_id = str(UUID(request_id))
+    config = live_config or {}
+    reference_config = reference_config or {}
+    here = packaged_evidence_root(ROOT)
+    output_root = Path(os.environ.get("LLMOPS_RESULTS_DIR", Path.cwd() / "work/llmops-ops")).resolve()
+    output = output_root / request_id
+    # UUID 디렉터리의 배타 생성은 실패 기록도 보존하며 수동 재실행의 중복 호출을 차단한다.
+    output.mkdir(parents=True, exist_ok=False)
+    marker = {
+        "request_id": request_id, "dataset_id": dataset_id,
+        "prefect_flow_run_id": str(flow_run.id),
+        "candidate_capture_id": candidate_capture_id, "reference_capture_id": reference_capture_id,
+        "execution_mode": execution_mode, "live_config": config,
+        "reference_config": reference_config,
+    }
+    if recovery_config:
+        marker["recovery_config"] = recovery_config
+    if execution_spec:
+        marker.update(execution_spec=execution_spec, execution_spec_sha256=execution_spec_sha256)
+    write_json(output / "request.json", marker)
+    with ExitStack() as stack:
+        try:
+            snapshot = execution_spec.get("dataset", {}).get("managed_snapshot") if execution_spec else None
+            if dataset_id.startswith("managed-") and snapshot is None:
+                raise ExecutionSpecMismatch("Managed evaluations require a pinned material snapshot")
+            if snapshot is not None:
+                stack.enter_context(managed_snapshot_context(snapshot))
+            @task(name="validate-evaluation-inputs", retries=0, cache_policy=NO_CACHE, persist_result=False)
+            def validate_evaluation_inputs():
+                nonlocal here
+                prepared, fixture_hash = None, None
+                if execution_spec:
+                    # 전달받은 식별자를 신뢰하지 않고 실행 중인 이미지의 실제 소스·입력을 다시 읽는다.
+                    verify_spec(execution_spec, execution_spec_sha256, build_release(ROOT),
+                                dataset_id=dataset_id, mode=execution_mode, config=config,
+                                candidate_id=candidate_capture_id, reference_id=reference_capture_id,
+                                reference_config=reference_config, recovery_config=recovery_config)
+                elif execution_mode == "live" or execution_spec_sha256 or evaluation_scope(dataset_id) == RAG_SCOPE:
+                    raise ExecutionSpecMismatch("Live execution requires a pinned specification")
+                if snapshot is not None:
+                    here = materialize(snapshot, output / "inputs")
+                if execution_mode == "recovery":
+                    evaluate.require(not config and bool(recovery_config), "Recovery must not generate responses")
+                    if recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+                        evaluate.require(execution_spec is not None and EVALUATOR_VERSION == execution_spec["evaluation"]["version"],
+                                         "Loaded evaluator differs from reassessment specification")
+                    dataset, _, _ = selection(dataset_id, candidate_capture_id, reference_capture_id)
+                    fixture_path, capture_path, reference_path = prepare_recovery(
+                        output, dataset_id, candidate_capture_id, reference_capture_id,
+                        reference_config, recovery_config,
+                        evidence_root=here,
+                    )
+                else:
+                    evaluate.require(not recovery_config, "Unexpected recovery configuration")
+                    dataset, candidate, reference = validate_execution(
+                        dataset_id, candidate_capture_id, reference_capture_id, execution_mode, config,
+                        pinned_vectors=True,
+                    )
+                    validate_reference_config(dataset_id, reference_capture_id, reference_config)
+                    fixture_path = here / dataset["fixture"]
+                    capture_path = output / "capture/capture.json" if execution_mode == "live" else here / candidate["path"]
+                    if reference_config:
+                        reference_path = output / "reference-capture.json"
+                        reference_path.write_bytes(reviewed_reference(dataset_id, reference_config, here, output_root))
+                    else:
+                        reference_path = here / reference["path"]
+                if execution_spec:
+                    for path, expected in (
+                        (fixture_path, execution_spec["dataset"]["fixture_sha256"]),
+                        (reference_path, execution_spec["reference_sha256"]),
+                        *(([(capture_path, execution_spec["candidate_sha256"])]) if execution_mode != "live" else []),
+                    ):
+                        evaluate.require(file_digest(path) == expected, "Pinned input has changed")
+                if execution_mode == "live":
+                    evaluate.require(os.environ.get("LLMOPS_LIVE_ENABLED", "false").lower() == "true",
+                                     "Live evaluations are disabled")
+                    evaluate.require(bool(os.environ.get("OPENAI_API_KEY", "").strip()), "OpenAI key is required")
+                    if evaluation_scope(dataset_id) == RAG_SCOPE:
+                        from govbiz_evaluation.integrations import rag_live
+                        from govbiz_evaluation.evaluators import rag_evaluate
+                        evaluate.require(os.environ.get("LLMOPS_RAG_LIVE_ENABLED", "false").lower() == "true",
+                                         "RAG live evaluations are disabled")
+                        _, fixture_hash, prepared = rag_live.prepare(
+                            fixture_path, model=config["model"], document_vectors=config.get("document_vectors")
+                        )
+                        evaluate.require(fixture_hash == config["fixture_sha256"] and
+                                         prepared["model_operations"] == execution_spec["model_operations"],
+                                         "Approved RAG inputs differ")
+                        rag_evaluate.evaluate(fixture_path, reference_path)
+                    else:
+                        # A long-lived serve process can retain an older imported evaluator
+                        # even when the mounted files and release manifest now match.
+                        evaluate.require(EVALUATOR_VERSION == execution_spec["evaluation"]["version"],
+                                         "Loaded evaluator differs from approved specification")
+                        _, prepared, fixture_hash = evaluate.load_fixture(fixture_path)
+                        evaluate.require(fixture_hash == config["fixture_sha256"], "Approved fixture has changed")
+                        prepared = evaluate.select_cases(prepared, dataset["case_ids"])
+                        baseline = load_results(fixture_path, reference_path, dataset["case_ids"])
+                        evaluate.require(baseline["summary"]["completed"], "Reference must be complete")
+                        settings = execution_spec["generation"]["settings"]
+                        evaluate.require(settings["max_input_tokens"] == config["max_input_tokens"] == evaluate.MAX_INPUT_TOKENS
+                                         and settings["max_output_tokens"] == config["max_output_tokens"]
+                                         and settings["model_timeout_seconds"] == evaluate.DEFAULT_LLM_MODEL_TIMEOUT_SECONDS
+                                         and settings["run_timeout_seconds"] == evaluate.DEFAULT_LLM_RUN_TIMEOUT_SECONDS
+                                         and settings["max_retries"] == 0, "Generation settings differ")
+                        evaluate.require(evaluate.digest(evaluate.SUPPORT_PROGRAM_EVIDENCE_ANSWER_INSTRUCTIONS.encode())
+                                         == execution_spec["generation"]["prompt_sha256"], "Loaded prompt differs")
+                return dataset, fixture_path, capture_path, reference_path, prepared, fixture_hash
+
+            dataset, fixture_path, capture_path, reference_path, prepared, fixture_hash = validate_evaluation_inputs()
+        except (ValueError, OSError, KeyError, TypeError, BudgetUnavailable) as error:
+            code = "EXECUTION_SPEC_REQUIRED" if execution_mode == "live" and not execution_spec else "EXECUTION_SPEC_MISMATCH"
+            # 이 기록은 execute() 이전에만 쓴다. 전송 후 실패나 응답 유실을 0회로 추정하지 않는다.
+            write_json(output / "preflight.json", {
+                "error_code": code, "phase": "before_model_call", "model_api_calls": 0,
+                "execution_spec_sha256": execution_spec_sha256 or "",
+            })
+            raise ExecutionSpecMismatch(code) from error
+        if execution_mode == "live":
+            @task(name="claim-evaluation-budget", retries=0, cache_policy=NO_CACHE, persist_result=False)
+            def claim_evaluation_budget():
+                budget = BudgetClient(request_id, str(flow_run.id), execution_spec_sha256)
+                budget.claim()
+                return budget
+
+            budget = claim_evaluation_budget()
+
+            @task(name="generate-evaluation-responses", retries=0, cache_policy=NO_CACHE, persist_result=False)
+            def generate_evaluation_responses():
+                try:
+                    if evaluation_scope(dataset_id) == RAG_SCOPE:
+                        from govbiz_evaluation.integrations import rag_live
+                        _, capture = asyncio.run(rag_live.execute(
+                            fixture_path, output / "capture", budget=budget, execution_spec=execution_spec,
+                        ))
+                    else:
+                        capture = asyncio.run(evaluate.execute(
+                            prepared, fixture_hash, output / "capture", model=config["model"],
+                            max_model_calls=config["max_model_calls"], budget=budget,
+                        ))
+                finally:
+                    # 모델 전송이 끝난 뒤에만 미전송 몫을 반환한다. 미확인 전송은 예약을 유지한다.
+                    budget.close()
+                evaluate.require(capture["completed"], "Live capture incomplete; partial capture preserved")
+
+            generate_evaluation_responses()
+        if evaluation_scope(dataset_id) == RAG_SCOPE:
+            return evaluate_rag_capture(str(fixture_path), str(capture_path), str(reference_path),
+                                        str(output / "evaluation"), execution_spec=execution_spec,
+                                        execution_spec_sha256=execution_spec_sha256)
+        reassessment = None
+        if recovery_config and recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+            reassessment = {
+                "source_run_id": recovery_config["source_run_id"],
+                "source_evaluator_version": recovery_config["source_evaluator_version"],
+                "source_approved_evaluator_version": recovery_config["source_approved_evaluator_version"],
+                "target_evaluator_version": recovery_config["evaluator_version"],
+            }
+        result = evaluate_capture(str(fixture_path), str(capture_path), str(reference_path),
+                                  str(output / "evaluation"), case_ids=dataset["case_ids"],
+                                  **({"execution_spec_sha256": execution_spec_sha256} if execution_spec else {}),
+                                  **({"reassessment": reassessment} if reassessment else {}))
+        if recovery_config and recovery_config.get("reassessment_kind") == "stored-response-reassessment":
+            manifest_path = output / "evaluation/manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            provenance = {key: recovery_config[key] for key in (
+                "source_run_id", "source_evaluator_version", "source_approved_evaluator_version",
+                "evaluator_version", "capture_sha256", "source_manifest_sha256",
+            )}
+            manifest["reassessment"] = provenance
+            write_json(manifest_path, manifest)
+            result["reassessment"] = provenance
+        return result

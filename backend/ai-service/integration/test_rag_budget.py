@@ -17,10 +17,10 @@ from uuid import uuid4
 import httpx2
 import pytest
 from integration import serve_flow
-from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
+from govbiz_evaluation.integrations.budget_client import BudgetClient, BudgetUnavailable
 from fastapi.testclient import TestClient
 from qdrant_client import AsyncQdrantClient
-from govbiz_evaluation.rag_budget import digest
+from govbiz_evaluation.integrations.rag_budget import digest
 from integration.serve_flow import create_http_budget as RagBudget, make_http_rag_spec as make_rag_spec
 
 PREFIX = "/internal/v1/support-program-evidence/"
@@ -630,7 +630,7 @@ def test_http_adapter_rejects_missing_binding_before_budget_or_model_calls(tmp_p
 
 def test_http_adapter_rejects_plain_worker_guard_before_starting_app(tmp_path):
     from types import SimpleNamespace
-    from govbiz_evaluation.rag_budget import RagBudget as WorkerBudget, make_rag_spec as worker_spec
+    from govbiz_evaluation.integrations.rag_budget import RagBudget as WorkerBudget, make_rag_spec as worker_spec
 
     spec = worker_spec(cases())
     client = SimpleNamespace(identity={"spec_hash": digest(spec)}, request=Mock())
