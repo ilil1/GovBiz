@@ -471,8 +471,10 @@ print('PASS: ordinary Compose restart preserved local revocation and result file
             run(base + ["exec", "-T", "ops-service", "python", "manage.py", "shell",
                         "-c", verify_preserved], environment)
             if not args.bootstrap_only:
-                # The /app layout is not a repository checkout. Reuse the validated,
-                # read-only source mount only for the producer/consumer contract tests.
+                # Mount only the real producer file into a disposable test container.
+                # The Ops image and the normal service do not depend on the runner.
+                runner_source = ROOT / "pipelines/evals/govbiz_evaluation/integrations/budget_client.py"
+                require(runner_source.is_file(), "The real runner budget client is required.")
                 # Compose overrides CMD with runserver; inspect the built image's
                 # default CMD to retain the deployment concurrency regression test.
                 container = run(base + ["ps", "--quiet", "ops-service"],
@@ -484,8 +486,9 @@ print('PASS: ordinary Compose restart preserved local revocation and result file
                     environment, capture=True,
                 ).stdout.strip()
                 run(
-                    base + ["exec", "-T", "--env",
-                            "OPS_TEST_BUDGET_CLIENT_PATH=/evaluation-data/budget_client.py",
+                    base + ["run", "--rm", "--no-deps", "-T", "--volume",
+                            f"{runner_source}:/test-inputs/budget_client.py:ro",
+                            "--env", "OPS_TEST_BUDGET_CLIENT_PATH=/test-inputs/budget_client.py",
                             "--env", "OPS_TEST_GUNICORN_COMMAND=" + gunicorn_command,
                             "ops-service", "python", "manage.py", "test", "--noinput"],
                     environment,

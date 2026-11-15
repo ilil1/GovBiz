@@ -1566,7 +1566,8 @@ Docker 안에서도 테스트할 수 있습니다.
 $opsTestContainer = docker compose ps --quiet ops-service
 $opsTestImage = docker inspect --format '{{.Image}}' $opsTestContainer
 $opsTestCommand = docker image inspect --format '{{json .Config.Cmd}}' $opsTestImage
-docker compose exec -T --env "OPS_TEST_GUNICORN_COMMAND=$opsTestCommand" --env OPS_TEST_BUDGET_CLIENT_PATH=/evaluation-data/budget_client.py ops-service python manage.py test --noinput
+$budgetClient = (Resolve-Path ../../pipelines/evals/govbiz_evaluation/integrations/budget_client.py).Path
+docker compose run --rm --no-deps -T --volume "${budgetClient}:/test-inputs/budget_client.py:ro" --env "OPS_TEST_GUNICORN_COMMAND=$opsTestCommand" --env OPS_TEST_BUDGET_CLIENT_PATH=/test-inputs/budget_client.py ops-service python manage.py test --noinput
 ```
 
 WSGI 동시성 테스트는 로컬에서 Dockerfile의 기본 CMD를 사용합니다. Dockerfile이 없는
@@ -1574,13 +1575,11 @@ WSGI 동시성 테스트는 로컬에서 Dockerfile의 기본 CMD를 사용합�
 Compose의 `runserver` 재정의와 무관하게 배포 기본 Gunicorn 설정을 검증하며, 입력이 없거나
 잘못되면 생략하지 않고 실패합니다. 이 변수 역시 테스트 전용이며 CI 검증 도구가 자동 전달합니다.
 
-사용량 증거의 실행기→Ops 계약 테스트는 기본적으로 `LLMOPS_EVIDENCE_DIR/budget_client.py`의
-실제 실행기 코드를 읽습니다. 로컬 기본값은 저장소의 `evaluation/support-program-evidence`이며,
-단독·루트 Compose는 같은 디렉터리를 `/evaluation-data`에 읽기 전용으로 연결합니다.
-격리 이미지 테스트는 테스트 전용 `OPS_TEST_BUDGET_CLIENT_PATH`로 실제 소스의 절대 경로를
-지정할 수 있습니다. 위 명령은 기존 `/evaluation-data` 마운트를 사용하며, 소스가 없거나 경로가
+사용량 증거의 실행기→Ops 계약 테스트는 저장소의
+`pipelines/evals/govbiz_evaluation/integrations/budget_client.py`를 직접 읽습니다.
+격리된 컨테이너에서는 위 명령처럼 실제 소스 파일만 테스트 컨테이너에 읽기 전용으로 연결하고,
+테스트 전용 `OPS_TEST_BUDGET_CLIENT_PATH`에 그 절대 경로를 지정합니다. 소스가 없거나 경로가
 잘못되면 테스트를 생략하지 않고 실패합니다. 이 변수는 운영 설정이 아닙니다.
-`/app/apps/evaluations`의 부모 깊이로 저장소 루트를 추정하지 않습니다.
 DB가 필요 없는 서명·파일 검증은 `apps.evaluations.test_usage_correction.UsageReceiptTests`,
 격리된 MySQL 8.4의 보정·경합 검증은 `apps.evaluations.test_usage_correction`으로 선택합니다.
 

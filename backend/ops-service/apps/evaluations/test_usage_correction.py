@@ -33,11 +33,12 @@ from .test_budget import TOKEN, USAGE
 from .usage_correction import CorrectionUnavailable, correct_usage, read_receipt
 
 # Test the real producer/consumer contract across the runner and Ops packages.
-# Keep the configured evidence path; isolated image tests may supply a test-only input.
+# In a checkout, load the real producer; isolated image tests supply a test-only input.
 _runner_source = Path(
     os.environ.get(
         "OPS_TEST_BUDGET_CLIENT_PATH",
-        settings.LLMOPS_EVIDENCE_DIR / "budget_client.py",
+        settings.BASE_DIR.parent.parent
+        / "pipelines/evals/govbiz_evaluation/integrations/budget_client.py",
     )
 )
 if not _runner_source.is_absolute() or not _runner_source.is_file():
