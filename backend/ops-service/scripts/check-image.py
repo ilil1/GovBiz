@@ -140,6 +140,8 @@ def main():
             "exec",
             "--env",
             "LLMOPS_EVIDENCE_DIR=/test-inputs",
+            "--env",
+            "OPS_TEST_BUDGET_CLIENT_PATH=/test-inputs/budget_client.py",
             *receipt_tests,
         )
         docker(
