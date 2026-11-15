@@ -43,6 +43,7 @@ uploads/
 tmp/
 work/
 *.log
+generated_images/
 
 # IDE and OS
 .idea/
