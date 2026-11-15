@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from filelock import FileLock, Timeout
 
-from pipelines.flows.evaluation import capture
+from pipelines.flows.support_program_evidence import capture
 from support_program_evidence.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 

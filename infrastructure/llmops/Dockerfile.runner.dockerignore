@@ -17,8 +17,8 @@
 !pipelines/serve.py
 !pipelines/flows/
 !pipelines/flows/__init__.py
-!pipelines/flows/evaluation/
-!pipelines/flows/evaluation/*.py
+!pipelines/flows/support_program_evidence/
+!pipelines/flows/support_program_evidence/*.py
 !pipelines/evals/
 !pipelines/evals/pyproject.toml
 !pipelines/evals/setup.py

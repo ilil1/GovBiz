@@ -89,10 +89,10 @@ def test_publish_gate_fails_only_at_rag_publication_before_sending_scores(
     state.configure(run_id, {"fault": fault})
     publish = Mock(return_value=["score-id"])
     module = SimpleNamespace(publish_payloads=publish)
-    import pipelines.flows.evaluation
+    import pipelines.flows.support_program_evidence
 
-    monkeypatch.setitem(sys.modules, "pipelines.flows.evaluation.rag", module)
-    monkeypatch.setattr(pipelines.flows.evaluation, "rag", module, raising=False)
+    monkeypatch.setitem(sys.modules, "pipelines.flows.support_program_evidence.rag", module)
+    monkeypatch.setattr(pipelines.flows.support_program_evidence, "rag", module, raising=False)
     runner = load_runner()
     monkeypatch.setattr(runner, "PROBE", base)
     runner.install_publish_gate(run_id)

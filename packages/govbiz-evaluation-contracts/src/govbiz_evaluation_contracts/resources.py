@@ -9,7 +9,8 @@ EVIDENCE = "evaluation/support-program-evidence/"
 DATASETS = "pipelines/evals/support_program_evidence/datasets/"
 PRIOR_DATASETS = "pipelines/evals/datasets/"
 PIPELINE_EVALUATION = "pipelines/evaluation/"
-FLOW_EVALUATION = "pipelines/flows/evaluation/"
+FLOW_EVALUATION = "pipelines/flows/support_program_evidence/"
+PRIOR_FLOW_EVALUATION = "pipelines/flows/evaluation/"
 PIPELINE_COMPAT = "pipelines/_compat/evaluation/"
 PIPELINE_MODULES = frozenset({"__init__.py", "flows.py", "capture.py", "rag.py", "tasks.py", "clients.py"})
 ENGINE_SOURCE = "pipelines/evals/support_program_evidence/"
@@ -90,8 +91,9 @@ def source_path(name, root=None):
             if relative not in PIPELINE_MODULES:
                 raise ValueError("Unknown pipeline compatibility resource")
             mapped = PIPELINE_EVALUATION + relative
-        elif name.startswith(PIPELINE_EVALUATION):
-            relative = name.removeprefix(PIPELINE_EVALUATION)
+        elif name.startswith((PIPELINE_EVALUATION, PRIOR_FLOW_EVALUATION)):
+            prefix = PIPELINE_EVALUATION if name.startswith(PIPELINE_EVALUATION) else PRIOR_FLOW_EVALUATION
+            relative = name.removeprefix(prefix)
             if relative in PIPELINE_MODULES:
                 mapped = FLOW_EVALUATION + relative
         elif name.startswith(PRIOR_DATASETS):
@@ -116,16 +118,28 @@ def source_path(name, root=None):
         if mapped != name and not candidate.exists():
             if name.startswith(PIPELINE_COMPAT):
                 raise FileNotFoundError(f"Pipeline compatibility module is missing: {mapped}")
-            if name.startswith(PIPELINE_EVALUATION) and mapped.startswith(FLOW_EVALUATION):
-                # Historical flat checkouts remain inspectable; a partially
-                # present new layout must not silently fall back to wrappers.
-                if (root / "pipelines/flows").is_dir():
+            if name.startswith((PIPELINE_EVALUATION, PRIOR_FLOW_EVALUATION)) and mapped.startswith(FLOW_EVALUATION):
+                # New layouts must never use stale historical modules when a
+                # current flow file is missing. Old checkouts remain inspectable.
+                config = root / "pipelines/pyproject.toml"
+                adopted = config.is_file() and '"pipelines.flows.support_program_evidence"' in config.read_text()
+                if (root / FLOW_EVALUATION).is_dir() or adopted:
                     raise FileNotFoundError(f"Pipeline flow implementation is missing: {mapped}")
-                candidate = root / name
+                previous = root / PRIOR_FLOW_EVALUATION / mapped.removeprefix(FLOW_EVALUATION)
+                if (root / PRIOR_FLOW_EVALUATION).is_dir():
+                    if not previous.is_file():
+                        raise FileNotFoundError(f"Pipeline flow implementation is missing: {previous}")
+                    candidate = previous
+                elif (root / "pipelines/flows").is_dir():
+                    raise FileNotFoundError(f"Pipeline flow implementation is missing: {mapped}")
+                elif name.startswith(PIPELINE_EVALUATION):
+                    candidate = root / name
+                else:
+                    raise FileNotFoundError(f"Pipeline flow implementation is missing: {mapped}")
             # An old flat checkout may still be inspected, but do not let a
             # leftover flat module stand in for missing installed code in a
             # checkout that has already adopted the new package layout.
-            if mapped.startswith(DATASETS):
+            elif mapped.startswith(DATASETS):
                 # Once the new data directory exists, do not replace missing
                 # files with stale historical copies.
                 if (root / DATASETS).is_dir() or (root / ENGINE_SOURCE).is_dir():
@@ -210,10 +224,11 @@ def source_path(name, root=None):
         if relative not in PIPELINE_MODULES:
             raise ValueError("Unknown pipeline compatibility resource")
         return _package("pipelines") / "evaluation" / relative
-    if name.startswith(PIPELINE_EVALUATION):
-        relative = name.removeprefix(PIPELINE_EVALUATION)
+    if name.startswith((PIPELINE_EVALUATION, PRIOR_FLOW_EVALUATION)):
+        prefix = PIPELINE_EVALUATION if name.startswith(PIPELINE_EVALUATION) else PRIOR_FLOW_EVALUATION
+        relative = name.removeprefix(prefix)
         if relative in PIPELINE_MODULES:
-            return _package("pipelines") / "flows" / "evaluation" / relative
+            return _package("pipelines") / "flows" / "support_program_evidence" / relative
     if name.startswith("pipelines/") and name.endswith(".py"):
         return _package("pipelines") / name.removeprefix("pipelines/")
     return Path(__file__).parent / "_inputs" / name

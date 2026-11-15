@@ -130,7 +130,7 @@ def install_http_double(run_id):
 
 
 def install_publish_gate(run_id):
-    import pipelines.flows.evaluation.rag as rag_replay_flow
+    import pipelines.flows.support_program_evidence.rag as rag_replay_flow
 
     original = rag_replay_flow.publish_payloads
 
@@ -208,7 +208,7 @@ def cancellation_evaluation(
     execution_spec: dict | None = None,
     execution_spec_sha256: str | None = None,
 ):
-    from pipelines.flows.evaluation.flows import evaluate_saved_capture
+    from pipelines.flows.support_program_evidence.flows import evaluate_saved_capture
 
     marker_path(request_id).write_text(json.dumps(process_info(os.getpid())))
     install_http_double(request_id)

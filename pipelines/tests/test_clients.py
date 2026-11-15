@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pipelines.flows.evaluation import clients, tasks
+from pipelines.flows.support_program_evidence import clients, tasks
 from support_program_evidence.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 

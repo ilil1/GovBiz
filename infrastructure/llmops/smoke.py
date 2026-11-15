@@ -23,7 +23,7 @@ from govbiz_ai_runtime.support_program_evidence.errors import SupportProgramEvid
 from govbiz_ai_runtime.tracing import LLMTracing
 from tests.langchain_stub import ResponsesChatStub, response_message
 from tests.support_program_evidence.test_agent import answer_request, valid_selection
-from pipelines.flows.evaluation.capture import evaluate_capture
+from pipelines.flows.support_program_evidence.capture import evaluate_capture
 from support_program_evidence.reports.reporting import write_json
 from assistant_trace_smoke import assistant_trace_examples, verify_assistant_observations
 from evidence_trace_smoke import evidence_trace_examples, verify_evidence_observations

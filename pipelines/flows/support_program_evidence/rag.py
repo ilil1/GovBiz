@@ -17,7 +17,7 @@ from govbiz_ai_runtime.config import LangfuseSettings
 from govbiz_evaluation_contracts import rag_replay
 from support_program_evidence.reports.reporting import write_json
 from support_program_evidence.reports.rag_reporting import render, score_payloads
-from pipelines.flows.evaluation.clients import publish_payloads
+from pipelines.flows.support_program_evidence.clients import publish_payloads
 
 
 @flow(

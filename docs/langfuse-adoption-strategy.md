@@ -1,6 +1,6 @@
 # Langfuse 기반 LLMOps 도입 전략
 
-> 현재 코드는 Prefect 실행 순서를 `pipelines/flows/evaluation/`, 평가 계산을 `pipelines/evals/support_program_evidence/`에서 관리하고, 평가 자료와 기록은 `pipelines/evals/support_program_evidence/datasets/`에 보관합니다. 아래 과거 검증 기록의 `ops_flow.py`와 `llmops.py`는 분리 전 파일명입니다. 최신 실행 방법은 [파이프라인 안내](../pipelines/README.md)를 따릅니다.
+> 현재 코드는 Prefect 실행 순서를 `pipelines/flows/support_program_evidence/`, 평가 계산을 `pipelines/evals/support_program_evidence/`에서 관리하고, 평가 자료와 기록은 `pipelines/evals/support_program_evidence/datasets/`에 보관합니다. 아래 과거 검증 기록의 `ops_flow.py`와 `llmops.py`는 분리 전 파일명입니다. 최신 실행 방법은 [파이프라인 안내](../pipelines/README.md)를 따릅니다.
 
 **현재 우선순위와 완료 기준은 [LLMOps 후속 개발 전략](llmops-next-development-plan.md)을 따른다.**
 이 문서는 최초 설계와 커밋별 구현·검증 이력을 보존한다. 아래 과거 계획을 현재 미구현 목록으로 해석하지 않는다.
@@ -58,7 +58,7 @@ workflow가 성공이지만 `publish` job은 건너뛰었다. 이미지 발행 �
 | P0 · 배포 전 | 감사 기준 SHA에는 [발행 gate](../infrastructure/release/gate.py)와 [trigger](../.github/workflows/msa-images.yml)에 LLMOps CI가 없었다 | 후속 작업 브랜치에서 다섯 CI·필수 job·발행/승격 재검증을 연결했다. 로컬 검증과 아래 구현 기록을 참조하며, `de7b0f0`의 필수 CI 5개는 통과했다. 실제 이미지 발행·승격 성공과는 구분한다. |
 | P0 · 로컬 실행 전 | [명세 검사](../backend/ops-service/apps/evaluations/execution_spec.py)가 기존 Windows checkout에서 실패 | AI 파일 5개의 CRLF가 원인이다. Git blob 및 LF 변환 바이트는 manifest와 일치한다. 후속 예산 작업에서 Git blob과 동일함을 확인한 뒤 LF로 복구하고 명세 검사를 통과했다. 명세 대상 Python 파일의 LF를 `.gitattributes`로 고정했다. |
 | P1 · 품질 | [품질 정책](../backend/ops-service/apps/evaluations/quality_policy.py)과 [판정 이력](../backend/ops-service/apps/evaluations/quality.py)은 구현됐지만 실제 사람 검토·현재 모델 기준은 미확보 | 개발 테스트의 `PASS`와 사람이 승인한 평가 기준을 구별한다. 자료 검토 → 승인 범위의 새 응답 → 사례 검토 → 품질 판정 → 별도 기준 지정 순서로 진행한다. |
-| P1 · 반복 실행 전 | [호출 설정](../backend/ops-service/apps/evaluations/catalog.py), [실행기](../pipelines/flows/evaluation/flows.py), [API](../backend/ops-service/apps/evaluations/urls.py) | 실행별 호출 수·출력 토큰은 있지만 누적 예산 장부·취소 API가 없다. `CANCELLED` 상태 수신과 취소 기능은 다르다. `serve(limit=1)`·로컬 FileLock은 다중 실행기의 전역 제한이 아니다. |
+| P1 · 반복 실행 전 | [호출 설정](../backend/ops-service/apps/evaluations/catalog.py), [실행기](../pipelines/flows/support_program_evidence/flows.py), [API](../backend/ops-service/apps/evaluations/urls.py) | 실행별 호출 수·출력 토큰은 있지만 누적 예산 장부·취소 API가 없다. `CANCELLED` 상태 수신과 취소 기능은 다르다. `serve(limit=1)`·로컬 FileLock은 다중 실행기의 전역 제한이 아니다. |
 | P2 · 자료 확대 전 | [평가기](../pipelines/evals/support_program_evidence/evaluators/evaluate.py)의 `load_fixture`·`report` | `synthetic`·`ai-authored`, 문서 최대 3개·사례 최대 12개로 제한된다. 자동 의미 충실도는 미측정이며 인용 recall은 불필요한 인용을 벌점 처리하지 않는다. 실제 공고·사람 참조·범위 확장은 자료 계약과 검토 기준부터 확장한다. |
 | P2 · 운영 전 | [추적](../backend/ai-service/app/tracing.py)과 [개발 Compose](../infrastructure/llmops/compose.ops.yaml) | 당시 허용 span은 답변·모델 두 개였다. 이후 일반 지원사업 검색의 Core→AI 추적을 추가했다([현재 범위](../infrastructure/llmops/README.md#지원사업-ai-검색-추적)). 상세 RAG 전체 연결, 운영 인증·보존 기간·백업/복원·결과 저장소 운영 검증은 남았다. |
 
@@ -526,7 +526,7 @@ Ops에 구현했으며 상태 동기화·복구 CI도 통과했다. 아래 기�
 - 무료 실패 주입으로 보고서 오류, Langfuse 전송 후 응답 유실, 동시 중복 접수, 실행기 재시작,
   캡처 훼손을 검증한다. 모델 호출 함수를 호출하면 실패하는 테스트로 **추가 호출 0회**를 보장한다.
 - 구현 지점은 `backend/ops-service/apps/evaluations`, `frontend/web`의 평가 상세,
-  `pipelines/flows/evaluation/flows.py`·`pipelines/flows/evaluation/capture.py`다. 범용 작업 엔진이나 새 스케줄러는 필요 없다.
+  `pipelines/flows/support_program_evidence/flows.py`·`pipelines/flows/support_program_evidence/capture.py`다. 범용 작업 엔진이나 새 스케줄러는 필요 없다.
 
 ### 평가 기준과 품질 판정
 

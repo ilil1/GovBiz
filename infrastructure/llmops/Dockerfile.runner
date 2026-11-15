@@ -13,7 +13,7 @@ COPY packages/govbiz-ai-runtime /build/packages/govbiz-ai-runtime
 COPY packages/govbiz-evaluation-contracts /build/packages/govbiz-evaluation-contracts
 COPY pipelines/pyproject.toml pipelines/uv.lock pipelines/__init__.py pipelines/serve.py /build/pipelines/
 COPY pipelines/flows/__init__.py /build/pipelines/flows/__init__.py
-COPY pipelines/flows/evaluation /build/pipelines/flows/evaluation
+COPY pipelines/flows/support_program_evidence /build/pipelines/flows/support_program_evidence
 COPY pipelines/evals /build/pipelines/evals
 COPY infrastructure/llmops/bundle_runner_inputs.py /build/infrastructure/llmops/bundle_runner_inputs.py
 RUN python infrastructure/llmops/bundle_runner_inputs.py --root /build \

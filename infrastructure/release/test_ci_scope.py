@@ -96,7 +96,7 @@ class AffectedJobsTests(unittest.TestCase):
 
     def test_pipeline_source_and_lock_require_evaluation_integrations(self):
         for path in (
-            "pipelines/flows/evaluation/flows.py", "pipelines/uv.lock",
+            "pipelines/flows/support_program_evidence/flows.py", "pipelines/uv.lock",
             "pipelines/evals/support_program_evidence/evaluators/evaluate.py",
             "pipelines/evals/pyproject.toml",
         ):

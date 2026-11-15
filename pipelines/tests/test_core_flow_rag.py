@@ -245,8 +245,8 @@ def test_failed_registration_rolls_back_catalog_and_new_files(repository, monkey
 def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
     repository, monkeypatch, tmp_path
 ):
-    from pipelines.flows.evaluation import flows as ops_flow
-    from pipelines.flows.evaluation import rag as rag_replay_flow
+    from pipelines.flows.support_program_evidence import flows as ops_flow
+    from pipelines.flows.support_program_evidence import rag as rag_replay_flow
     from govbiz_evaluation_contracts import catalog, rag_replay
 
     importer.register(

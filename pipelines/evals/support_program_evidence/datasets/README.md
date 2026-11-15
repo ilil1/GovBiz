@@ -186,7 +186,7 @@ uv run --project pipelines --locked python -m support_program_evidence.preparati
 
 [`rag_live.py`](../../../../pipelines/evals/support_program_evidence/integrations/rag_live.py)는 등록 fixture의 원문·청크를 고정하고, 평가용 청크 벡터 조회·필요 시 생성 →
 격리된 메모리 색인 복원 → 질문 임베딩·검색 → Agent 답변을 실행합니다. Core 서버의 원문 수집·청킹과
-운영 Qdrant 성능을 측정하지 않습니다. [`pipelines/flows/evaluation/flows.py`](../../../../pipelines/flows/evaluation/flows.py)가 승인된 명세와 두 활성화 설정을
+운영 Qdrant 성능을 측정하지 않습니다. [`pipelines/flows/support_program_evidence/flows.py`](../../../../pipelines/flows/support_program_evidence/flows.py)가 승인된 명세와 두 활성화 설정을
 검증한 후 기존 `BudgetClient`와 `RagBudget`을 통해 전송 직전 승인·사용량 영수증·정산을 수행합니다.
 새 외부 서비스나 의존성은 추가하지 않습니다.
 
@@ -558,7 +558,7 @@ Windows 체크아웃에서도 같은 원본을 재검증하기 위한 규칙이�
 
 ### Langfuse·Prefect·Pandera·Evidently·pandas 평가 배치
 
-[평가 파이프라인](../../../../pipelines/flows/evaluation/capture.py)는 기존 캡처의 점수를 재계산하고 검증된 결과를 Langfuse와 Evidently에 연결합니다.
+[평가 파이프라인](../../../../pipelines/flows/support_program_evidence/capture.py)는 기존 캡처의 점수를 재계산하고 검증된 결과를 Langfuse와 Evidently에 연결합니다.
 새 모델 호출 없이 Prefect로 실행하며, 원본 캡처를 덮어쓰지 않습니다.
 Evidently 원본 보고서는 기존 점수 분포와 함께 같은 사례에서 양쪽이 측정된 점수의 변화
 (후보 − 비교 대상) 분포와 양쪽에서 측정된 사례의 비율을 보여줍니다. 변화 그래프의 Reference 0은 비교 대상 점수가
@@ -568,7 +568,7 @@ Evidently 원본 보고서는 기존 점수 분포와 함께 같은 사례에서
 사용하므로 버전 변경 시 실제 HTML 배치와 위젯 구조를 함께 검증해야 합니다.
 AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
 저장소 루트에서 `uv sync --project pipelines --locked --extra dev`으로 설치합니다.
-평가 계산은 이 디렉터리에, Prefect 순서·재시도·등록과 Langfuse 전송은 `pipelines/flows/evaluation/`에 있습니다.
+평가 계산은 `pipelines/evals/support_program_evidence/`에, Prefect 순서·재시도·등록과 Langfuse 전송은 `pipelines/flows/support_program_evidence/`에 있습니다.
 두 범위는 `uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/tests pipelines/tests`로 함께 검증합니다.
 [개발 서버·무료 검증·실행 명령](../../../../infrastructure/llmops/README.md)에 구성과 제한 사항을 정리했습니다.
 
@@ -577,7 +577,7 @@ AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
 
 ### Ops 실행 명세 검증
 
-`pipelines/flows/evaluation/flows.py`는 Django가 접수한 명세와 실행기의 실제 소스·잠금 파일·입력 바이트를 대조합니다.
+`pipelines/flows/support_program_evidence/flows.py`는 Django가 접수한 명세와 실행기의 실제 소스·잠금 파일·입력 바이트를 대조합니다.
 명세 생성기는 [execution_spec.py](../../../../backend/ops-service/apps/evaluations/execution_spec.py)이며
 명시적인 파일 목록으로 생성·평가 경로를 구분합니다. `execution_release.json`은 빌드 입력이고
 실행 중 실제 파일 재검증을 대신하지 않습니다.
@@ -700,10 +700,10 @@ pipelines/.venv/bin/python -m support_program_evidence.evaluators.evaluate \
 
 ## Ops에서 실패한 후처리 복구
 
-`pipelines/flows/evaluation/flows.py`의 `recovery` 모드는 원본 요청·완료 캡처·fixture·비교 기준의 해시를 확인하고,
+`pipelines/flows/support_program_evidence/flows.py`의 `recovery` 모드는 원본 요청·완료 캡처·fixture·비교 기준의 해시를 확인하고,
 새 요청 폴더에 바이트를 복사한 뒤 기존 `evaluate_capture`만 호출합니다. `evaluate.execute`는
 호출하지 않습니다. 원본의 유료 호출 수는 보존하며 복구의 추가 호출 수는 0입니다.
-`pipelines/flows/evaluation/capture.py`는 입력 검증 뒤 해시와 마지막 보고서/등록 단계를 즉시 manifest에 저장하므로
+`pipelines/flows/support_program_evidence/capture.py`는 입력 검증 뒤 해시와 마지막 보고서/등록 단계를 즉시 manifest에 저장하므로
 후처리 도중 프로세스가 중단되어도 입력을 확인할 수 있습니다. 입력 검증 이전의 중단은 복구하지 않습니다.
 실행 방법과 제한은 [후처리 복구 안내](../../../../infrastructure/llmops/README.md#후처리-복구)를 참고하세요.
 
@@ -720,7 +720,7 @@ migration과 같은 소스로 생성한 실행기·실행 명세가 필요합니
 호출을 합산하지 않습니다. [Ops 누적 한도와 설정](../../../../backend/ops-service/README.md#누적-호출출력-토큰-한도)을 따릅니다.
 
 [실행 설정](../../../../infrastructure/llmops/README.md#ops에서-새-모델-평가) 후 Ops에서 새 응답 생성을 선택합니다.
-`pipelines/flows/evaluation/flows.py`는 승인한 fixture 해시와 비교 기준을 먼저 검증하고 선택 사례만 `evaluate.execute()`에 전달합니다.
+`pipelines/flows/support_program_evidence/flows.py`는 승인한 fixture 해시와 비교 기준을 먼저 검증하고 선택 사례만 `evaluate.execute()`에 전달합니다.
 실제 생성은 기존 `Service → Agent → OpenAI Responses` 경로를 사용하며 HTTP 서버 초기화에 의존하지 않습니다.
 모델은 승인 명세에서 고정하고, 전송 직전 endpoint·모델·출력 제한·호출 예산을 다시 검사합니다.
 자동 재시도는 없고 첫 실패에서 중단합니다. `capture.modelApiCalls`는 응답 유실을 포함한 전송 시도 횟수이며
@@ -774,7 +774,7 @@ Service가 결과·캐시 반영을 거절합니다.
 
 이 도구는 **내부 색인·검색 세션용 연결점**입니다. 예약 생성·claim·close 및 자료/예산 승인은 호출자가
 수행해야 합니다. 가드를 전달한 세션은 답변 생성을 거절하며, 답변 슬롯을 임베딩 캐시로 건너뛰지 않습니다.
-답변까지 포함하는 내부 CLI는 아래 혼합 RAG 예산 세션을 따릅니다. 현재 `pipelines/flows/evaluation/flows.py`의 고정 원문·청크
+답변까지 포함하는 내부 CLI는 아래 혼합 RAG 예산 세션을 따릅니다. 현재 `pipelines/flows/support_program_evidence/flows.py`의 고정 원문·청크
 RAG live는 `rag_live.py → RagBudget → EmbeddingBudget`으로 이 가드를 사용하며, 상단의 별도 활성화·
 자료 승인·누적 예산 계약을 따릅니다. Core 원문 수집·청킹까지 포함하는 운영 경로는 후속 범위입니다.
 
@@ -852,7 +852,7 @@ uv run --project ../../pipelines --locked --group integration python -m integrat
 세션 종료 시 서버를 정상 종료해야 `close`를 시도합니다. claim/close 실패는 오류로 드러나며
 프로세스 강제 종료·close 유실 시 기존 Ops 종료 정리/보정 절차가 필요합니다. 출력 경로는
 artifact 조회를 사용하려면 해당 실행의 `/results/{run UUID}/capture`에 연결해야 합니다.
-runner 이미지에 모듈을 포함하지만 기본 `pipelines/flows/evaluation/flows.py`가 자동으로 이 세션을 시작하지는 않습니다.
+runner 이미지에 모듈을 포함하지만 기본 `pipelines/flows/support_program_evidence/flows.py`가 자동으로 이 세션을 시작하지는 않습니다.
 
 무료 `test_rag_budget.py`는 실제 AI 앱·Service·Agent·SDK·메모리 Qdrant와 로컬 예산 HTTP 대역,
 모델 HTTP 대역으로 정상·캐시·계산/승인/정산 실패·취소 상태의 승인 거절·응답 유실·미확정 사용량·

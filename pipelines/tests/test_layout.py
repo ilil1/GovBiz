@@ -59,7 +59,7 @@ assert not any(name.split(".", 1)[0] in {"prefect", "pipelines", "app", "apps"} 
 
 def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
     from pipelines import serve
-    from pipelines.flows.evaluation.flows import evaluate_saved_capture
+    from pipelines.flows.support_program_evidence.flows import evaluate_saved_capture
 
     assert serve.evaluate_saved_capture is evaluate_saved_capture
     assert evaluate_saved_capture.name == "govbiz-ops-evidence-evaluation"
@@ -86,7 +86,7 @@ def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
     filename, function, name, tmp_path
 ):
     # The deployment resolves its installed module in every fresh process.
-    entrypoint = "pipelines.flows.evaluation." + filename.removesuffix(".py") + "." + function
+    entrypoint = "pipelines.flows.support_program_evidence." + filename.removesuffix(".py") + "." + function
     completed = subprocess.run(
         [
             sys.executable, "-I", "-c",
@@ -106,7 +106,7 @@ def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
 
 def test_capture_command_keeps_cli_entrypoint(tmp_path):
     completed = subprocess.run(
-        [sys.executable, "-I", "-m", "pipelines.flows.evaluation.capture", "--help"],
+        [sys.executable, "-I", "-m", "pipelines.flows.support_program_evidence.capture", "--help"],
         cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -117,7 +117,9 @@ def test_installed_package_omits_previous_pipeline_import_path(tmp_path):
     completed = subprocess.run(
         [
             sys.executable, "-I", "-c",
-            'import importlib.util; assert importlib.util.find_spec("pipelines.evaluation") is None',
+            'import importlib.util; assert importlib.util.find_spec("pipelines.evaluation") is None; '
+            'assert importlib.util.find_spec("pipelines.flows.evaluation") is None; '
+            'assert importlib.util.find_spec("pipelines.flows.support_program_evidence.flows") is not None',
         ],
         cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
     )

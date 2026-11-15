@@ -18,7 +18,7 @@ from prefect.runtime import flow_run
 from support_program_evidence.evaluators import evaluate
 from support_program_evidence.integrations.budget_client import BudgetClient, BudgetUnavailable
 from support_program_evidence.reports.reporting import EVALUATOR_VERSION, load_results, write_json
-from pipelines.flows.evaluation.capture import evaluate_capture
+from pipelines.flows.support_program_evidence.capture import evaluate_capture
 
 from govbiz_evaluation_contracts.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
 from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
@@ -28,7 +28,7 @@ from govbiz_evaluation_contracts.execution_spec import (
 from govbiz_evaluation_contracts.catalog import RAG_SCOPE, evaluation_scope
 from govbiz_evaluation_contracts.catalog import managed_snapshot_context
 from govbiz_evaluation_contracts.managed_materials import materialize
-from pipelines.flows.evaluation.rag import evaluate_rag_capture
+from pipelines.flows.support_program_evidence.rag import evaluate_rag_capture
 
 DATASET_ID = LEGACY_DATASET_ID
 

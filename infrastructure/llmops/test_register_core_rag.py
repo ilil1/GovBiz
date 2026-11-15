@@ -191,8 +191,8 @@ def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
     import core_rag_capture as collector
     import ops_smoke
     from govbiz_evaluation_contracts import catalog, rag_replay
-    from pipelines.flows.evaluation import flows as ops_flow
-    from pipelines.flows.evaluation import rag as rag_replay_flow
+    from pipelines.flows.support_program_evidence import flows as ops_flow
+    from pipelines.flows.support_program_evidence import rag as rag_replay_flow
 
     if source_failed:
         wire_path = completed_capture / "wire.json"

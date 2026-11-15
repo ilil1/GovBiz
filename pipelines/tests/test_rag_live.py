@@ -8,10 +8,10 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx2
-from pipelines.flows.evaluation import flows as ops_flow
+from pipelines.flows.support_program_evidence import flows as ops_flow
 import pytest
 from support_program_evidence.integrations import rag_live
-from pipelines.flows.evaluation import rag as rag_replay_flow
+from pipelines.flows.support_program_evidence import rag as rag_replay_flow
 from govbiz_evaluation_contracts.catalog import live_config
 from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
 from govbiz_evaluation_contracts.rag_material import material_from_sources

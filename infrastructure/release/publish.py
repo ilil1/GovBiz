@@ -42,7 +42,7 @@ RUNNER_PATHS = (
     "backend/ai-service/pyproject.toml",
     "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
     "pipelines/pyproject.toml", "pipelines/uv.lock",
-    "pipelines/__init__.py", "pipelines/serve.py", "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
+    "pipelines/__init__.py", "pipelines/serve.py", "pipelines/flows/__init__.py", "pipelines/flows/support_program_evidence", "pipelines/evals",
     "infrastructure/llmops/bundle_runner_inputs.py",
 )
 

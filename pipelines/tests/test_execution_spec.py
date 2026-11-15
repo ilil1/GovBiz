@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from pipelines.flows.evaluation import flows as ops_flow
+from pipelines.flows.support_program_evidence import flows as ops_flow
 from govbiz_evaluation_contracts.execution_spec import (
     AI, OPS, EVIDENCE, PIPELINES, ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
 )

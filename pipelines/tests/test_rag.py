@@ -7,9 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from pipelines.flows.evaluation import flows as ops_flow
+from pipelines.flows.support_program_evidence import flows as ops_flow
 import pytest
-from pipelines.flows.evaluation import rag
+from pipelines.flows.support_program_evidence import rag
 from support_program_evidence.reports import rag_reporting
 from govbiz_evaluation_contracts import rag_replay
 from govbiz_evaluation_contracts.catalog import public_datasets, validate_execution

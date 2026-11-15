@@ -13,7 +13,7 @@
     "code_sha256": "b2715707819f120f677aba684790f3f68d6c27c17c1613db455d162d89823b84"
   },
   "evaluation": {
-    "sha256": "9c7b08c5ba4b77b42cb43148fc72862f8930b04230ba34970d64b05598b287ae",
+    "sha256": "f662fe98ab4458149e2bb6bc6ef270f48d4f5f21858d94c3d023dea6e3cfdb87",
     "files": {
       "evaluation/support-program-evidence/evaluate.py": "8234de3c755e68f17d27bf26a48f824768621a2b462d8838b1363a99ded04d12",
       "evaluation/support-program-evidence/official_snapshot.py": "e3163fc4b2c56c36c3a765944b6a68958d6d54d2828980eaa252323a93d152e8",
@@ -25,14 +25,14 @@
       "packages/govbiz-ai-runtime/pyproject.toml": "12ac220a2a1147ff5510d1dae6d1e55e62b9ce165c1d6e5b9c1c349e11b52a50",
       "packages/govbiz-evaluation-contracts/pyproject.toml": "983fd8e5e6a96dc0035e651965781be7daabf3d94d4c72051c402ecdfa799a3b",
       "evaluation/pyproject.toml": "1f47b3488ae7a25681c5d37442c2e114855d527968403da24134fa7b43c55045",
-      "pipelines/pyproject.toml": "fa9f5aa7c416b47d4de03cf922d4b5e7cdd813e26fc936dfd81b1c4f43a0b473",
+      "pipelines/pyproject.toml": "3b5961661bcb7cc6c3c468a657d787d6c387b410614d893eba09756bff750fb4",
       "pipelines/uv.lock": "258cb8a4a78613709d98fb366bfd62292a42e965fe5f151699d0653eae8d1da7"
     },
-    "version": "9c7b08c5ba4b77b42cb43148fc72862f8930b04230ba34970d64b05598b287ae",
+    "version": "f662fe98ab4458149e2bb6bc6ef270f48d4f5f21858d94c3d023dea6e3cfdb87",
     "scope": "fixed-answer-context-only"
   },
   "rag_evaluation": {
-    "sha256": "25a394ddad1a60d5cd3457e09825d218609d71c0d896d35acaf5eff4a7e77427",
+    "sha256": "154d089e4a5c4667b1600ea2d8201a0a80b54b2f1ca33d378caf9218a0e31f24",
     "files": {
       "evaluation/support-program-evidence/rag_evaluate.py": "f31b70e065c4a9feb47a88be1d53b0358f6df7afd75613b7714feb6c85fd886e",
       "evaluation/support-program-evidence/rag_reporting.py": "f8e30375c2d0f24bf130d294e5003156c3d64c96970393e64a0f171719e8e7ee",
@@ -43,14 +43,14 @@
       "packages/govbiz-ai-runtime/pyproject.toml": "12ac220a2a1147ff5510d1dae6d1e55e62b9ce165c1d6e5b9c1c349e11b52a50",
       "packages/govbiz-evaluation-contracts/pyproject.toml": "983fd8e5e6a96dc0035e651965781be7daabf3d94d4c72051c402ecdfa799a3b",
       "evaluation/pyproject.toml": "1f47b3488ae7a25681c5d37442c2e114855d527968403da24134fa7b43c55045",
-      "pipelines/pyproject.toml": "fa9f5aa7c416b47d4de03cf922d4b5e7cdd813e26fc936dfd81b1c4f43a0b473",
+      "pipelines/pyproject.toml": "3b5961661bcb7cc6c3c468a657d787d6c387b410614d893eba09756bff750fb4",
       "pipelines/uv.lock": "258cb8a4a78613709d98fb366bfd62292a42e965fe5f151699d0653eae8d1da7"
     },
-    "version": "25a394ddad1a60d5cd3457e09825d218609d71c0d896d35acaf5eff4a7e77427",
+    "version": "154d089e4a5c4667b1600ea2d8201a0a80b54b2f1ca33d378caf9218a0e31f24",
     "scope": "source-chunks-retrieval-answer"
   },
   "generation": {
-    "sha256": "1e41ab660724b667f9f274514ae9cf26a456a5b7023f2f8a2d98b0090355dc64",
+    "sha256": "819a6ff05a6409ca8778998525d098058601696baf89986ec1a3d6a13fdfc8a1",
     "files": {
       "evaluation/support-program-evidence/evaluate.py": "8234de3c755e68f17d27bf26a48f824768621a2b462d8838b1363a99ded04d12",
       "evaluation/support-program-evidence/official_snapshot.py": "e3163fc4b2c56c36c3a765944b6a68958d6d54d2828980eaa252323a93d152e8",
@@ -67,7 +67,7 @@
       "packages/govbiz-ai-runtime/pyproject.toml": "12ac220a2a1147ff5510d1dae6d1e55e62b9ce165c1d6e5b9c1c349e11b52a50",
       "packages/govbiz-evaluation-contracts/pyproject.toml": "983fd8e5e6a96dc0035e651965781be7daabf3d94d4c72051c402ecdfa799a3b",
       "evaluation/pyproject.toml": "1f47b3488ae7a25681c5d37442c2e114855d527968403da24134fa7b43c55045",
-      "pipelines/pyproject.toml": "fa9f5aa7c416b47d4de03cf922d4b5e7cdd813e26fc936dfd81b1c4f43a0b473",
+      "pipelines/pyproject.toml": "3b5961661bcb7cc6c3c468a657d787d6c387b410614d893eba09756bff750fb4",
       "pipelines/uv.lock": "258cb8a4a78613709d98fb366bfd62292a42e965fe5f151699d0653eae8d1da7"
     },
     "prompt_sha256": "d1da6572a30b3e63a65d5820e07f29088276cd6eae23db55661349d388c0b626",
@@ -85,7 +85,7 @@
     }
   },
   "rag_generation": {
-    "sha256": "4117670c6543a55a720e4ff6381ec4ef01b5b0a7596f0a7007674ac3bc5ec685",
+    "sha256": "37895c61bb1ed7d3979a364f8e5e69d241ba8c4f1b3e862dc3d76c40ac1054b2",
     "files": {
       "evaluation/support-program-evidence/evaluate.py": "8234de3c755e68f17d27bf26a48f824768621a2b462d8838b1363a99ded04d12",
       "evaluation/support-program-evidence/official_snapshot.py": "e3163fc4b2c56c36c3a765944b6a68958d6d54d2828980eaa252323a93d152e8",
@@ -102,7 +102,7 @@
       "packages/govbiz-ai-runtime/pyproject.toml": "12ac220a2a1147ff5510d1dae6d1e55e62b9ce165c1d6e5b9c1c349e11b52a50",
       "packages/govbiz-evaluation-contracts/pyproject.toml": "983fd8e5e6a96dc0035e651965781be7daabf3d94d4c72051c402ecdfa799a3b",
       "evaluation/pyproject.toml": "1f47b3488ae7a25681c5d37442c2e114855d527968403da24134fa7b43c55045",
-      "pipelines/pyproject.toml": "fa9f5aa7c416b47d4de03cf922d4b5e7cdd813e26fc936dfd81b1c4f43a0b473",
+      "pipelines/pyproject.toml": "3b5961661bcb7cc6c3c468a657d787d6c387b410614d893eba09756bff750fb4",
       "pipelines/uv.lock": "258cb8a4a78613709d98fb366bfd62292a42e965fe5f151699d0653eae8d1da7",
       "backend/ops-service/apps/evaluations/vector_cache.py": "d0a08e7922f4dcd47c19165a21bd700c9aa9128a24ddffc2b387b50078c15bb3",
       "evaluation/support-program-evidence/rag_live.py": "a0fa1585d3196225fef8b614ec3ec35ff3b112dee8ea2d9964a2a96ec7c66ef6",
@@ -130,10 +130,10 @@
     "document_vectors": "content-addressed-evaluation-cache-v1"
   },
   "pipeline": {
-    "sha256": "f6127498b983d7a20fe902250857b3c2bce135f6e9d0100f211cee3398821e8f",
+    "sha256": "41f4e5ff7833fc11c9f6a213a3e411169f9ccd14bb59ca1d99bb2a3acb6225ed",
     "files": {
       "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/__init__.py": "dd97af2e88cbf83f4ea93a98e27b6146c1b08345a7d72f76d561b376752034f3",
-      "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/resources.py": "d9ec5f11469c67ace7cc1f89220c90bdfd0ef4c9a537730f07a7ce8b8ccfd33c",
+      "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/resources.py": "31e65240d8a39c24da476c310002f60d891cde328e9fb20aaa19c66bc2d99448",
       "packages/govbiz-ai-runtime/src/govbiz_ai_runtime/__init__.py": "5566df464695de0d865ee70e980b3b79a0655f1ab163735388c47508a9153f7c",
       "evaluation/support-program-evidence/__init__.py": "334926ca6b72479f8b18672ac2901d3597d1f212a9747601ba7a49e9c9c01311",
       "evaluation/support-program-evidence/evaluators/__init__.py": "0c2790b31ea45cbe851238b33e0607f52228198436764827294b042bf13d2dc0",
@@ -142,13 +142,13 @@
       "evaluation/support-program-evidence/preparation/__init__.py": "ed23b34b98b302c1954ba474b19cf132d1aa33941fd80a461e33775815d04735",
       "backend/ai-service/app/support_program_evidence/__init__.py": "0f45e7b877d789b6ae9c3bc9e27a1ed3bcfc2f5541b06a82a03ddc4ad5a21856",
       "pipelines/__init__.py": "fec847c3ba661f5cf68da6fd7d232caba1da56729030ddaa839175a540975db2",
-      "pipelines/serve.py": "f965b9f7f1193b9117e490b8cb6a6a30ddd112b88d061a9eff028b1571054724",
+      "pipelines/serve.py": "cc4d2902acd63f39347f20e18f9f7fb756afd16843b74113692b26bbe32986ce",
       "pipelines/flows/__init__.py": "bff63a8415289c8a8018f3a30da2d1bbc8b17dca465c71a0e5ec16e2a5a658a5",
       "pipelines/evaluation/__init__.py": "0352a71bf22699193053146bca08e0848d01d12146adf268aed383f4be565d94",
-      "pipelines/evaluation/flows.py": "8d566f9d89fea30ef64c04b388f36584b1524089b666af95e8b8e1ad1e410128",
-      "pipelines/evaluation/capture.py": "adb80758879e3a27fad8a959222e4e038b7092a09071210cd7f81afa458a3e0b",
-      "pipelines/evaluation/rag.py": "aae987030621b37c25b255953e610fc013ba6e8e701436e41c1711c655590515",
-      "pipelines/evaluation/tasks.py": "94436b6ca159116e039955f91776bc4636ced1dc0af682b3c260b6ffd374aa36",
+      "pipelines/evaluation/flows.py": "bc974fdfd34e9e0a4732b2ed22f58db1d664a4d8a3efc3e183bf1de004f6fb46",
+      "pipelines/evaluation/capture.py": "28dd59c247710d19aaa5ca60ed7132ee23094b92a9fd455f17ebd5ce95ca8288",
+      "pipelines/evaluation/rag.py": "62bf58e37364ee95491488672e06efc0c37221330529dc29f0ba351ef46e0c2b",
+      "pipelines/evaluation/tasks.py": "036db2801ecfca7c5998cb21bc0cfe02ecbf3f159982cd209118db3f29bee648",
       "pipelines/evaluation/clients.py": "dbba546257f20d49e5ed1ad6817e48c8575c297205ed10c2967c4c1a1b75fd1e",
       "evaluation/support-program-evidence/budget_client.py": "5fb2ba03088467201693f94ec2c2b074ab15998f4e2ea6724c0c67cdef6613f9",
       "backend/ops-service/apps/evaluations/catalog.py": "eb60d93d6075a0333bd2f69b8cc85ccf7ef446b0849a88175f08e706922c83c2",

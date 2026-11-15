@@ -41,7 +41,7 @@ import json, os, sys
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-from pipelines.flows.evaluation import flows as ops_flow
+from pipelines.flows.support_program_evidence import flows as ops_flow
 from govbiz_evaluation_contracts.execution_spec import ExecutionSpecMismatch, build_release
 os.environ["OPENAI_API_KEY"] = "not-a-real-key-model-function-is-forbidden"
 os.environ["LLMOPS_LIVE_ENABLED"] = "true"

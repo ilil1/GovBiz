@@ -7,7 +7,7 @@ from prefect.cache_policies import NO_CACHE
 
 from govbiz_ai_runtime.config import LangfuseSettings
 from support_program_evidence.reports.reporting import create_report, load_results
-from pipelines.flows.evaluation.clients import publish_scores
+from pipelines.flows.support_program_evidence.clients import publish_scores
 
 
 @task(name="validate-capture-and-results", retries=0, cache_policy=NO_CACHE, persist_result=False)

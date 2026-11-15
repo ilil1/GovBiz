@@ -248,7 +248,7 @@ class RunnerPublishTests(unittest.TestCase):
                 in (
                     "backend/ai-service", "backend/ops-service",
                     "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
-                    "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
+                    "pipelines/flows/__init__.py", "pipelines/flows/support_program_evidence", "pipelines/evals",
                     "frontend/web",
                     "frontend/packages/shared",
                 )

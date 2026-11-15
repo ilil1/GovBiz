@@ -375,10 +375,14 @@ class DevTests(unittest.TestCase):
 
     def test_runner_build_context_includes_every_evaluation_module(self):
         root = dev.REPOSITORY_ROOT
-        package = root / "pipelines/evals/support_program_evidence"
+        packages = (root / "pipelines/evals/support_program_evidence",
+                    root / "pipelines/flows/support_program_evidence")
         rules = (root / "infrastructure/llmops/Dockerfile.runner.dockerignore").read_text()
-        modules = sorted(package.rglob("*.py"))
-        self.assertTrue(modules, "The evaluation package must contain Python modules")
+        modules = []
+        for package in packages:
+            found = sorted(package.rglob("*.py"))
+            self.assertTrue(found, f"The evaluation package must contain Python modules: {package}")
+            modules.extend(found)
         for module in modules:
             for path in (module, *module.parents):
                 if path == root:

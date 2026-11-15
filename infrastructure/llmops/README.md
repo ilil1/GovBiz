@@ -2,8 +2,8 @@
 
 [전략 문서](../../docs/langfuse-adoption-strategy.md) · [근거 답변 평가](../../pipelines/evals/support_program_evidence/datasets/README.md) · [파이프라인 실행](../../pipelines/README.md)
 
-평가 지표·자료·보고서 계산은 `evaluation/`, Prefect flow·task와 Langfuse 점수 전송은
-`pipelines/`에서 관리합니다. 실행기는 저장소 루트에서
+평가 지표·자료·보고서 계산은 `pipelines/evals/support_program_evidence/`, Prefect flow·task와 Langfuse 점수 전송은
+`pipelines/flows/support_program_evidence/`에서 관리합니다. 실행기는 저장소 루트에서
 `uv run --project pipelines --locked python -m pipelines.serve`로 시작하며, Docker와 Kubernetes도
 같은 진입점을 사용합니다. Prefect 서버·Langfuse·저장소 구성은 이 디렉터리에 남습니다.
 
@@ -131,7 +131,7 @@ v1의 원본 실패 4건을 보존하며 유료 예약·품질 기준 지정은 
 
 runner 빌드에는 `serve_flow.py`, `embedding_budget.py`, `rag_budget.py`를 함께 포함합니다.
 이미 승인·예약된 내부 실행에 AI 색인·검색·답변과 Ops claim/승인/정산/close를 연결하는 CLI이며,
-기본 `pipelines/flows/evaluation/flows.py` 실행이나 공개 RAG live 접수를 활성화하지 않습니다. 명세 인자·격리 Qdrant·
+기본 `pipelines/flows/support_program_evidence/flows.py` 실행이나 공개 RAG live 접수를 활성화하지 않습니다. 명세 인자·격리 Qdrant·
 증거 경로 및 무료 대역 검증 범위는
 [혼합 RAG 예산 세션](../../pipelines/evals/support_program_evidence/datasets/README.md#혼합-rag-예산-세션)을 따릅니다.
 실제 Ops HTTP+MySQL 혼합 검사는 별도 AI 프로세스와 격리 MySQL 8.4를 사용하는
@@ -396,7 +396,7 @@ Langfuse는 자체 로그인이 필요하며 Ops 로그인과 자동 공유하�
 Ops의 점수 링크는 해당 평가 ID의 `Session ID` 필터와 고정 조회 기간을 사용한다.
 가상 6건 재현은 점수 22개, E01 비교의 후보 실행은 점수 4개다.
 
-실행 진입점은 `pipelines/serve.py`이며, `pipelines/flows/evaluation/flows.py`의 `govbiz-ops-evidence-evaluation/saved-capture` deployment를 등록하고
+실행 진입점은 `pipelines/serve.py`이며, `pipelines/flows/support_program_evidence/flows.py`의 `govbiz-ops-evidence-evaluation/saved-capture` deployment를 등록하고
 `serve(limit=1)`로 요청을 받는다. 스케줄은 등록하지 않는다. Django는 Prefect HTTP API만 호출하며
 평가 의존성을 설치하지 않는다. UI는 저장된 가상 평가 6건 재현과 과거 프롬프트 실행의 공통 E01 비교를 제공한다.
 자료를 선택하면 허용된 기준·후보 실행과 비교 사례가 표시된다. 상세 화면에서는 지표 차이, 사례별 상태·인용,
@@ -704,7 +704,7 @@ ID·이름·값이 확인되지 않으면 실패로 남긴다. Langfuse v4는 �
 위 설치와 환경변수 설정 뒤 저장소 루트에서 실행한다.
 
 ```bash
-pipelines/.venv/bin/python -m pipelines.flows.evaluation.capture \
+pipelines/.venv/bin/python -m pipelines.flows.support_program_evidence.capture \
   --fixture pipelines/evals/support_program_evidence/datasets/target-coverage-fixture.json \
   --capture pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/capture.json \
   --reference pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/capture.json \

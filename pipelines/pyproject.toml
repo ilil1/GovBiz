@@ -27,7 +27,7 @@ dev = [
 ]
 
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "__init__.py" }, { file = "serve.py" }, { file = "flows/__init__.py" }, { file = "flows/evaluation/*.py" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "__init__.py" }, { file = "serve.py" }, { file = "flows/__init__.py" }, { file = "flows/support_program_evidence/*.py" }]
 required-version = "==0.12.5"
 
 [dependency-groups]
@@ -47,6 +47,6 @@ testpaths = ["tests"]
 govbiz-pipelines = "pipelines.serve:main"
 
 [tool.setuptools]
-packages = ["pipelines", "pipelines.flows", "pipelines.flows.evaluation"]
+packages = ["pipelines", "pipelines.flows", "pipelines.flows.support_program_evidence"]
 package-dir = { pipelines = "." }
 include-package-data = false

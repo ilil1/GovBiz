@@ -60,7 +60,7 @@ PROBE = textwrap.dedent("""
         ExecutionSpecMismatch, build_release, digest, make_spec, read_release,
     )
     from govbiz_evaluation_contracts.resources import evidence_root, source_path
-    from pipelines.flows.evaluation import flows
+    from pipelines.flows.support_program_evidence import flows
 
     for package in ('govbiz_ai_runtime', 'govbiz_evaluation_contracts', 'support_program_evidence', 'pipelines'):
         assert Path(sys.modules[package].__file__).resolve().is_relative_to(installed)
@@ -80,7 +80,7 @@ PROBE = textwrap.dedent("""
     paths = {
         'prompt': source_path('backend/ai-service/app/support_program_evidence/prompt.py'),
         'runtime_init': source_path('backend/ai-service/app/support_program_evidence/__init__.py'),
-        'tasks': source_path('pipelines/flows/evaluation/tasks.py'),
+        'tasks': source_path('pipelines/flows/support_program_evidence/tasks.py'),
         'lock': source_path('pipelines/uv.lock'),
         'fixture': evidence_root() / dataset['fixture'],
         'capture': evidence_root() / reference['path'],

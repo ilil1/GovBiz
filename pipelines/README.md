@@ -13,7 +13,7 @@ pipelines/
 ├── pyproject.toml, uv.lock           # 실행 의존성과 잠금 파일
 ├── serve.py                         # 평가 Deployment 등록·실행 대기
 ├── flows/                           # Prefect 실행 흐름
-│   ├── evaluation/                  # 구현된 평가 파이프라인
+│   ├── support_program_evidence/    # 구현된 공고 원문 평가 파이프라인
 │   │   ├── flows.py                 # Ops 요청 검증·실행·복구 순서
 │   │   ├── capture.py, rag.py       # 고정 근거·RAG 평가 흐름
 │   │   ├── tasks.py                 # Prefect 작업과 재시도 정책

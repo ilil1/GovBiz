@@ -21,8 +21,8 @@ def source_hashes(folder):
 def prepare(source_id, root):
     assert not os.environ.get("OPENAI_API_KEY")
     assert os.environ.get("LLMOPS_LIVE_ENABLED", "false") == "false"
-    from pipelines.flows.evaluation import flows as ops_flow
-    from pipelines.flows.evaluation import capture
+    from pipelines.flows.support_program_evidence import flows as ops_flow
+    from pipelines.flows.support_program_evidence import capture
 
     def forbid_model(*args, **kwargs):
         raise AssertionError("Model calls are forbidden in recovery smoke")
