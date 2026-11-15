@@ -160,7 +160,7 @@ K-Startup은 [공공데이터포털 조회서비스](https://www.data.go.kr/data
 
 - [검색 기준선/개선 기록](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md)은 AI-only 참조이며 사람 검증 정답이 아니다.
 - 고정 후보 프롬프트 비교에서 held-out 무관 선택 5건이 그대로 남았다. 개발 세트 개선으로 전체 품질이 좋아졌다고 결론 내리지 않는다.
-- [최신 공식 HTML 평가](../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md)는 소규모·단회 AI 의미 검토다. 공식 공고당 청크가 1개라 다중 청크 검색 성능을 입증하지 못한다.
+- [최신 공식 HTML 평가](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md)는 소규모·단회 AI 의미 검토다. 공식 공고당 청크가 1개라 다중 청크 검색 성능을 입증하지 못한다.
 - 코드 테스트는 식별자·계약·예외·상태 전이를 검증한다. 테스트가 전부 통과해도 이유 문장의 사실성·자격 정확도가 증명되는 것은 아니다.
 
 ### 제안 평가 프로토콜

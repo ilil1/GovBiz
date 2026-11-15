@@ -7,8 +7,8 @@ import pytest
 from openai import AsyncOpenAI
 
 from govbiz_ai_runtime.support_program_evidence.service import SupportProgramEvidenceService
-from govbiz_evaluation.budget_client import BudgetUnavailable
-from govbiz_evaluation.embedding_budget import EmbeddingBudget, embedding_operations
+from support_program_evidence.integrations.budget_client import BudgetUnavailable
+from support_program_evidence.integrations.embedding_budget import EmbeddingBudget, embedding_operations
 
 
 MODEL = "text-embedding-3-small"
@@ -279,14 +279,14 @@ def test_real_client_preserves_signed_receipt_before_settlement(tmp_path, monkey
     import hashlib
     import hmac
     from uuid import uuid4
-    from govbiz_evaluation.budget_client import BudgetClient
+    from support_program_evidence.integrations.budget_client import BudgetClient
 
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "offline-embedding-receipt-token-000000")
     budget = BudgetClient(str(uuid4()), str(uuid4()), "a" * 64)
     budget.authorize = AsyncMock()
     budget.settle = AsyncMock()
     if fault == "write":
-        monkeypatch.setattr("govbiz_evaluation.budget_client.os.link", Mock(side_effect=OSError("disk full")))
+        monkeypatch.setattr("support_program_evidence.integrations.budget_client.os.link", Mock(side_effect=OSError("disk full")))
     guard = EmbeddingBudget(budget, plan(["hello"]), receipt_directory=tmp_path)
     request = httpx2.Request(
         "POST",
@@ -368,7 +368,7 @@ def test_sdk_settlement_failure_keeps_receipt_and_stops_later_service_batches(
     tmp_path, monkeypatch
 ):
     from uuid import uuid4
-    from govbiz_evaluation.budget_client import BudgetClient
+    from support_program_evidence.integrations.budget_client import BudgetClient
 
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "offline-embedding-receipt-token-000000")
     budget = BudgetClient(str(uuid4()), str(uuid4()), "a" * 64)

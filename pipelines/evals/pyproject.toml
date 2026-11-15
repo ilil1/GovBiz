@@ -16,8 +16,8 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["govbiz_evaluation", "govbiz_evaluation.evaluators", "govbiz_evaluation.reports", "govbiz_evaluation.integrations", "govbiz_evaluation.preparation"]
-package-dir = { govbiz_evaluation = "govbiz_evaluation" }
+packages = ["support_program_evidence", "support_program_evidence.evaluators", "support_program_evidence.reports", "support_program_evidence.integrations", "support_program_evidence.preparation"]
+package-dir = { support_program_evidence = "support_program_evidence" }
 include-package-data = false
 
 [tool.uv.sources]
@@ -25,4 +25,4 @@ govbiz-ai-runtime = { path = "../../packages/govbiz-ai-runtime" }
 govbiz-evaluation-contracts = { path = "../../packages/govbiz-evaluation-contracts" }
 
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "govbiz_evaluation/*.py" }, { file = "govbiz_evaluation/evaluators/*.py" }, { file = "govbiz_evaluation/reports/*.py" }, { file = "govbiz_evaluation/integrations/*.py" }, { file = "govbiz_evaluation/preparation/*.py" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "setup.py" }, { file = "support_program_evidence/*.py" }, { file = "support_program_evidence/evaluators/*.py" }, { file = "support_program_evidence/reports/*.py" }, { file = "support_program_evidence/integrations/*.py" }, { file = "support_program_evidence/preparation/*.py" }]

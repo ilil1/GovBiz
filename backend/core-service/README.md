@@ -570,7 +570,7 @@ Spring 서버·DB·원문 수집·AI Service·OpenAI는 시작하지 않습니�
 cd backend/core-service
 mkdir -p build/reports
 ./gradlew preflightEvidenceEvaluation --no-daemon \
-  -PevidenceFixture=../../evaluation/support-program-evidence/runs/official-rag-20261006-v2/fixture.json \
+  -PevidenceFixture=../../pipelines/evals/support_program_evidence/datasets/runs/official-rag-20261006-v2/fixture.json \
   -PevidenceReport=build/reports/core-evidence-preflight.json
 ```
 
@@ -1402,7 +1402,7 @@ C02 회귀는 공개 HTTP의 nullable 필수 키·엄격한 타입·문자/날�
 `SupportProgramEvidenceIntegrationTest`는 실제 Core HTTP·MySQL과 고정한 공식 HTML 2건으로 RAG 경계를
 통합 검증합니다. 기본 실행에서 원문/AI 외부 HTTP는 스텁이며 API 키를 사용하지 않습니다.
 명시적으로 별도 로컬 AI 주소와 새 캡처 경로를 지정한 경우에만 실제 AI 경로를 호출할 수 있습니다.
-실행 조건·범위·기록은 [RAG 평가 안내](../../evaluation/support-program-evidence/README.md)를 참고하세요.
+실행 조건·범위·기록은 [RAG 평가 안내](../../pipelines/evals/support_program_evidence/datasets/README.md)를 참고하세요.
 
 HWP 체크박스의 FORM_OBJECT Caption은 주변 문항과 함께 별도 근거 블록으로 보존한다. 공식 신청 문항의 단일 선택지는 AI Service가 원문 인용에 포함된 `options`로 추출하고, Core API가 다시 검증한 뒤 양식 스냅샷과 공개 응답에 보존한다. Frontend는 선택지를 라디오 버튼으로 표시한다. 기존 스냅샷에서 `options`가 없으면 빈 목록으로 읽으며, 선택형 문항의 선택지를 확인하지 못한 경우 공식 원문 확인을 안내한다.
 

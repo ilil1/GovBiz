@@ -73,6 +73,7 @@ def affected_jobs(paths):
 
     for path in paths:
         if (path in {"README.md", "AGENTS.md", "pipelines/README.md"}
+                or path.startswith("pipelines/evals/support_program_evidence/datasets/") and path.endswith(".md")
                 or path.startswith(("docs/", "infrastructure/gitops/docs/", "backend/ai-service/docs/"))
                 and path.endswith((".md", ".png", ".jpg", ".svg"))
                 or re.fullmatch(r"(?:backend/[^/]+|frontend/[^/]+|infrastructure/[^/]+|evaluation/[^/]+)/README\.md", path)):

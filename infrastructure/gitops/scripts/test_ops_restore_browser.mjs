@@ -231,9 +231,8 @@ test('Evidently report lays out paired charts responsively in the report sandbox
     const reportPath = resolve(directory, 'report.html')
     const generated = spawnSync(python, ['-c', [
       'import sys',
-      "sys.path[:0] = ['evaluation/support-program-evidence', 'backend/ai-service']",
       'import pandas as pd', 'from evidently import Report', 'from evidently.metrics import MeanValue, RowCount',
-      'from reporting import compact_report_charts',
+      'from support_program_evidence.reports.reporting import compact_report_charts',
       's = Report([RowCount(), MeanValue(column="score"), MeanValue(column="second")], include_tests=False).run(current_data=pd.DataFrame({"score": [0, 1], "second": [1, 0]}), reference_data=pd.DataFrame({"score": [1, 1], "second": [0, 0]}))',
       'compact_report_charts(s, 2)', 's.save_html(sys.argv[1])',
     ].join('\n'), reportPath], { cwd: root, env: { ...process.env, DO_NOT_TRACK: '1', PYTHONUTF8: '1' }, encoding: 'utf8', timeout: 60000, windowsHide: true })

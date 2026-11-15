@@ -55,6 +55,12 @@ def test_checked_in_release_matches_repository():
     assert build_release(ops_flow.ROOT) == read_release()
 
 
+def test_release_fingerprints_implementations_without_removed_wrappers():
+    pipeline_files = read_release()["pipeline"]["files"]
+    assert not any(name.startswith(EVIDENCE + "_compat/") for name in pipeline_files)
+    assert EVIDENCE + "budget_client.py" in pipeline_files
+
+
 @pytest.mark.parametrize("name", [
     AI + "app/support_program_evidence/prompt.py",
     AI + "app/support_program_evidence/agent.py",
@@ -76,8 +82,6 @@ def test_checked_in_release_matches_repository():
     PIPELINES + "evaluation/clients.py",
     EVIDENCE + "reporting.py",
     EVIDENCE + "budget_client.py",
-    EVIDENCE + "_compat/reporting.py",
-    EVIDENCE + "_compat/budget_client.py",
     EVIDENCE + "evaluators/__init__.py",
     EVIDENCE + "reports/__init__.py",
     EVIDENCE + "integrations/__init__.py",
@@ -120,7 +124,7 @@ def test_registered_core_bytes_are_pinned_before_replay(runner, monkeypatch, ver
     params = dict(request_id=str(uuid4()), dataset_id=dataset, execution_mode="replay",
                   candidate_capture_id=capture, reference_capture_id=capture,
                   execution_spec=spec, execution_spec_sha256=digest(spec))
-    path = root / EVIDENCE / f"runs/core-rag-20261002/{version}/{name}"
+    path = source_path(EVIDENCE + f"runs/core-rag-20261002/{version}/{name}", root)
     path.write_bytes(path.read_bytes() + b"\n")
     monkeypatch.setattr(ops_flow, "evaluate_rag_capture", lambda *a, **k: pytest.fail("Replay started"))
     with pytest.raises(ExecutionSpecMismatch):

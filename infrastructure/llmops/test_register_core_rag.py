@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 import register_core_rag as registration
 from govbiz_evaluation_contracts import execution_spec
-from govbiz_evaluation_contracts.resources import source_path
+from govbiz_evaluation_contracts.resources import evidence_root, source_path
 from test_core_rag_budget import completed_capture as completed_capture
 
 
@@ -122,7 +122,7 @@ def test_failed_registration_preserves_catalog_release_and_no_partial_bundle(
         source_path(execution_spec.OPS + name, repository)
         for name in ("capture_catalog.json", "execution_release.json")
     ]
-    runs = repository / execution_spec.EVIDENCE / "runs"
+    runs = evidence_root(repository) / "runs"
     original_bundles = {path: path.read_bytes() for path in runs.rglob("*") if path.is_file()}
     if failure == "partial":
         path = completed_capture.parent / "integration.json"
@@ -305,7 +305,7 @@ def test_registered_core_capture_uses_existing_ops_flow_and_preserves_failures(
         with pytest.raises(AssertionError):
             ops_smoke.verify_core_rag_replay(altered, receipt)
     # A valid registration does not authorize altered bytes at execution time.
-    capture = repository / execution_spec.EVIDENCE / datasets[identifier]["captures"][0]["path"]
+    capture = evidence_root(repository) / datasets[identifier]["captures"][0]["path"]
     with capture.open("ab") as target:
         target.write(b"\n")
     rejected_id = str(uuid4())

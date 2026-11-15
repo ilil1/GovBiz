@@ -51,7 +51,7 @@ def container(name):
                 "RW": False,
                 "Source": str(
                     rollout.database.REPOSITORY_ROOT
-                    / "evaluation/support-program-evidence"
+                    / "pipelines/evals/support_program_evidence/datasets"
                 ),
             }
         )

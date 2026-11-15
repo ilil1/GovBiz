@@ -418,9 +418,9 @@ def test_process_exits_after_proc_stat_open(monkeypatch, tmp_path):
 def test_real_sdk_and_evaluator_accept_http_double(monkeypatch, tmp_path, server):
     import httpx2
 
-    evaluation_dir = HERE.parents[1] / "evaluation/support-program-evidence"
-    from govbiz_evaluation.evaluators import evaluate
-    from govbiz_evaluation.integrations.budget_client import BudgetClient
+    evaluation_dir = HERE.parents[1] / "pipelines/evals/support_program_evidence/datasets"
+    from support_program_evidence.evaluators import evaluate
+    from support_program_evidence.integrations.budget_client import BudgetClient
 
     runner = load_runner()
     state, base = server
@@ -499,12 +499,12 @@ def test_rag_service_and_sdk_use_http_double_and_preserve_mixed_budget(
 ):
     import httpx2
 
-    evaluation_dir = HERE.parents[1] / "evaluation/support-program-evidence"
-    from govbiz_evaluation.integrations import rag_live
+    evaluation_dir = HERE.parents[1] / "pipelines/evals/support_program_evidence/datasets"
+    from support_program_evidence.integrations import rag_live
     from govbiz_evaluation_contracts.catalog import live_config
     from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
     from govbiz_evaluation_contracts.rag_replay import validate_live_capture
-    from govbiz_evaluation.integrations.budget_client import BudgetClient
+    from support_program_evidence.integrations.budget_client import BudgetClient
 
     state, base = server
     run_id = str(uuid4())

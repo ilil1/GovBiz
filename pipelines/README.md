@@ -2,16 +2,12 @@
 
 `pipelines/`는 Prefect가 실행할 평가 순서와 재시도, 외부 점수 전송을 관리하는
 설치 가능한 Python 패키지다. 평가 지표·입력 검증·비교 보고서는
-`govbiz-evaluation-engine` 패키지의 `govbiz_evaluation` 모듈을 호출한다.
+`govbiz-evaluation-engine` 패키지의 `support_program_evidence` 모듈을 호출한다.
 
 ```text
 packages/
 ├── govbiz-ai-runtime/                # AI 서비스와 실행기가 공유하는 모델·생성·검색 코드
 └── govbiz-evaluation-contracts/      # Ops와 실행기가 공유하는 카탈로그·검증·파일 계약
-
-evaluation/support-program-evidence/  # 기존 평가 자료와 실험 기록
-├── fixture·runs                     # 기존 경로 유지
-└── *.py                             # 구 CLI 경로 호환 진입점
 
 pipelines/
 ├── pyproject.toml, uv.lock           # 실행 의존성과 잠금 파일
@@ -24,10 +20,12 @@ pipelines/
 │   │   └── clients.py               # Langfuse 점수 전송·저장 확인
 │   ├── catalog_ingestion/README.md   # 추후 검토 후 개발 예정
 │   └── daily_report/README.md       # 추후 검토 후 개발 예정
-├── evaluation/                      # 이전 Python import 경로 호환
 ├── evals/                           # 독립 설치되는 평가 기능
 │   ├── pyproject.toml
-│   ├── govbiz_evaluation/
+│   ├── support_program_evidence/
+│   │   ├── datasets/                # 평가 입력 데이터와 이전 실행 기록
+│   │   │   ├── fixture*.json
+│   │   │   └── runs/
 │   │   ├── evaluators/              # 답변·RAG 지표 계산
 │   │   ├── reports/                 # 비교 보고서와 점수
 │   │   ├── integrations/            # 모델 호출과 예산 연계
@@ -41,14 +39,13 @@ pipelines/
 요청한다. Prefect·Langfuse·Ops 연결도 운영 시 필요한 외부 시스템 의존성이다.
 평가 엔진은 Prefect나 `pipelines`를 가져오지 않는다.
 
-입력 데이터와 과거 `runs/`는 이동하거나 다시 계산하지 않는다. 이미지 빌드는 승인된
+입력 데이터와 과거 `runs/`는 `pipelines/evals/support_program_evidence/datasets/`에서 관리하며 내용을 다시 계산하지 않는다. 이미지 빌드는 승인된
 카탈로그가 참조하는 JSON만 검증해 계약 패키지의 리소스로 묶는다. 설치된 실행기는
 그 리소스와 실제 설치 코드의 해시를 확인하며, 저장소의 `backend/`·`evaluation/`
 경로를 요구하지 않는다. CLI로 원본 데이터를 재생성할 때는 저장소 경로를 명시한다.
-실행 명세에 남은 `backend/...` 문자열은 과거 평가 기록과 연결하는 식별자다.
+실행 명세에 남은 `backend/...` 및 `evaluation/support-program-evidence/...` 문자열은 과거 평가 기록과 연결하는 논리 식별자다.
 실제 검증 파일은 설치된 공용 패키지에서 찾으므로 해당 저장소 경로가 필요하지 않다.
-평가 코드의 과거 논리 파일 식별자는 유지하고, 실행 시 이동한 실제 모듈과 구 import
-호환 파일의 해시를 모두 확인한다. 기존 경로의 모듈은 새 역할별 모듈을 연결한다.
+평가 코드의 과거 논리 파일 식별자는 유지하고, 실행 시 실제 역할별 모듈의 해시를 확인한다.
 실제 AI HTTP 앱을 띄우는 캡처 도구는 `backend/ai-service/integration/serve_flow.py`에
 있으며 실행기 패키지에는 포함하지 않는다.
 

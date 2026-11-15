@@ -68,7 +68,7 @@ def register(source_id, email):
 
 
 def verify(source_id, recovery_id, root):
-    from govbiz_evaluation.reports import reporting
+    from support_program_evidence.reports import reporting
     import httpx
     from govbiz_ai_runtime.config import LangfuseSettings
     from langfuse.api.client import LangfuseAPI

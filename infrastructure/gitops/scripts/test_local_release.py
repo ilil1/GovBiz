@@ -37,8 +37,7 @@ class LocalReleaseTests(unittest.TestCase):
             files[f"backend/{name}/source.txt"] = name.encode()
         tree_paths = {
             "packages/govbiz-ai-runtime", "packages/govbiz-evaluation-contracts",
-            "evaluation/support-program-evidence",
-            "pipelines/evaluation", "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
+            "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
             "frontend/web",
             "frontend/packages/shared",
         }

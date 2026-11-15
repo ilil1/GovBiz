@@ -6,7 +6,7 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-from .resources import COMPAT_MODULES, PIPELINE_MODULES, source_path
+from .resources import source_path
 
 AI = "backend/ai-service/"
 OPS = "backend/ops-service/apps/evaluations/"
@@ -51,13 +51,11 @@ PIPELINE_FILES = (
     "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/resources.py",
     "packages/govbiz-ai-runtime/src/govbiz_ai_runtime/__init__.py",
     EVIDENCE + "__init__.py",
-    *(EVIDENCE + "_compat/" + name for name in sorted(COMPAT_MODULES)),
     *(EVIDENCE + part + "/__init__.py" for part in ("evaluators", "reports", "integrations", "preparation")),
     AI + "app/support_program_evidence/__init__.py",
     PIPELINES + "__init__.py",
     PIPELINES + "serve.py",
     PIPELINES + "flows/__init__.py",
-    *(PIPELINES + "_compat/evaluation/" + name for name in sorted(PIPELINE_MODULES)),
     PIPELINES + "evaluation/__init__.py",
     PIPELINES + "evaluation/flows.py",
     PIPELINES + "evaluation/capture.py",

@@ -373,6 +373,36 @@ class DevTests(unittest.TestCase):
         self.assertFalse(dev.included("app/main.pyc", rules))
         self.assertFalse(dev.included("README.md", rules))
 
+    def test_runner_build_context_includes_every_evaluation_module(self):
+        root = dev.REPOSITORY_ROOT
+        package = root / "pipelines/evals/support_program_evidence"
+        rules = (root / "infrastructure/llmops/Dockerfile.runner.dockerignore").read_text()
+        modules = sorted(package.rglob("*.py"))
+        self.assertTrue(modules, "The evaluation package must contain Python modules")
+        for module in modules:
+            for path in (module, *module.parents):
+                if path == root:
+                    break
+                relative = path.relative_to(root).as_posix()
+                with self.subTest(path=relative):
+                    self.assertTrue(
+                        dev.included(relative, rules), relative + " is excluded from the runner context"
+                    )
+
+
+    def test_runner_build_context_includes_registered_evaluation_inputs(self):
+        root = dev.REPOSITORY_ROOT
+        rules = (root / "infrastructure/llmops/Dockerfile.runner.dockerignore").read_text()
+        catalog_path = root / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json"
+        catalog = json.loads(catalog_path.read_text())
+        for dataset in catalog:
+            inputs = [dataset["fixture"], *(capture["path"] for capture in dataset["captures"])]
+            for path in inputs:
+                source = root / "pipelines/evals/support_program_evidence/datasets" / path
+                with self.subTest(path=path):
+                    self.assertTrue(source.is_file(), path)
+                    self.assertTrue(dev.included(source.relative_to(root).as_posix(), rules), path)
+
 
 if __name__ == "__main__":
     unittest.main()

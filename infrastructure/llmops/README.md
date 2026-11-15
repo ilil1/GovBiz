@@ -1,6 +1,6 @@
 # LLMOps 개발 환경과 실행
 
-[전략 문서](../../docs/langfuse-adoption-strategy.md) · [근거 답변 평가](../../evaluation/support-program-evidence/README.md) · [파이프라인 실행](../../pipelines/README.md)
+[전략 문서](../../docs/langfuse-adoption-strategy.md) · [근거 답변 평가](../../pipelines/evals/support_program_evidence/datasets/README.md) · [파이프라인 실행](../../pipelines/README.md)
 
 평가 지표·자료·보고서 계산은 `evaluation/`, Prefect flow·task와 Langfuse 점수 전송은
 `pipelines/`에서 관리합니다. 실행기는 저장소 루트에서
@@ -55,7 +55,7 @@ AI 프로젝트는 `>=3.12,<3.13`으로 제한하며 `.python-version`과 `uv.lo
 
 상세 계약은 [Ops README](../../backend/ops-service/README.md#응답-검토와-비교-기준),
 화면 사용법은 [Web README](../../frontend/web/README.md#llmops-운영-화면--react--django),
-평가 입력·출력은 [평가 README](../../evaluation/support-program-evidence/README.md#ops에서-새-응답-생성)에 둔다.
+평가 입력·출력은 [평가 README](../../pipelines/evals/support_program_evidence/datasets/README.md#ops에서-새-응답-생성)에 둔다.
 전체 도입 순서와 후속 범위는 [전략 문서](../../docs/langfuse-adoption-strategy.md)에서 관리한다.
 현재 작업 우선순위와 진입·완료 조건은 [LLMOps 후속 개발 전략](../../docs/llmops-next-development-plan.md)을 따른다.
 
@@ -117,7 +117,7 @@ RAG에서는 비활성 상태의 live 요청이 거절되고 실행 기록도 �
 [입력·결과·실패 복구 계약](../../backend/ops-service/README.md#전체-rag-저장-캡처-재평가)에
 출처·미측정 값·원본 실패와 재계산 작업 상태의 구분을 설명합니다.
 
-실제 Core 수집의 v1·v2는 [등록 명령](../../evaluation/support-program-evidence/README.md#core-캡처의-ops-저장-재평가-등록)으로
+실제 Core 수집의 v1·v2는 [등록 명령](../../pipelines/evals/support_program_evidence/datasets/README.md#core-캡처의-ops-저장-재평가-등록)으로
 배포 준비 checkout의 목록·release에 추가합니다. LLMOps CI는 수집·예산 검사 뒤 이 자료를 등록하고,
 `ops_smoke.py --core-rag-replay <registration.json>`으로 기존 관리자·Prefect·artifact·sync 경로를 대조합니다.
 로컬 무료 보고서 검증과 최신 SHA의 실제 서버 CI를 구분하며, 개인 PC의 현재 목록·DB는 자동 변경하지 않습니다.
@@ -125,7 +125,7 @@ RAG에서는 비활성 상태의 live 요청이 거절되고 실행 기록도 �
 실제 Core CI에서 저장한 **전체 RAG · Core HTTP 대역 수집 · v1 9건 / v2 1건**도 등록했습니다.
 `ops_smoke.py --core-snapshot-replay v1` 또는 `v2`로 기존 Prefect·artifact HTTP 경로를 확인합니다.
 v1의 원본 실패 4건을 보존하며 유료 예약·품질 기준 지정은 허용하지 않습니다.
-[출처·실행 방법](../../evaluation/support-program-evidence/README.md#등록된-core-캡처의-ops-재평가)을 따릅니다.
+[출처·실행 방법](../../pipelines/evals/support_program_evidence/datasets/README.md#등록된-core-캡처의-ops-재평가)을 따릅니다.
 
 ### 내부 혼합 RAG 예산 세션
 
@@ -133,12 +133,12 @@ runner 빌드에는 `serve_flow.py`, `embedding_budget.py`, `rag_budget.py`를 �
 이미 승인·예약된 내부 실행에 AI 색인·검색·답변과 Ops claim/승인/정산/close를 연결하는 CLI이며,
 기본 `pipelines/flows/evaluation/flows.py` 실행이나 공개 RAG live 접수를 활성화하지 않습니다. 명세 인자·격리 Qdrant·
 증거 경로 및 무료 대역 검증 범위는
-[혼합 RAG 예산 세션](../../evaluation/support-program-evidence/README.md#혼합-rag-예산-세션)을 따릅니다.
+[혼합 RAG 예산 세션](../../pipelines/evals/support_program_evidence/datasets/README.md#혼합-rag-예산-세션)을 따릅니다.
 실제 Ops HTTP+MySQL 혼합 검사는 별도 AI 프로세스와 격리 MySQL 8.4를 사용하는
 `rag_budget_http_checks.py`로 필수 Ops CI에 연결했습니다. 모델 호출은 무료 대역이며 실행법과
-검증 경계는 [통합 검사 안내](../../evaluation/support-program-evidence/README.md#실제-ops-httpmysql-혼합-예산-검증)를
+검증 경계는 [통합 검사 안내](../../pipelines/evals/support_program_evidence/datasets/README.md#실제-ops-httpmysql-혼합-예산-검증)를
 따릅니다. `core_rag_budget_http_checks.py`는 실제 Core 수집 직후 준비 명세를 테스트 DB에 예약하고
-같은 HTTP 경로로 정산하는 필수 LLMOps CI 검사입니다. [입력·명령·검증 범위](../../evaluation/support-program-evidence/README.md#core-캡처의-ops-예약정산-연결)를
+같은 HTTP 경로로 정산하는 필수 LLMOps CI 검사입니다. [입력·명령·검증 범위](../../pipelines/evals/support_program_evidence/datasets/README.md#core-캡처의-ops-예약정산-연결)를
 따릅니다. 실제 전송 작업·증거 입력/출력·장부를 대조한 `core-budget.json`도 원본 산출물과 함께 보존합니다.
 Prefect 및 실제 Kubernetes 환경의 혼합 실행은 후속 통합 검증 대상입니다.
 
@@ -705,9 +705,9 @@ ID·이름·값이 확인되지 않으면 실패로 남긴다. Langfuse v4는 �
 
 ```bash
 pipelines/.venv/bin/python -m pipelines.flows.evaluation.capture \
-  --fixture evaluation/support-program-evidence/target-coverage-fixture.json \
-  --capture evaluation/support-program-evidence/runs/target-coverage-20260907-v1/capture.json \
-  --reference evaluation/support-program-evidence/runs/target-coverage-20260907-v1/capture.json \
+  --fixture pipelines/evals/support_program_evidence/datasets/target-coverage-fixture.json \
+  --capture pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/capture.json \
+  --reference pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/capture.json \
   --output-dir work/llmops-evaluation-001
 ```
 
@@ -1058,7 +1058,7 @@ LLMOps CI가 같은 기존 통합 단계에서 실행하고 `work/llmops-ci/core
 활성화하지 않습니다. 명세 v2와 갱신된 `execution_release.json`을 함께 배포해야 하며 기존 개발
 컨테이너는 이번 로컬 검증에서 교체하지 않았습니다.
 
-전체 RAG 확장의 다음 단계로 [오프라인 자료 계약·평가기](../../evaluation/support-program-evidence/README.md)를
+전체 RAG 확장의 다음 단계로 [오프라인 자료 계약·평가기](../../pipelines/evals/support_program_evidence/datasets/README.md)를
 추가했습니다. 원문·청크 버전과 검색·답변 기록을 검증하고 검색 근거 재현율·답변 인용 재현율을
 각각 계산합니다. 무료 합성 예제는 모델·Qdrant·Langfuse를 호출하지 않으며 현재 Ops 카탈로그에는
 등록하지 않습니다. 실제 Core 캡처 수집의 후속 구현은 아래와 같습니다. 임베딩·답변의 호출별 예산·취소, 사람 검토를 연결한 뒤
@@ -1069,7 +1069,7 @@ LLMOps CI가 같은 기존 통합 단계에서 실행하고 `work/llmops-ci/core
 `--rag-capture-output`은 기존 상세 RAG 6건 검증 뒤 별도 다중 청크 자료를 실행합니다.
 같은 임시 DB 원문 행이 예상 해시와 일치할 때만 갱신하며 원문 버전 두 개와 총 10개 사례를 검사합니다.
 공식 HTML 수집 대신 고정 가상 DB 원문을 사용합니다. 실제 Core 청커·공개 응답, AI 요청/응답,
-Qdrant 검색 결과와 Langfuse 관측을 이어서 검증하고 [오프라인 평가기](../../evaluation/support-program-evidence/README.md)로 재계산합니다.
+Qdrant 검색 결과와 Langfuse 관측을 이어서 검증하고 [오프라인 평가기](../../pipelines/evals/support_program_evidence/datasets/README.md)로 재계산합니다.
 
 ```bash
 # 저장소 루트, Python 3.12 AI 가상환경·명시적인 로컬 Langfuse 설정 필요
@@ -1082,7 +1082,7 @@ pipelines/.venv/bin/python -B infrastructure/scripts/verify-catalog-separation.p
   --rag-capture-output work/core-rag-new
 # 전체 서버 실행은 --config-only를 제외. 기존 개발 환경을 교체하지 않고 임시 프로젝트를 만듭니다.
 # 수집한 파일은 서버·모델 호출 없이 다시 계산할 수 있습니다.
-pipelines/.venv/bin/python -m govbiz_evaluation.evaluators.rag_evaluate \
+pipelines/.venv/bin/python -m support_program_evidence.evaluators.rag_evaluate \
   --fixture work/core-rag-new/v1/fixture.json --capture work/core-rag-new/v1/capture.json
 # 전체 수집 성공 후 생성된 예산 준비 파일을 모델·Ops 호출 없이 대조합니다.
 pipelines/.venv/bin/python infrastructure/llmops/core_rag_budget.py check work/core-rag-new/v1
@@ -1102,7 +1102,7 @@ production 이미지·서버 진입점·Ops 카탈로그는 변경하지 않습�
 전체 수집 성공 후 버전별 `budget-plan.json`도 생성합니다. 실제 청크·질문·사례 순서를 기존 혼합
 예산 명세로 변환하고 원본 파일·Core 청커·실행 코드 해시를 고정합니다. 부분 수집에서는 생성하지 않으며
 실패 사례도 삭제하지 않습니다. 이 파일은 다음 실행의 준비 자료이며 Ops 예약·실행 승인·과거 호출 정산을
-만들지 않습니다. [검증 항목과 CLI](../../evaluation/support-program-evidence/README.md#core-캡처에서-혼합-예산-명세-준비)를 따릅니다.
+만들지 않습니다. [검증 항목과 CLI](../../pipelines/evals/support_program_evidence/datasets/README.md#core-캡처에서-혼합-예산-명세-준비)를 따릅니다.
 
 CI는 `work/llmops-ci/core-rag/`의 전체/버전별 진행 상태·원시 기록·평가 입력·보고서를 실패 시에도 보존합니다.
 Core trace와 실제 Langfuse 관측 연결이 깨지면 통합 검사도 실패합니다. 로컬의 실제 Core 청커 단위 테스트,
@@ -1146,7 +1146,7 @@ uv run --project ../../pipelines --locked --extra dev python -m pytest \
   tests/test_config.py tests/test_bootstrap.py tests/test_container_image_contract.py \
   tests/support_program_evidence/test_agent.py tests/support_program_evidence/test_tracing.py tests/test_search_tracing.py \
   ../../infrastructure/llmops/test_search_trace_smoke.py \
-  ../../evaluation/support-program-evidence ../../pipelines/tests
+  ../../pipelines/evals/support_program_evidence/datasets ../../pipelines/tests
 ```
 
 [GovBiz CI](../../.github/workflows/ci.yml)는 기존 전체 AI 검증과 평가 도구 무료 테스트를 유지한다.
@@ -1308,7 +1308,7 @@ migration 정합성, Compose 구문과 두 서비스 이미지 빌드도 확인�
 (`work/llmops-live-feature-replay-verification.json`, 요청 `7068d286-e16d-4594-9a48-b6d86d4dadf8`).
 브라우저에서 새 응답 생성 선택·자료별 1회/6회 예산·비활성화 상태를 확인했다.
 구현 당시에는 OpenAI 키와 별도 실행 승인이 없어 유료 호출 없이 검증했다. 이후 승인된 실제 호출 결과는 다음 절에 기록한다.
-변경된 평가 테스트는 기존 GovBiz CI의 `evaluation/support-program-evidence` 전체 테스트에 포함된다.
+변경된 평가 테스트는 기존 GovBiz CI의 `pipelines/evals/tests` 전체 테스트에 포함된다.
 이 기록은 로컬 검증 결과이며, 원격 CI 통과나 운영 배포 완료를 의미하지 않는다.
 
 

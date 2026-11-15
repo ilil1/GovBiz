@@ -20,7 +20,7 @@ import tools.jackson.databind.node.ObjectNode
 class SupportProgramEvidenceEvaluationPreflightTest {
     @TempDir lateinit var directory: Path
     private val mapper = JsonMapper.builder().build()
-    private val fixture = Path.of("../../evaluation/support-program-evidence/runs/official-rag-20261006-v2/fixture.json")
+    private val fixture = Path.of("../../pipelines/evals/support_program_evidence/datasets/runs/official-rag-20261006-v2/fixture.json")
 
     @Test
     fun officialSixCasesDoNotMeasureTopFiveRankingWithTheActualCoreChunker() {

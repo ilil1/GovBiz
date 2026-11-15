@@ -10,7 +10,7 @@ from uuid import uuid4
 from pipelines.flows.evaluation import flows as ops_flow
 import pytest
 from pipelines.flows.evaluation import rag
-from govbiz_evaluation.reports import rag_reporting
+from support_program_evidence.reports import rag_reporting
 from govbiz_evaluation_contracts import rag_replay
 from govbiz_evaluation_contracts.catalog import public_datasets, validate_execution
 from govbiz_evaluation_contracts.execution_spec import digest, make_spec, read_release
@@ -21,7 +21,7 @@ DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
 
 
-EVIDENCE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
+EVIDENCE = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets"
 
 
 def parameters(mode="replay", recovery=None, *, dataset=DATASET, capture=CAPTURE):

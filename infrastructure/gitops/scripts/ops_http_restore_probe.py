@@ -22,7 +22,7 @@ BROWSER_ORIGIN = "http://127.0.0.1:5173"
 def copy_evidence(target):
     """Copy only versioned catalog inputs, never the surrounding evaluation tree."""
     repository = Path(__file__).resolve().parents[3]
-    source = repository / "evaluation/support-program-evidence"
+    source = repository / "pipelines/evals/support_program_evidence/datasets"
     catalog = json.loads(
         (
             repository / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json"

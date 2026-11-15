@@ -101,14 +101,14 @@ Core·Web·MySQL·Qdrant 및 데이터 볼륨은 유지했으며, 반영 확인 
 확인해 짧은 번호 선택·ID 복원 방식으로 수정했습니다. 수정 후 가상 4건과 공식 공고 2건의 질문 6개를 검증했고,
 첫 공식 실행은 기대 상태 6건 일치·AI 의미 검토 5건 일치/1건 부분 일치였습니다. 당시 H01의 요약 누락과
 이전 E01의 확정 불가한 실패 원인을 보존합니다. 전체 품질 합격·첨부/PDF 지원·운영 준비 완료는 아닙니다.
-[5단계 검증 보고서](../evaluation/support-program-evidence/runs/official-flow-20260907-v1/README.md)와
-[실행법](../evaluation/support-program-evidence/README.md)을 참고하세요.
+[5단계 검증 보고서](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v1/README.md)와
+[실행법](../pipelines/evals/support_program_evidence/datasets/README.md)을 참고하세요.
 
 5단계 후속 보완으로 H01의 대상 조건 요약 누락을 줄이기 위한 프롬프트 지침과 가상 질문 6개를 추가했습니다.
 관련 범위·예외와 필수/우대/선택 관계를 보존하도록 했고, 공고별 하드코딩이나 검색 구조 변경은 없습니다.
 **추가 20회로 가상 6건·공식 6건의 실측도 완료했습니다.** AI 의미 검토에서 모두 일치했고 공식 H01의
 누락 보완과 기존 사례의 비회귀를 관찰했습니다. 단회 소규모 결과로 일반 정확도·통계적 개선을 주장하지
-않습니다. [최신 검증 보고서](../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md)에 전후 조건·사용량·한계를 보존했습니다.
+않습니다. [최신 검증 보고서](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md)에 전후 조건·사용량·한계를 보존했습니다.
 
 **6단계는 API 없이 가능한 다중 제공처 준비를 구현했습니다.** 제공처별 준비 상태·부분 검색·복구 실패 격리,
 K-Startup 공식 URL 표시와 RAG 미지원 사전 안내를 검증했습니다. 당시 실제 K-Startup Client·공고 수집·추가 데이터의
@@ -343,8 +343,8 @@ TTL은 성공 후 재사용 기한이며 만료 즉시 물리 삭제를 보장�
 - [4단계 1차 후보 검색 비교](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/stage4-v1/README.md): 동일 질문의 RRF 결합 전후·제한시간 정렬
 - [4단계 2차 고정 후보 랭킹 비교](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/stage4-v2/README.md): 지원 목적 판단 전후·응답 지연·토큰 사용량
 - [4단계 요청 제한·최종 통합 검증](support-program-request-limits.md#4단계-최종-통합-검증-2026-09-06): 제한 구현과 전체 Compose 통과 기록
-- [5단계 HTML RAG 후속 검증](../evaluation/support-program-evidence/runs/official-flow-20260907-v1/README.md): 인용 ID 오류 수정·공식 공고 전체 경로·AI-only 정성 검토·API 없는 기록 재검사
-- [5단계 대상 조건 요약 검증](../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md): H01 누락 보완·가상 6건 및 공식 6건·전후 조건/사용량 비교
+- [5단계 HTML RAG 후속 검증](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v1/README.md): 인용 ID 오류 수정·공식 공고 전체 경로·AI-only 정성 검토·API 없는 기록 재검사
+- [5단계 대상 조건 요약 검증](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md): H01 누락 보완·가상 6건 및 공식 6건·전후 조건/사용량 비교
 
 저장소를 받은 개발자는 공유 자료 안내의 `verify-shared-run.py --with-capture` 명령으로 API 키·DB·Excel 없이
 3단계 원표부터 지표까지 다시 확인할 수 있습니다. 4단계 전후 비교의 재계산 명령은 각 보고서에 있습니다.

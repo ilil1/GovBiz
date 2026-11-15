@@ -199,7 +199,7 @@ def compose_definition(settings, project, items, images):
     """Preserve inspected runtime inputs; create no networks, stores or dependencies."""
     definition = {"name": project, "services": {}, "volumes": {}, "networks": {}}
     evidence_path = str(
-        (database.REPOSITORY_ROOT / "evaluation/support-program-evidence").resolve()
+        (database.REPOSITORY_ROOT / "pipelines/evals/support_program_evidence/datasets").resolve()
     )
     for name in SERVICES:
         item = items[name]

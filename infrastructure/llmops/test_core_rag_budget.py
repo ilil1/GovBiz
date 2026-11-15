@@ -97,7 +97,7 @@ def test_plan_preserves_input_order_and_is_accepted_by_existing_guard(
     from uuid import uuid4
 
     from core_rag_budget import http_adapter
-    from govbiz_evaluation.integrations.budget_client import BudgetClient
+    from support_program_evidence.integrations.budget_client import BudgetClient
 
     plan = planner.prepare(completed_capture)
     fixture, _ = planner.rag.read_json(completed_capture / "fixture.json")

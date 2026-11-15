@@ -7,12 +7,11 @@ from pathlib import Path
 
 import core_rag_budget as planner
 from govbiz_evaluation_contracts.execution_spec import (
-    EVIDENCE,
     OPS,
     build_release,
     digest,
 )
-from govbiz_evaluation_contracts.resources import source_path
+from govbiz_evaluation_contracts.resources import evidence_root, source_path
 
 
 def encode(value):
@@ -30,7 +29,7 @@ def register(directory, repository):
         )
     identifier = "core-rag-" + digest(plan["sourceSha256"])
     relative = Path("runs") / identifier
-    destination = repository / EVIDENCE / relative
+    destination = evidence_root(repository) / relative
     catalog_path = source_path(OPS + "capture_catalog.json", repository)
     release_path = source_path(OPS + "execution_release.json", repository)
     # Concurrent registrations must not overwrite each other's catalog or release.

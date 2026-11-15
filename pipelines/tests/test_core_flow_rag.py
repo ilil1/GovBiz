@@ -6,11 +6,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from govbiz_evaluation.preparation import core_flow_rag as importer
+from support_program_evidence.preparation import core_flow_rag as importer
 import pytest
 from govbiz_evaluation_contracts import execution_spec
 
-RUN = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence/runs/official-flow-20260907-v2"
+RUN = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2"
 
 
 @pytest.fixture

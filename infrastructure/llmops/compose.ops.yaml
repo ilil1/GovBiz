@@ -53,7 +53,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
     volumes:
       - ops-results:/results:ro
-      - ../../evaluation/support-program-evidence:/evaluation-data:ro
+      - ../../pipelines/evals/support_program_evidence/datasets:/evaluation-data:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -70,7 +70,7 @@ services:
     command: ["python", "manage.py", "bootstrap_local_reviews"]
     volumes:
       - ops-results:/results
-      - ../../evaluation/support-program-evidence:/evaluation-data:ro
+      - ../../pipelines/evals/support_program_evidence/datasets:/evaluation-data:ro
     depends_on:
       ops-mysql: {condition: service_healthy}
 

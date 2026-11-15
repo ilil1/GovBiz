@@ -14,7 +14,7 @@ import pytest
 PACKAGES = {
     "govbiz-ai-runtime": "govbiz_ai_runtime",
     "govbiz-evaluation-contracts": "govbiz_evaluation_contracts",
-    "govbiz-evaluation-engine": "govbiz_evaluation",
+    "govbiz-evaluation-engine": "support_program_evidence",
     "govbiz-pipelines": "pipelines",
 }
 
@@ -62,7 +62,7 @@ PROBE = textwrap.dedent("""
     from govbiz_evaluation_contracts.resources import evidence_root, source_path
     from pipelines.flows.evaluation import flows
 
-    for package in ('govbiz_ai_runtime', 'govbiz_evaluation_contracts', 'govbiz_evaluation', 'pipelines'):
+    for package in ('govbiz_ai_runtime', 'govbiz_evaluation_contracts', 'support_program_evidence', 'pipelines'):
         assert Path(sys.modules[package].__file__).resolve().is_relative_to(installed)
     assert flows.ROOT is None, 'This test must exercise the installed default resolver'
     assert read_release() == build_release(), 'Installed release was stale before tampering'
@@ -80,7 +80,7 @@ PROBE = textwrap.dedent("""
     paths = {
         'prompt': source_path('backend/ai-service/app/support_program_evidence/prompt.py'),
         'runtime_init': source_path('backend/ai-service/app/support_program_evidence/__init__.py'),
-        'tasks': source_path('pipelines/evaluation/tasks.py'),
+        'tasks': source_path('pipelines/flows/evaluation/tasks.py'),
         'lock': source_path('pipelines/uv.lock'),
         'fixture': evidence_root() / dataset['fixture'],
         'capture': evidence_root() / reference['path'],

@@ -96,8 +96,8 @@ class AffectedJobsTests(unittest.TestCase):
 
     def test_pipeline_source_and_lock_require_evaluation_integrations(self):
         for path in (
-            "pipelines/evaluation/flows.py", "pipelines/flows/evaluation/flows.py", "pipelines/uv.lock",
-            "pipelines/evals/govbiz_evaluation/evaluators/evaluate.py",
+            "pipelines/flows/evaluation/flows.py", "pipelines/uv.lock",
+            "pipelines/evals/support_program_evidence/evaluators/evaluate.py",
             "pipelines/evals/pyproject.toml",
         ):
             with self.subTest(path=path):
@@ -122,7 +122,8 @@ class AffectedJobsTests(unittest.TestCase):
             "README.md", "AGENTS.md", "docs/guide.md", "docs/screenshot.png",
             "backend/ai-service/README.md", "frontend/web/README.md",
             "backend/ai-service/docs/agent-structure.md", "infrastructure/gitops/docs/web-kubernetes.md",
-            "evaluation/support-program-evidence/README.md", "pipelines/README.md",
+            "pipelines/evals/support_program_evidence/datasets/README.md", "pipelines/evals/support_program_evidence/datasets/runs/README.md",
+            "pipelines/README.md",
         ])
         self.assertEqual(selected["infra-ci.yml"], {"repository", "fork-identity"})
         self.assertTrue(all(not jobs for name, jobs in selected.items() if name != "infra-ci.yml"))

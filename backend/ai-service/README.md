@@ -524,7 +524,7 @@ payload 불일치, 검증 실패는 `EVIDENCE_UNAVAILABLE`입니다. 부분 검�
 지시합니다. 필수·우대·선택 조건을 구분하고 원문의 AND/OR 관계를 임의로 바꾸거나 없는 제한을 만들지
 않도록 했으며, 조건이 흩어져 있으면 해당 청크들을 함께 인용하도록 했습니다.
 이는 프롬프트 지침이지 모든 조건을 코드로 판정하는 규칙 엔진이 아닙니다.
-[추가 실제 검증](../../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md)에서
+[추가 실제 검증](../../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md)에서
 가상 6건·공식 6건의 답변을 대조했고, H01의 누락 보완을 관찰했습니다. 단회 AI-only 결과이며 일반적인
 정확도나 반복 실험으로 입증한 개선을 뜻하지 않습니다.
 

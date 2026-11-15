@@ -94,7 +94,7 @@ C01 문서의 수동 조건 입력 UI와 개발 전략의 최초 UI 계획은 �
 | [실데이터 평가 결과·이어받기](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md) | 고정 스냅샷·판정 원표·3단계 기준선·4단계 전후 비교와 API 없는 재현 |
 | [검색 평가 도구](../evaluation/support-program-search/README.md) | 가상 공고 회귀 평가, 실제 후보·최종 추천 캡처와 지표 계산 |
 | [Elasticsearch 독립 비교 실험](../evaluation/support-program-search/elasticsearch/README.md) | 고정 스냅샷의 키워드·Standard BM25·Nori BM25 비교와 API 없는 보고서 재검증 |
-| [RAG 검수·답변 평가](../evaluation/support-program-evidence/README.md) | 5단계 인용 오류 수정, 가상 근거 평가·공식 HTML 전체 경로 검증, API 없는 기록 재검사 |
+| [RAG 검수·답변 평가](../pipelines/evals/support_program_evidence/datasets/README.md) | 5단계 인용 오류 수정, 가상 근거 평가·공식 HTML 전체 경로 검증, API 없는 기록 재검사 |
 | [6단계 다중 제공처 준비](support-program-multi-source-preparation.md) | API 없는 제공처별 준비 상태·검색 범위·복구 실패 격리·K-Startup URL/RAG 화면 준비와 남은 연동 범위 |
 | [C01 기업 조건 검색](company-conditions-search.md) | 익명 조건 입력·적용·초기화, POST 검색 반영, 검증 결과와 후속 범위 |
 | [원문 우선 자격 판정](source-first-eligibility-review.md) | 태그와 신청 요건 구분, 본문 인용 검증, 확인 필요 공고 분리와 검증 한계 |

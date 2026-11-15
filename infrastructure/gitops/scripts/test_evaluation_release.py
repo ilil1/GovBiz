@@ -28,8 +28,7 @@ class EvaluationReleaseTests(SourceFixture):
             if path in (
                 "packages/govbiz-ai-runtime",
                 "packages/govbiz-evaluation-contracts",
-                "evaluation/support-program-evidence",
-                "pipelines/evaluation", "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
+                "pipelines/flows/__init__.py", "pipelines/flows/evaluation", "pipelines/evals",
             ):
                 files[path + "/fixture.txt"] = b"runner tree\n"
             else:

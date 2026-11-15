@@ -1,7 +1,6 @@
 """평가 계산의 독립 실행과 기존 Deployment 등록 계약을 검증한다."""
 
 from pathlib import Path
-import importlib
 import subprocess
 import sys
 
@@ -14,7 +13,6 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.mark.parametrize("module", ["reporting", "rag_reporting"])
 def test_reporting_runs_without_prefect_or_pipelines(module, tmp_path):
     script = r'''
-import importlib
 import importlib.abc
 from pathlib import Path
 import sys
@@ -30,7 +28,7 @@ class RejectOrchestration(importlib.abc.MetaPathFinder):
         return None
 
 sys.meta_path.insert(0, RejectOrchestration())
-reporting = importlib.import_module("govbiz_evaluation.reports." + module)
+reporting = importlib.import_module("support_program_evidence.reports." + module)
 if module == "reporting":
     result = reporting.load_results(
         evidence / "target-coverage-fixture.json",
@@ -39,7 +37,7 @@ if module == "reporting":
     assert result["frame"].shape == (6, 9)
     assert result["summary"]["completed"] is True
 else:
-    from govbiz_evaluation.evaluators import rag_evaluate
+    from support_program_evidence.evaluators import rag_evaluate
     result = rag_evaluate.evaluate(
         evidence / "rag-fixture.json", evidence / "rag-synthetic-capture.json",
     )
@@ -76,7 +74,6 @@ def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
     assert registrations == [{"name": "saved-capture", "limit": 1, "entrypoint_type": EntrypointType.MODULE_PATH}]
 
 
-@pytest.mark.parametrize("prefix", ["pipelines.flows.evaluation.", "pipelines.evaluation."])
 @pytest.mark.parametrize(
     "filename,function,name",
     [
@@ -86,10 +83,10 @@ def test_entrypoint_serves_existing_deployment_with_one_run(monkeypatch):
     ],
 )
 def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
-    filename, function, name, prefix, tmp_path
+    filename, function, name, tmp_path
 ):
     # The deployment resolves its installed module in every fresh process.
-    entrypoint = prefix + filename.removesuffix(".py") + "." + function
+    entrypoint = "pipelines.flows.evaluation." + filename.removesuffix(".py") + "." + function
     completed = subprocess.run(
         [
             sys.executable, "-I", "-c",
@@ -107,17 +104,50 @@ def test_prefect_loads_installed_module_entrypoint_in_fresh_process(
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
-@pytest.mark.parametrize("module", ["flows", "capture", "rag", "tasks", "clients"])
-def test_legacy_import_resolves_to_current_module(module):
-    legacy = importlib.import_module("pipelines.evaluation." + module)
-    current = importlib.import_module("pipelines.flows.evaluation." + module)
-    assert legacy is current
-
-
-def test_legacy_capture_command_keeps_cli_entrypoint(tmp_path):
+def test_capture_command_keeps_cli_entrypoint(tmp_path):
     completed = subprocess.run(
-        [sys.executable, "-I", "-m", "pipelines.evaluation.capture", "--help"],
+        [sys.executable, "-I", "-m", "pipelines.flows.evaluation.capture", "--help"],
         cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "--fixture" in completed.stdout
+
+
+def test_installed_package_omits_previous_pipeline_import_path(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable, "-I", "-c",
+            'import importlib.util; assert importlib.util.find_spec("pipelines.evaluation") is None',
+        ],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_installed_evaluation_package_omits_flat_compatibility_modules(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable, "-I", "-c",
+            "import importlib.util; "
+            "names = ('evaluate', 'rag_evaluate', 'reporting', 'rag_reporting', "
+            "'budget_client', 'embedding_budget', 'rag_budget', 'rag_live', "
+            "'verify_flow', 'official_snapshot', 'official_rag', "
+            "'revise_official_reference', 'core_flow_rag'); "
+            "assert all(importlib.util.find_spec('support_program_evidence.' + n) is None for n in names)",
+        ],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_installed_evaluation_package_uses_the_current_name(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable, "-I", "-c",
+            'import importlib.util; '
+            'assert importlib.util.find_spec("govbiz_evaluation") is None; '
+            'assert importlib.util.find_spec("support_program_evidence.evaluators.evaluate") is not None',
+        ],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr

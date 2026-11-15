@@ -226,7 +226,7 @@ def validate(model, project):
         and evidence_mount.get("type") == "bind"
         and evidence_mount.get("read_only") is True
         and Path(evidence_mount.get("source", "")).resolve()
-        == (ROOT / "evaluation/support-program-evidence").resolve(),
+        == (ROOT / "pipelines/evals/support_program_evidence/datasets").resolve(),
         "Django review fixtures must be mounted read-only at LLMOPS_EVIDENCE_DIR.",
     )
     for name, volume in (
@@ -473,7 +473,7 @@ print('PASS: ordinary Compose restart preserved local revocation and result file
             if not args.bootstrap_only:
                 # Mount only the real producer file into a disposable test container.
                 # The Ops image and the normal service do not depend on the runner.
-                runner_source = ROOT / "pipelines/evals/govbiz_evaluation/integrations/budget_client.py"
+                runner_source = ROOT / "pipelines/evals/support_program_evidence/integrations/budget_client.py"
                 require(runner_source.is_file(), "The real runner budget client is required.")
                 # Compose overrides CMD with runserver; inspect the built image's
                 # default CMD to retain the deployment concurrency regression test.

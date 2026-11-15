@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from govbiz_evaluation import evaluate
-from govbiz_evaluation import reporting
-from govbiz_evaluation import official_snapshot as official
+from support_program_evidence.evaluators import evaluate
+from support_program_evidence.reports import reporting
+from support_program_evidence.preparation import official_snapshot as official
 def test_projection_is_reproducible_and_preserves_recorded_requests_and_answers():
     fixture, capture = official.build(SOURCE_ROOT)
     assert (OUTPUT / "fixture.json").read_bytes() == official.encoded(fixture)
@@ -97,20 +97,20 @@ def test_new_answer_capture_uses_v1_and_keeps_official_source_identity():
     assert "measurementKind" not in report
 
 SOURCE_ROOT = Path(__file__).resolve().parents[3]
-OUTPUT = SOURCE_ROOT / "evaluation/support-program-evidence/runs/official-answer-20260907-v2"
-SOURCE = SOURCE_ROOT / "evaluation/support-program-evidence/runs/official-flow-20260907-v2"
+OUTPUT = SOURCE_ROOT / "pipelines/evals/support_program_evidence/datasets/runs/official-answer-20260907-v2"
+SOURCE = SOURCE_ROOT / "pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2"
 
 
 @pytest.mark.parametrize("revision", [False, True], ids=["original", "reference-revision"])
 @pytest.mark.parametrize("tamper", [None, "runnerSha256", "answer"])
 def test_historical_cli_checks_approved_bytes_before_recorder_compatible_replay(tmp_path, monkeypatch, revision, tamper):
-    from govbiz_evaluation import revise_official_reference
+    from support_program_evidence.preparation import revise_official_reference
     from govbiz_evaluation_contracts.resources import source_path
 
     module = revise_official_reference if revision else official
     dataset = "official-answer-20260907-v3" if revision else "official-answer-20260907-v2"
-    original = SOURCE_ROOT / "evaluation/support-program-evidence/runs" / dataset
-    target = tmp_path / "evaluation/support-program-evidence/runs" / dataset
+    original = SOURCE_ROOT / "pipelines/evals/support_program_evidence/datasets/runs" / dataset
+    target = tmp_path / "pipelines/evals/support_program_evidence/datasets/runs" / dataset
     target.mkdir(parents=True)
     for name in ("fixture.json", "capture.json", "report.json"):
         (target / name).write_bytes((original / name).read_bytes())

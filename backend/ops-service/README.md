@@ -250,7 +250,7 @@ React `/ops/datasets`의 **평가 자료 관리**에서 기존 Core 관리자 �
   새 모델 평가에는 기존 자료 검토·유료 실행 허용·예산·최종 확인 조건이 그대로 적용됩니다.
 
 `0031_managed_datasets` migration으로 초안·게시 버전·변경 이력을 저장합니다. 실행기에 전달하는
-고정 입력과 수동 답변의 출처 규칙은 [관리자 게시 자료 실행](../../evaluation/support-program-evidence/README.md#관리자-게시-자료-실행)을 참고하세요.
+고정 입력과 수동 답변의 출처 규칙은 [관리자 게시 자료 실행](../../pipelines/evals/support_program_evidence/datasets/README.md#관리자-게시-자료-실행)을 참고하세요.
 
 ### 평가 자료와 실행 환경
 
@@ -259,7 +259,7 @@ React `/ops/datasets`의 **평가 자료 관리**에서 기존 Core 관리자 �
 이전 자료 ID·해시, 변경 사례, 사유, 원문 인용을 반환하며 React 상세에 표시합니다.
 기존 버전에는 이 필드가 null이고 이전 API에서 필드가 없어도 화면은 동작합니다.
 모델 응답은 과거 자료 그대로이며 이전 버전의 사람 승인·비교 기준을 승계하지 않습니다.
-[자료 생성·검증 방법](../../evaluation/support-program-evidence/README.md#실제-공고의-과거-답변을-검토-자료로-사용)을 참고하세요.
+[자료 생성·검증 방법](../../pipelines/evals/support_program_evidence/datasets/README.md#실제-공고의-과거-답변을-검토-자료로-사용)을 참고하세요.
 
 첫 전체 실행은 [LLMOps 개발 환경](../../infrastructure/llmops/README.md#django-운영-화면)을 따르세요.
 화면은 `frontend/web`의 React가 [localhost:5173/ops/evaluations](http://localhost:5173/ops/evaluations)에서
@@ -327,7 +327,7 @@ Django HTTP 요청 안에서는 평가하지 않으며 Django에 평가 SDK 전�
 
 원본 참조는 AI 작성이다. 같은 `FixtureReview`와 사례별 검토·품질 정책을 적용하므로 사람 검토 없는
 자동 합격·기준 지정은 허용하지 않는다. 새 자료를 파일에 등록해도 검토/평가 DB 행은 생성되지 않는다.
-자료 형식·무료 검증·한계는 [평가 안내](../../evaluation/support-program-evidence/README.md#실제-공고의-과거-답변을-검토-자료로-사용)를 따른다.
+자료 형식·무료 검증·한계는 [평가 안내](../../pipelines/evals/support_program_evidence/datasets/README.md#실제-공고의-과거-답변을-검토-자료로-사용)를 따른다.
 
 ## 고정 원문·청크의 새 RAG 실행
 
@@ -394,7 +394,7 @@ Django에는 평가 SDK나 별도 작업 큐를 추가하지 않습니다.
 LLMOps CI의 `ops_smoke.py --rag-replay`는 기존 관리자 인증·CSRF·중복 UUID·보고서 접근·공유 로그아웃
 경로에서 검색 0.5, 인용 0.25, 신규 모델 호출 0회와 출처 표시를 확인합니다.
 
-실제 Core 무료 수집도 [저장 재평가 등록 명령](../../evaluation/support-program-evidence/README.md#core-캡처의-ops-저장-재평가-등록)으로
+실제 Core 무료 수집도 [저장 재평가 등록 명령](../../pipelines/evals/support_program_evidence/datasets/README.md#core-캡처의-ops-저장-재평가-등록)으로
 동일한 접수·Prefect 경로에 추가할 수 있습니다. 등록 목록·release·원본 자료를 함께 배포한 뒤 기존 React
 목록에서 선택합니다. CI는 v1 9건·v2 1건의 원본 실패·trace·해시·보고서를 대조합니다. 이 기능은
 무료 저장 캡처의 재계산이며 이를 실행해도 RAG live가 활성화되지는 않습니다. 사례 검토·품질 판정·비교 기준은 아래에서 별도로 관리합니다.
@@ -784,15 +784,15 @@ uv run --locked python manage.py set_evaluation_budget \
   제공자의 요청 ID를 대조해 입력 차액만 보정합니다. timeout·사용량/요청 ID 누락 등 증거가 없는
   미확인 호출은 입력 예약을 유지합니다. [보정 계약](#증거-기반-미확인-사용량-보정)을 따릅니다.
 
-실제 SDK 전송 검증은 [평가 실행기 임베딩 가드](../../evaluation/support-program-evidence/README.md#임베딩-배치-예산-연결-내부-실행기)를 따릅니다.
+실제 SDK 전송 검증은 [평가 실행기 임베딩 가드](../../pipelines/evals/support_program_evidence/datasets/README.md#임베딩-배치-예산-연결-내부-실행기)를 따릅니다.
 기존 AI 색인·검색·답변을 같은 예약으로 실행하는
-[혼합 RAG 예산 세션](../../evaluation/support-program-evidence/README.md#혼합-rag-예산-세션)도 추가했습니다.
+[혼합 RAG 예산 세션](../../pipelines/evals/support_program_evidence/datasets/README.md#혼합-rag-예산-세션)도 추가했습니다.
 이미 예약된 내부 명세를 받으며 claim/close, 실제 검색 근거 대조, 답변 입력 계산·승인·정산을 수행합니다.
 기존 실행기 단위 테스트의 예산 HTTP는 대역입니다. 별도의
-[실제 Ops HTTP·MySQL 통합 검사](../../evaluation/support-program-evidence/README.md#실제-ops-httpmysql-혼합-예산-검증)는
+[실제 Ops HTTP·MySQL 통합 검사](../../pipelines/evals/support_program_evidence/datasets/README.md#실제-ops-httpmysql-혼합-예산-검증)는
 격리 MySQL 8.4와 별도 AI 프로세스로 정상·캐시·취소·동시 승인·정산 전후 응답 유실·증거 보정을
 검증하며 필수 Ops CI에 연결했습니다. 이 검사에서도 모델은 무료 전송 대역입니다.
-추가로 [Core 캡처의 Ops 예약·정산 검사](../../evaluation/support-program-evidence/README.md#core-캡처의-ops-예약정산-연결)는
+추가로 [Core 캡처의 Ops 예약·정산 검사](../../pipelines/evals/support_program_evidence/datasets/README.md#core-캡처의-ops-예약정산-연결)는
 실제 Core 준비 명세로 테스트 DB의 실행·예약을 만들고 같은 명세의 HTTP 승인·정산을 대조합니다.
 예산 부족 시 실행·예약 롤백, 입력 변경 차단과 미확정 사용량 유지도 검사하며 필수 LLMOps CI에 연결했습니다.
 고정 원문·청크 RAG의 공개 접수·manifest·Prefect 연결은 위 신규 실행 경로에 구현했습니다.
@@ -1120,7 +1120,7 @@ Ops는 결과의 명세·평가기·선택 사례·입력 해시를 확인한 �
 출처는 실제 Core CI의 모델 HTTP 대역이며 `integration-stub`로 명세에 고정합니다. 기존 관리자 화면의
 자료 선택과 Prefect 재평가를 사용하며 v1의 원본 실패 4건은 재평가 완료 후에도 유지합니다.
 유료 호출·예산 예약·live 프로필·품질 기준 지정은 허용하지 않습니다. 입력 해시·이미지 갱신·CI 확인은
-[등록 Core 캡처 안내](../../evaluation/support-program-evidence/README.md#등록된-core-캡처의-ops-재평가)를 따릅니다.
+[등록 Core 캡처 안내](../../pipelines/evals/support_program_evidence/datasets/README.md#등록된-core-캡처의-ops-재평가)를 따릅니다.
 
 새 실행 명세는 `schema_version=2`이며 자료별 `evaluation_scope`를 프로필 해시에 포함합니다.
 `evaluation-catalog`의 `datasets[].evaluation_scope`와 실행 응답의 `evaluation_scope`로 접수 전후 범위를
@@ -1184,7 +1184,7 @@ Migration `0008_case_reviews`는 사례별 이력과 실행의 검토 버전, �
 유실 재전송은 기존 기록을 반환하고, 다른 변경이 끼어든 오래된 요청은 409로 거절합니다.
 알 수 없는 사례, 잘못된 해시/기준, 미검토·부적합·보류는 승인 자격을 얻지 못합니다.
 데이터셋 기준 행 → 실행 행 순서로 잠가 검토 변경·전체 승인·기준 지정·다음 접수의 경계를 유지합니다.
-`LLMOPS_EVIDENCE_DIR`에는 버전이 고정된 `evaluation/support-program-evidence`를 읽기 전용으로 연결합니다.
+`LLMOPS_EVIDENCE_DIR`에는 버전이 고정된 `pipelines/evals/support_program_evidence/datasets`를 읽기 전용으로 연결합니다.
 로컬 Python은 저장소 경로가 기본이며 단독·루트 통합·LLMOps Compose는 모두 `/evaluation-data`에 마운트합니다.
 루트 Compose 검증은 자료 경로와 읽기 전용 마운트를 확인하며, 컨테이너 테스트도 같은 자료를 사용합니다.
 다른 배포 방식에서는 결과 볼륨과 이 자료 경로를 함께 제공해야 합니다. Django에는 평가 SDK를 추가하지 않습니다.
@@ -1566,7 +1566,7 @@ Docker 안에서도 테스트할 수 있습니다.
 $opsTestContainer = docker compose ps --quiet ops-service
 $opsTestImage = docker inspect --format '{{.Image}}' $opsTestContainer
 $opsTestCommand = docker image inspect --format '{{json .Config.Cmd}}' $opsTestImage
-$budgetClient = (Resolve-Path ../../pipelines/evals/govbiz_evaluation/integrations/budget_client.py).Path
+$budgetClient = (Resolve-Path ../../pipelines/evals/support_program_evidence/integrations/budget_client.py).Path
 docker compose run --rm --no-deps -T --volume "${budgetClient}:/test-inputs/budget_client.py:ro" --env "OPS_TEST_GUNICORN_COMMAND=$opsTestCommand" --env OPS_TEST_BUDGET_CLIENT_PATH=/test-inputs/budget_client.py ops-service python manage.py test --noinput
 ```
 
@@ -1576,7 +1576,7 @@ Compose의 `runserver` 재정의와 무관하게 배포 기본 Gunicorn 설정�
 잘못되면 생략하지 않고 실패합니다. 이 변수 역시 테스트 전용이며 CI 검증 도구가 자동 전달합니다.
 
 사용량 증거의 실행기→Ops 계약 테스트는 저장소의
-`pipelines/evals/govbiz_evaluation/integrations/budget_client.py`를 직접 읽습니다.
+`pipelines/evals/support_program_evidence/integrations/budget_client.py`를 직접 읽습니다.
 격리된 컨테이너에서는 위 명령처럼 실제 소스 파일만 테스트 컨테이너에 읽기 전용으로 연결하고,
 테스트 전용 `OPS_TEST_BUDGET_CLIENT_PATH`에 그 절대 경로를 지정합니다. 소스가 없거나 경로가
 잘못되면 테스트를 생략하지 않고 실패합니다. 이 변수는 운영 설정이 아닙니다.

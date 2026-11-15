@@ -45,7 +45,8 @@ def main():
     name = "govbiz-ops-service-image-check-" + uuid.uuid4().hex[:12]
     image = name + ":test"
     runner_source = (
-        ROOT.parent.parent / "pipelines/evals/govbiz_evaluation/integrations/budget_client.py"
+        ROOT.parent.parent
+        / "pipelines/evals/support_program_evidence/integrations/budget_client.py"
     )
     require(runner_source.is_file(), "The checkout's real budget_client.py is required.")
     built = False

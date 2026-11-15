@@ -11,8 +11,8 @@ import httpx2
 import pytest
 
 
-HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
-ENGINE = Path(__file__).resolve().parents[1] / "govbiz_evaluation"
+HERE = Path(__file__).resolve().parents[3] / "pipelines/evals/support_program_evidence/datasets"
+ENGINE = Path(__file__).resolve().parents[1] / "support_program_evidence"
 spec = importlib.util.spec_from_file_location("evidence_evaluate", ENGINE / "evaluators" / "evaluate.py")
 evaluate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluate)
@@ -437,7 +437,7 @@ def test_live_rejects_too_small_call_budget_before_client_creation(loaded, tmp_p
 
 @pytest.mark.parametrize("failure", ["authorize", "settle", "unknown", "timeout", "none", "duplicate-case"])
 def test_ops_budget_precedes_http_and_uncertain_usage_blocks_next_case(loaded, tmp_path, monkeypatch, failure):
-    from govbiz_evaluation.budget_client import BudgetClient, BudgetUnavailable
+    from support_program_evidence.integrations.budget_client import BudgetClient, BudgetUnavailable
     monkeypatch.setenv("OPENAI_API_KEY", "offline-no-real-call")
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setenv("LLMOPS_BUDGET_TOKEN", "offline-test-budget-token-32-characters")

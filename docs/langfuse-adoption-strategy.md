@@ -1,11 +1,11 @@
 # Langfuse 기반 LLMOps 도입 전략
 
-> 현재 코드는 Prefect 실행 순서를 `pipelines/flows/evaluation/`, 평가 계산을 `evaluation/support-program-evidence/`에서 관리합니다. 아래 과거 검증 기록의 `ops_flow.py`와 `llmops.py`는 분리 전 파일명입니다. 최신 실행 방법은 [파이프라인 안내](../pipelines/README.md)를 따릅니다.
+> 현재 코드는 Prefect 실행 순서를 `pipelines/flows/evaluation/`, 평가 계산을 `pipelines/evals/support_program_evidence/`에서 관리하고, 평가 자료와 기록은 `pipelines/evals/support_program_evidence/datasets/`에 보관합니다. 아래 과거 검증 기록의 `ops_flow.py`와 `llmops.py`는 분리 전 파일명입니다. 최신 실행 방법은 [파이프라인 안내](../pipelines/README.md)를 따릅니다.
 
 **현재 우선순위와 완료 기준은 [LLMOps 후속 개발 전략](llmops-next-development-plan.md)을 따른다.**
 이 문서는 최초 설계와 커밋별 구현·검증 이력을 보존한다. 아래 과거 계획을 현재 미구현 목록으로 해석하지 않는다.
 
-[문서 목록](README.md) · [AI Service](../backend/ai-service/README.md) · [기존 근거 답변 평가](../evaluation/support-program-evidence/README.md)
+[문서 목록](README.md) · [AI Service](../backend/ai-service/README.md) · [기존 근거 답변 평가](../pipelines/evals/support_program_evidence/datasets/README.md)
 
 2026-09-28 코드 검토를 기준으로 한 도입 전략과 구현 범위다. 개발 실행 방법은 [LLMOps 실행 안내](../infrastructure/llmops/README.md)에 둔다. 실제 모델 품질 재평가와 운영 배포는 별도 작업이다.
 
@@ -59,7 +59,7 @@ workflow가 성공이지만 `publish` job은 건너뛰었다. 이미지 발행 �
 | P0 · 로컬 실행 전 | [명세 검사](../backend/ops-service/apps/evaluations/execution_spec.py)가 기존 Windows checkout에서 실패 | AI 파일 5개의 CRLF가 원인이다. Git blob 및 LF 변환 바이트는 manifest와 일치한다. 후속 예산 작업에서 Git blob과 동일함을 확인한 뒤 LF로 복구하고 명세 검사를 통과했다. 명세 대상 Python 파일의 LF를 `.gitattributes`로 고정했다. |
 | P1 · 품질 | [품질 정책](../backend/ops-service/apps/evaluations/quality_policy.py)과 [판정 이력](../backend/ops-service/apps/evaluations/quality.py)은 구현됐지만 실제 사람 검토·현재 모델 기준은 미확보 | 개발 테스트의 `PASS`와 사람이 승인한 평가 기준을 구별한다. 자료 검토 → 승인 범위의 새 응답 → 사례 검토 → 품질 판정 → 별도 기준 지정 순서로 진행한다. |
 | P1 · 반복 실행 전 | [호출 설정](../backend/ops-service/apps/evaluations/catalog.py), [실행기](../pipelines/flows/evaluation/flows.py), [API](../backend/ops-service/apps/evaluations/urls.py) | 실행별 호출 수·출력 토큰은 있지만 누적 예산 장부·취소 API가 없다. `CANCELLED` 상태 수신과 취소 기능은 다르다. `serve(limit=1)`·로컬 FileLock은 다중 실행기의 전역 제한이 아니다. |
-| P2 · 자료 확대 전 | [평가기](../pipelines/evals/govbiz_evaluation/evaluators/evaluate.py)의 `load_fixture`·`report` | `synthetic`·`ai-authored`, 문서 최대 3개·사례 최대 12개로 제한된다. 자동 의미 충실도는 미측정이며 인용 recall은 불필요한 인용을 벌점 처리하지 않는다. 실제 공고·사람 참조·범위 확장은 자료 계약과 검토 기준부터 확장한다. |
+| P2 · 자료 확대 전 | [평가기](../pipelines/evals/support_program_evidence/evaluators/evaluate.py)의 `load_fixture`·`report` | `synthetic`·`ai-authored`, 문서 최대 3개·사례 최대 12개로 제한된다. 자동 의미 충실도는 미측정이며 인용 recall은 불필요한 인용을 벌점 처리하지 않는다. 실제 공고·사람 참조·범위 확장은 자료 계약과 검토 기준부터 확장한다. |
 | P2 · 운영 전 | [추적](../backend/ai-service/app/tracing.py)과 [개발 Compose](../infrastructure/llmops/compose.ops.yaml) | 당시 허용 span은 답변·모델 두 개였다. 이후 일반 지원사업 검색의 Core→AI 추적을 추가했다([현재 범위](../infrastructure/llmops/README.md#지원사업-ai-검색-추적)). 상세 RAG 전체 연결, 운영 인증·보존 기간·백업/복원·결과 저장소 운영 검증은 남았다. |
 
 ### skn-35 초기 검토 기록
@@ -275,8 +275,8 @@ Web 첫 실행은 테스트 시작 전 worker timeout이었고 같은 명령의 
 ### 운영과 전체 RAG의 완료 증거
 
 전체 RAG는 [기존 검색 평가](../evaluation/support-program-search/README.md),
-[실제 흐름 실행](../evaluation/support-program-evidence/serve_flow.py),
-[흐름 검증](../pipelines/evals/govbiz_evaluation/preparation/verify_flow.py)을 재사용한다.
+[실제 흐름 실행](../backend/ai-service/integration/serve_flow.py),
+[흐름 검증](../pipelines/evals/support_program_evidence/preparation/verify_flow.py)을 재사용한다.
 검색 후보·필터·순위·근거 선택·답변 지표를 분리하고 index/문서 snapshot·chunker/embedding/reranker 버전을
 해당 기능에 맞게 고정한다. Core부터 내부 요청에 추적 문맥을 전달해 검색 실패·근거 부족·모델 오류를 구분한다.
 추가 추적 의존성이 필요하면 구현 전에 알린다.
@@ -649,7 +649,7 @@ Langfuse와 Evidently는 동일한 검증 결과 표와 평가기 버전을 사�
 | [답변 Service](../backend/ai-service/app/support_program_evidence/answer_service.py)와 [Agent](../backend/ai-service/app/support_program_evidence/agent.py) | 모델 호출 후 출력·인용 검증까지 포함한 실행 상태 기록 |
 | [공통 LLM 호출](../backend/ai-service/app/support_program_llm.py) | 기존 호출 계약 유지. 근거 답변 Agent에서 호출 전후를 추적하므로 이 파일은 변경하지 않음 |
 | [Core 근거 답변 Facade](../backend/core-service/src/main/kotlin/ai/govbiz/core/supportprogram/facade/AiSupportProgramEvidenceFacade.kt) | 색인·검색·답변의 세 HTTP 호출을 연결할 후속 지점 |
-| [기존 평가 실행기](../pipelines/evals/govbiz_evaluation/evaluators/evaluate.py) | 저장 캡처 재계산, 상태 일치율·인용 재현율 재사용. Service·Agent를 직접 생성하므로 HTTP 서버와 별도로 추적 초기화·종료 연결 필요 |
+| [기존 평가 실행기](../pipelines/evals/support_program_evidence/evaluators/evaluate.py) | 저장 캡처 재계산, 상태 일치율·인용 재현율 재사용. Service·Agent를 직접 생성하므로 HTTP 서버와 별도로 추적 초기화·종료 연결 필요 |
 | [Django Ops](../backend/ops-service/README.md) | Core 관리자 세션 확인·평가 실행 요청·이력·결과 조회 |
 
 현재 LangSmith 추적과 OpenAI Agents 추적은 일부 경로에서 명시적으로 비활성화되어 있다. 이 설정은 각 도구의 추적 설정이며 Langfuse 전체를 금지하는 스위치가 아니다. Langfuse 연결을 별도로 추가하고, 기존 수집 정책을 유지하는지 검증한다.
@@ -712,7 +712,7 @@ AI HTTP /answers → AnswerService → AnswerAgent → LangChain → OpenAI
 - `app/config.py`, `app/bootstrap.py`, `app/main.py`: 명시적 활성화, 설정 검증, 초기화와 종료 시 유한 시간의 전송 마무리
 - `app/support_program_evidence/answer_service.py`, `agent.py`: 실행·검증 결과와 모델 호출 연결
 - `app/tracing.py`(초기에는 근거 답변 디렉터리): 명시적 span, 전송 필터, 본문 제거, 유한 종료 대기. 검색 추적 추가 시 공유 위치로 이동했으며 공통 LLM 호출부는 변경하지 않음
-- `evaluation/support-program-evidence/evaluate.py`: Service·Agent 직접 생성 경로의 명시적 추적 초기화·종료 연결. 저장 캡처 재계산에는 새 모델 호출 trace를 만들지 않음
+- `pipelines/evals/support_program_evidence/evaluators/evaluate.py`: Service·Agent 직접 생성 경로의 명시적 추적 초기화·종료 연결. 저장 캡처 재계산에는 새 모델 호출 trace를 만들지 않음
 - `tests/support_program_evidence/` 및 설정·초기화 관련 테스트: 추적과 기존 응답 동작 확인
 - AI Service README와 개발 Compose 안내: 실행 방법·수집 범위·제한 사항
 
@@ -803,7 +803,7 @@ Ops의 장시간 평가는 HTTP 요청 밖에서 상시 `serve(limit=1)` 실행�
 ```bash
 # backend/ai-service에서 실행
 uv run --locked --extra dev python -m pytest tests/support_program_evidence
-uv run --project ../../pipelines --locked --extra dev python -m pytest ../../evaluation/support-program-evidence ../../pipelines/tests
+uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/evals/tests ../../pipelines/tests
 ```
 
 공통 호출·설정·초기화 변경 시 관련 소비자 테스트를 추가한다. SDK·서버 호환성은 합성 요청 및 HTTP 스텁으로 검증하고, 실제 Langfuse에서 trace 조회까지 별도로 확인한다. 콜백 호출만 확인한 단위 테스트를 서버 저장 성공으로 간주하지 않는다.
@@ -830,7 +830,7 @@ pandas 변환은 원본 사례·누락값 보존, Pandera는 잘못된 표 거�
 | 4 | 근거 답변 Service와 모델 호출 연결 | HTTP 요청과 평가 실행기의 직접 호출 모두에서 실행·모델 호출·출력 검증이 하나의 trace로 연결. 모델 응답은 HTTP 스텁 사용 |
 | 5 | 실패·동시 요청·수집 정책 및 CI 검증 | 정상·근거 부족·잘못된 인용·시간 초과를 구별하고, 전송 실패로 모델이 재호출되지 않으며, 본문·키가 내보내기 데이터에 없음. 최신 커밋의 해당 CI와 서버 조회 확인 |
 
-1번의 첫 자료는 [대상 조건 fixture](../evaluation/support-program-evidence/target-coverage-fixture.json)와 [6개 사례의 저장 캡처](../evaluation/support-program-evidence/runs/target-coverage-20260907-v1/capture.json), [기존 보고서](../evaluation/support-program-evidence/runs/target-coverage-20260907-v1/report.json)를 사용한다. 이 자료는 AI 작성 가상 사례이며 과거 구현의 결과다. 새 구현의 품질 기준선으로 간주하지 않고, 재계산·표 변환·결과 등록의 정합성을 검증하는 입력으로 사용한다. 이후 기존 부분 실행·실패 캡처를 추가해 누락과 오류 처리도 확인한다.
+1번의 첫 자료는 [대상 조건 fixture](../pipelines/evals/support_program_evidence/datasets/target-coverage-fixture.json)와 [6개 사례의 저장 캡처](../pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/capture.json), [기존 보고서](../pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/report.json)를 사용한다. 이 자료는 AI 작성 가상 사례이며 과거 구현의 결과다. 새 구현의 품질 기준선으로 간주하지 않고, 재계산·표 변환·결과 등록의 정합성을 검증하는 입력으로 사용한다. 이후 기존 부분 실행·실패 캡처를 추가해 누락과 오류 처리도 확인한다.
 
 PR 1의 최종 산출물은 SDK·서버 버전과 실행 방법, 두 진입 경로의 추적 코드, 무료 회귀 테스트, 정상·실패 trace 조회 기록이다. 다음 구현은 PR 2의 pandas·Pandera 결과 표와 Langfuse 점수 연결, PR 3의 Evidently 보고서, PR 4의 Prefect 자동화 순서로 진행한다. 각 도구의 구체적인 책임과 완료 조건은 위 PR별 절을 따른다.
 

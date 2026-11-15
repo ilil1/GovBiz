@@ -13,7 +13,7 @@ services:
       LLMOPS_EVIDENCE_DIR: /evaluation-data
     volumes:
       - ops-results:/results:ro
-      - ../../evaluation/support-program-evidence:/evaluation-data:ro
+      - ../../pipelines/evals/support_program_evidence/datasets:/evaluation-data:ro
     read_only: true
     tmpfs: ["/tmp:rw,noexec,nosuid,size=32m,mode=1777"]
     cap_drop: [ALL]

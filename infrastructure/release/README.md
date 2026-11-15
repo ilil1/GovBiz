@@ -102,7 +102,7 @@ checkout·앱 코드·비밀 파일은 build context로 전달하지 않습니�
 - `infrastructure/llmops/Dockerfile.runner`
 - `packages/govbiz-ai-runtime/`, `packages/govbiz-evaluation-contracts/`
 - `pipelines/evals/`의 패키지 정보와 평가 코드
-- `evaluation/support-program-evidence/`
+- `pipelines/evals/support_program_evidence/datasets/`
 - `pipelines/`의 패키지 정보·잠금 파일·실행 코드
 - `infrastructure/llmops/bundle_runner_inputs.py`
 

@@ -38,7 +38,7 @@ _runner_source = Path(
     os.environ.get(
         "OPS_TEST_BUDGET_CLIENT_PATH",
         settings.BASE_DIR.parent.parent
-        / "pipelines/evals/govbiz_evaluation/integrations/budget_client.py",
+        / "pipelines/evals/support_program_evidence/integrations/budget_client.py",
     )
 )
 if not _runner_source.is_absolute() or not _runner_source.is_file():

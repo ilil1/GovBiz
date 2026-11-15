@@ -7,10 +7,10 @@ from types import SimpleNamespace
 import pytest
 
 from pipelines.flows.evaluation import clients, tasks
-from govbiz_evaluation.reports import reporting
+from support_program_evidence.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 
-HERE = Path(__file__).resolve().parents[2] / "evaluation/support-program-evidence"
+HERE = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets"
 FIXTURE = HERE / "target-coverage-fixture.json"
 CAPTURE = HERE / "runs/target-coverage-20260907-v1/capture.json"
 

@@ -56,8 +56,8 @@ class RunnerInputBundleTests(unittest.TestCase):
     def test_only_registered_bytes_and_dependency_records_are_included(self):
         self.assertEqual(bundle.bundle(self.root), 2)
         installed = self.owner / "_inputs"
-        self.assertEqual((installed / bundle.EVIDENCE / "capture.json").read_bytes(), self.capture)
-        self.assertFalse((installed / bundle.EVIDENCE / "raw-private.json").exists())
+        self.assertEqual((installed / bundle.EVIDENCE_IDENTIFIER / "capture.json").read_bytes(), self.capture)
+        self.assertFalse((installed / bundle.EVIDENCE_IDENTIFIER / "raw-private.json").exists())
         self.assertEqual(
             (installed / "evaluation/pyproject.toml").read_text(),
             (self.root / "pipelines/evals/pyproject.toml").read_text(),
@@ -70,7 +70,7 @@ class RunnerInputBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differs from approved"):
             bundle.bundle(self.root)
         self.assertEqual(
-            (self.owner / "_inputs" / bundle.EVIDENCE / "capture.json").read_bytes(), self.capture
+            (self.owner / "_inputs" / bundle.EVIDENCE_IDENTIFIER / "capture.json").read_bytes(), self.capture
         )
 
     def test_catalog_cannot_select_outside_evidence(self):
@@ -97,7 +97,7 @@ class RunnerInputBundleTests(unittest.TestCase):
         self.save()
         self.assertEqual(bundle.bundle(self.root), 3)
         self.assertEqual(
-            (self.owner / "_inputs" / bundle.EVIDENCE / "new-capture.json").read_bytes(), raw
+            (self.owner / "_inputs" / bundle.EVIDENCE_IDENTIFIER / "new-capture.json").read_bytes(), raw
         )
 
 

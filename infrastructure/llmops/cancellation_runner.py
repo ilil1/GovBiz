@@ -56,7 +56,7 @@ def barrier(run_id, stage):
 
 def install_http_double(run_id):
     import httpx2
-    from govbiz_evaluation.integrations.budget_client import BudgetClient
+    from support_program_evidence.integrations.budget_client import BudgetClient
 
     class OfflineTransport(httpx2.AsyncBaseTransport):
         def __init__(self):
@@ -174,7 +174,7 @@ def process_command():
         pid = json.loads(PARENT.read_text())["pid"]
         os.kill(pid, {"STOP": signal.SIGSTOP, "CONT": signal.SIGCONT}[sys.argv[2]])
     elif sys.argv[1] == "duplicate":
-        from govbiz_evaluation.integrations.budget_client import BudgetClient, BudgetUnavailable
+        from support_program_evidence.integrations.budget_client import BudgetClient, BudgetUnavailable
 
         run_id, flow_id, spec_hash = sys.argv[2:]
         client = BudgetClient(run_id, flow_id, spec_hash)

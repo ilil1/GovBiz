@@ -7,7 +7,8 @@ import shutil
 from pathlib import Path
 
 CONTRACTS = Path("packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts")
-EVIDENCE = Path("evaluation/support-program-evidence")
+EVIDENCE = Path("pipelines/evals/support_program_evidence/datasets")
+EVIDENCE_IDENTIFIER = Path("evaluation/support-program-evidence")
 METADATA = (
     "packages/govbiz-ai-runtime/pyproject.toml",
     "packages/govbiz-evaluation-contracts/pyproject.toml",
@@ -46,7 +47,7 @@ def bundle(root):
             raw = source.read_bytes()
             if hashlib.sha256(raw).hexdigest() != expected:
                 raise ValueError("Registered evaluation input differs from approved release")
-            inputs[str(EVIDENCE / path)] = raw
+            inputs[str(EVIDENCE_IDENTIFIER / path)] = raw
     inputs.update({name: (root / METADATA_SOURCES.get(name, name)).read_bytes() for name in METADATA})
     destination = owner / "_inputs"
     staged = owner / "_inputs.build"

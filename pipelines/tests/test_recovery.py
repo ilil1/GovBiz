@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 
 from pipelines.flows.evaluation import capture as llmops
-from govbiz_evaluation.reports import reporting
+from support_program_evidence.reports import reporting
 from pipelines.flows.evaluation import flows as ops_flow
 from govbiz_evaluation_contracts.recovery_inputs import read_recovery_inputs
 

@@ -9,9 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
-EVIDENCE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
-from govbiz_evaluation import rag_evaluate
-from govbiz_evaluation import rag_reporting
+EVIDENCE = Path(__file__).resolve().parents[3] / "pipelines/evals/support_program_evidence/datasets"
+from support_program_evidence.evaluators import rag_evaluate
+from support_program_evidence.reports import rag_reporting
 from govbiz_evaluation_contracts import rag_replay
 from govbiz_evaluation_contracts.rag_material import material_from_sources
 

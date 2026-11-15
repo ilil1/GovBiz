@@ -6,8 +6,8 @@ import sys
 
 import pytest
 
-from govbiz_evaluation import official_rag
-from govbiz_evaluation import rag_evaluate as rag
+from support_program_evidence.preparation import official_rag
+from support_program_evidence.evaluators import rag_evaluate as rag
 
 from govbiz_evaluation_contracts.rag_material import material_from_sources
 from govbiz_evaluation_contracts.catalog import live_config, public_datasets

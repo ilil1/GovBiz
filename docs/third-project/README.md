@@ -361,8 +361,8 @@ GovBiz/
 ├── evaluation/
 │   ├── assistant/                   # AI 어시스턴트 평가
 │   ├── combination-review/          # 중복 지원·수혜 검토 평가
-│   ├── support-program-evidence/    # 공고 근거 답변 평가
 │   └── support-program-search/      # 검색 품질·성능 평가
+├── pipelines/evals/                # 공고 근거 답변 평가 코드·데이터
 ├── infrastructure/
 │   ├── codebuild/                   # AWS CodeBuild 설정
 │   ├── document-mcp/                # 신청 문서 생성 환경
@@ -407,7 +407,7 @@ GovBiz/
 
 평가 절차는 입력과 설정 고정, 변경 전후 실행, 결과 및 실패 보존, 지표 재계산, 사례 검토 순서로 진행합니다. 코드 커밋, 질문·원문·프롬프트·설정의 해시, 모델·추론 수준·처리 등급, 기준일, 후보 수, 캐시 사용 여부를 실행 기록에 남깁니다. 한 번에 바꾼 요소와 고정한 요소도 구분합니다.
 
-기존 실행에는 모든 영역에 공통으로 적용할 사전 합의 합격선이 없습니다. 따라서 지표가 좋아졌다는 이유만으로 전체 시스템을 합격 처리하지 않습니다. 후속 평가에서는 개발셋으로 변경을 결정한 뒤, 별도 검증셋과 합격 기준을 실행 전에 확정합니다. 상세 절차는 [검색 평가 도구](../../evaluation/support-program-search/README.md)와 [RAG 평가 도구](../../evaluation/support-program-evidence/README.md)에 있습니다.
+기존 실행에는 모든 영역에 공통으로 적용할 사전 합의 합격선이 없습니다. 따라서 지표가 좋아졌다는 이유만으로 전체 시스템을 합격 처리하지 않습니다. 후속 평가에서는 개발셋으로 변경을 결정한 뒤, 별도 검증셋과 합격 기준을 실행 전에 확정합니다. 상세 절차는 [검색 평가 도구](../../evaluation/support-program-search/README.md)와 [RAG 평가 도구](../../pipelines/evals/support_program_evidence/datasets/README.md)에 있습니다.
 
 ### 12.3 평가 데이터와 지표 정의
 
@@ -449,8 +449,8 @@ S02의 exact-token은 Python 기준선이며, BM25/Nori와 S03은 로컬 Elastic
 
 | 확인 항목 | 기록된 결과 | 판정과 원본 |
 |---|---|---|
-| 응답 완료·기대 상태 | 신규 가상 질문 6/6, 공식 HTML 질문 6/6 정상 반환 및 상태 일치 | 총 12/12. 이전 공식 v1도 상태 일치 6/6. 가상 6개는 신규 회귀 사례. [v2 실행 보고서](../../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md) |
-| 대상 조건 보존 | 공식 H01의 ‘중소·중견 제조기업’ 범위 누락을 후속 답변에서 보완 | 공식 6개 중 H01 의미 판정이 부분 일치에서 일치로 변경, 나머지 5개는 일치 유지. [사례별 의미 검토](../../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md#답변-의미-검토--ai-only) |
+| 응답 완료·기대 상태 | 신규 가상 질문 6/6, 공식 HTML 질문 6/6 정상 반환 및 상태 일치 | 총 12/12. 이전 공식 v1도 상태 일치 6/6. 가상 6개는 신규 회귀 사례. [v2 실행 보고서](../../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md) |
+| 대상 조건 보존 | 공식 H01의 ‘중소·중견 제조기업’ 범위 누락을 후속 답변에서 보완 | 공식 6개 중 H01 의미 판정이 부분 일치에서 일치로 변경, 나머지 5개는 일치 유지. [사례별 의미 검토](../../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md#답변-의미-검토--ai-only) |
 | 의미 검토 | AI-only 검토에서 12개 답변 모두 참조 사실·금지 주장과 일치로 판단 | 사람 검수·독립적인 통계 검증 아님. 자동 `semanticFaithfulness`는 `null`로 미측정 |
 | 인용 경로 | 저장된 공식 v1/v2의 Core·OpenAI 캡처와 가상 캡처 검증 통과 | 유효 ID·원문/요청/응답 연결의 검증. 인용 존재만으로 의미 정확도를 보증하지 않음 |
 
@@ -476,8 +476,9 @@ python3 -B evaluation/support-program-search/compare_lexical_v2.py \
   --verify-report evaluation/support-program-search/runs/lexical-v2-20260913-v1/report.json
 
 # 공식 HTML RAG 캡처의 요청·응답·인용 경로 검증
-python3 -B evaluation/support-program-evidence/verify_flow.py \
-  --run-dir evaluation/support-program-evidence/runs/official-flow-20260907-v2
+uv run --project pipelines --locked python -m support_program_evidence.preparation.verify_flow \
+  --run-dir pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2 \
+  --fixture backend/core-service/src/test/resources/support-program-evidence/official-sources.json
 ```
 
 2026-09-17 재검사에서 한국어 48문항, 후보 예산 300문항, Nori v2 저장 보고서 검증이 통과했습니다. RRF 비교의 지표·입력 해시는 일치했으며 현재 평가기 소스 해시는 과거 실행 때와 달랐습니다. 지연 보고서는 생성 시각을 제외하고 재계산 결과가 일치했고, 가상 RAG와 공식 v1/v2 캡처 검사도 통과했습니다. 공식 RAG 녹화기 코드 역시 과거 실행 버전과 현재 버전이 달랐습니다. 이는 보존 자료의 계산·일관성 확인이며 과거 실행의 진위나 AI 라벨의 사실 정확도 인증은 아닙니다.

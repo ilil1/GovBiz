@@ -9,8 +9,8 @@ import socket
 import pytest
 
 
-HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
-ENGINE = Path(__file__).resolve().parents[1] / "govbiz_evaluation"
+HERE = Path(__file__).resolve().parents[3] / "pipelines/evals/support_program_evidence/datasets"
+ENGINE = Path(__file__).resolve().parents[1] / "support_program_evidence"
 RUN = HERE / "runs/official-flow-20260907-v1"
 spec = importlib.util.spec_from_file_location("verify_evidence_flow", ENGINE / "preparation" / "verify_flow.py")
 verify_flow = importlib.util.module_from_spec(spec)

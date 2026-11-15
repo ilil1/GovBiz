@@ -10,8 +10,8 @@ import pandera.pandas as pa
 import pytest
 from plotly.utils import PlotlyJSONEncoder
 
-HERE = Path(__file__).resolve().parents[3] / "evaluation/support-program-evidence"
-from govbiz_evaluation import reporting
+HERE = Path(__file__).resolve().parents[3] / "pipelines/evals/support_program_evidence/datasets"
+from support_program_evidence.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 
 FIXTURE = HERE / "target-coverage-fixture.json"

@@ -15,9 +15,9 @@ from govbiz_evaluation_contracts.resources import evidence_root as packaged_evid
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.runtime import flow_run
-from govbiz_evaluation.evaluators import evaluate
-from govbiz_evaluation.integrations.budget_client import BudgetClient, BudgetUnavailable
-from govbiz_evaluation.reports.reporting import EVALUATOR_VERSION, load_results, write_json
+from support_program_evidence.evaluators import evaluate
+from support_program_evidence.integrations.budget_client import BudgetClient, BudgetUnavailable
+from support_program_evidence.reports.reporting import EVALUATOR_VERSION, load_results, write_json
 from pipelines.flows.evaluation.capture import evaluate_capture
 
 from govbiz_evaluation_contracts.catalog import LEGACY_DATASET_ID, selection, validate_execution, validate_reference_config
@@ -168,8 +168,8 @@ def evaluate_saved_capture(
                                      "Live evaluations are disabled")
                     evaluate.require(bool(os.environ.get("OPENAI_API_KEY", "").strip()), "OpenAI key is required")
                     if evaluation_scope(dataset_id) == RAG_SCOPE:
-                        from govbiz_evaluation.integrations import rag_live
-                        from govbiz_evaluation.evaluators import rag_evaluate
+                        from support_program_evidence.integrations import rag_live
+                        from support_program_evidence.evaluators import rag_evaluate
                         evaluate.require(os.environ.get("LLMOPS_RAG_LIVE_ENABLED", "false").lower() == "true",
                                          "RAG live evaluations are disabled")
                         _, fixture_hash, prepared = rag_live.prepare(
@@ -221,7 +221,7 @@ def evaluate_saved_capture(
             def generate_evaluation_responses():
                 try:
                     if evaluation_scope(dataset_id) == RAG_SCOPE:
-                        from govbiz_evaluation.integrations import rag_live
+                        from support_program_evidence.integrations import rag_live
                         _, capture = asyncio.run(rag_live.execute(
                             fixture_path, output / "capture", budget=budget, execution_spec=execution_spec,
                         ))

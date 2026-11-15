@@ -490,7 +490,7 @@ class EvidenceTests(unittest.TestCase):
             catalog = (
                 repository / "packages/govbiz-evaluation-contracts/src/govbiz_evaluation_contracts/capture_catalog.json"
             )
-            source = repository / "evaluation/support-program-evidence"
+            source = repository / "pipelines/evals/support_program_evidence/datasets"
             target = repository / "snapshot"
             catalog.parent.mkdir(parents=True)
             (source / "runs").mkdir(parents=True)

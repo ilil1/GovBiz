@@ -309,7 +309,7 @@ def main():
             )[0]["fixture"]
             digest = hashlib.sha256(
                 (
-                    REPOSITORY_ROOT / "evaluation/support-program-evidence" / fixture
+                    REPOSITORY_ROOT / "pipelines/evals/support_program_evidence/datasets" / fixture
                 ).read_bytes()
             ).hexdigest()
             probe = {

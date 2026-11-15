@@ -116,7 +116,7 @@ LLMOPS_RESULTS_DIR = Path(
 LLMOPS_EVIDENCE_DIR = Path(
     env(
         "LLMOPS_EVIDENCE_DIR",
-        default=str(BASE_DIR.parent.parent / "evaluation/support-program-evidence"),
+        default=str(BASE_DIR.parent.parent / "pipelines/evals/support_program_evidence/datasets"),
     )
 ).resolve()
 LANGFUSE_PROJECT_URL = env(

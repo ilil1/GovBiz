@@ -1412,7 +1412,7 @@ Core의 Health는 프로세스 상태, AI Health는 AI Service의 정해진 Heal
 실제 검색 후보·최종 추천의 캡처, AI-only 참조 판정과 변경 전후 보고서는
 [공유 평가 자료](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md)에 있습니다.
 평가 가능한 질문은 6개, 그중 양성 질문은 2개뿐이며 독립적인 사람 검토 품질 증거는 아닙니다.
-근거 답변은 [5단계 후속 검증](../evaluation/support-program-evidence/runs/official-flow-20260907-v1/README.md)에서
+근거 답변은 [5단계 후속 검증](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v1/README.md)에서
 공식 HTML 2건·질문 6개의 실제 MySQL·Qdrant·모델 연결과 인용을 확인했습니다. 고정 HTML을 재생한
 소규모 AI-only 검토이며 공고당 청크 1개여서 일반적인 검색 품질 근거는 아닙니다.
 PDF·첨부·다른 제공처 확장은 후속 범위입니다.

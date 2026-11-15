@@ -62,7 +62,7 @@ class ComposeRunnerContractTest(unittest.TestCase):
 
         test_call = next(call for call in calls if "manage.py" in call and "test" in call)
         source = (
-            check_compose.ROOT / "pipelines/evals/govbiz_evaluation/integrations/budget_client.py"
+            check_compose.ROOT / "pipelines/evals/support_program_evidence/integrations/budget_client.py"
         )
         self.assertIn("run", test_call)
         self.assertIn("--rm", test_call)

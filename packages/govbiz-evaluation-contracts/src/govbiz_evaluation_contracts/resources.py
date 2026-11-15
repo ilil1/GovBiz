@@ -6,11 +6,14 @@ from pathlib import Path, PurePosixPath
 AI = "backend/ai-service/app/"
 OPS = "backend/ops-service/apps/evaluations/"
 EVIDENCE = "evaluation/support-program-evidence/"
+DATASETS = "pipelines/evals/support_program_evidence/datasets/"
+PRIOR_DATASETS = "pipelines/evals/datasets/"
 PIPELINE_EVALUATION = "pipelines/evaluation/"
 FLOW_EVALUATION = "pipelines/flows/evaluation/"
 PIPELINE_COMPAT = "pipelines/_compat/evaluation/"
 PIPELINE_MODULES = frozenset({"__init__.py", "flows.py", "capture.py", "rag.py", "tasks.py", "clients.py"})
-ENGINE_SOURCE = "pipelines/evals/govbiz_evaluation/"
+ENGINE_SOURCE = "pipelines/evals/support_program_evidence/"
+PRIOR_ENGINE_SOURCE = "pipelines/evals/govbiz_evaluation/"
 ENGINE_METADATA = "pipelines/evals/pyproject.toml"
 PREVIOUS_ENGINE_SOURCE = "pipelines/evaluation_engine/govbiz_evaluation/"
 PREVIOUS_ENGINE_METADATA = "pipelines/evaluation_engine/pyproject.toml"
@@ -28,8 +31,8 @@ EVALUATION_MODULES = {
         "verify_flow", "official_snapshot", "official_rag", "revise_official_reference", "core_flow_rag"
     )},
 }
-# Flat compatibility modules remain importable in runner images. Fingerprint
-# their actual bytes separately from the implementations they delegate to.
+# Legacy wrapper identifiers remain resolvable when inspecting a historical
+# checkout that still contains them. New releases do not ship or hash them.
 COMPAT_MODULES = frozenset({
     "evaluate.py", "rag_evaluate.py", "reporting.py", "rag_reporting.py",
     "budget_client.py", "embedding_budget.py", "rag_budget.py", "rag_live.py",
@@ -91,6 +94,8 @@ def source_path(name, root=None):
             relative = name.removeprefix(PIPELINE_EVALUATION)
             if relative in PIPELINE_MODULES:
                 mapped = FLOW_EVALUATION + relative
+        elif name.startswith(PRIOR_DATASETS):
+            mapped = DATASETS + name.removeprefix(PRIOR_DATASETS)
         elif name.startswith(EVIDENCE):
             relative = name.removeprefix(EVIDENCE)
             if relative.startswith("_compat/"):
@@ -104,6 +109,8 @@ def source_path(name, root=None):
                 part + "/__init__.py" for part in ENGINE_PACKAGES
             }:
                 mapped = ENGINE_SOURCE + relative
+            else:
+                mapped = DATASETS + relative
         candidate = root / mapped
         # Also supports historical checkout fixtures used to verify older releases.
         if mapped != name and not candidate.exists():
@@ -118,35 +125,60 @@ def source_path(name, root=None):
             # An old flat checkout may still be inspected, but do not let a
             # leftover flat module stand in for missing installed code in a
             # checkout that has already adopted the new package layout.
-            if mapped.startswith(ENGINE_SOURCE) or name == LEGACY_ENGINE_METADATA:
-                # Never substitute stale wrappers when the new package exists.
-                if (root / ENGINE_METADATA).parent.is_dir() or (root / ENGINE_SOURCE).is_dir():
-                    raise FileNotFoundError(f"Evaluation implementation is missing: {mapped}")
-                # The immediately preceding colocated layout has its own
-                # source tree. Resolve its real files before older layouts;
-                # do not accept stale wrappers when that tree is incomplete.
-                previous_layout = (root / PREVIOUS_ENGINE_METADATA).parent.is_dir() or (root / PREVIOUS_ENGINE_SOURCE).is_dir()
-                if previous_layout:
-                    previous = (PREVIOUS_ENGINE_METADATA if name == LEGACY_ENGINE_METADATA
-                                else PREVIOUS_ENGINE_SOURCE + mapped.removeprefix(ENGINE_SOURCE))
-                    candidate = root / previous
-                    if not candidate.is_file():
-                        raise FileNotFoundError(f"Evaluation implementation is missing: {previous}")
+            if mapped.startswith(DATASETS):
+                # Once the new data directory exists, do not replace missing
+                # files with stale historical copies.
+                if (root / DATASETS).is_dir() or (root / ENGINE_SOURCE).is_dir():
+                    raise FileNotFoundError(f"Evaluation data is missing: {mapped}")
+                previous = root / PRIOR_DATASETS / mapped.removeprefix(DATASETS)
+                if (root / PRIOR_DATASETS).is_dir():
+                    if not previous.is_file():
+                        raise FileNotFoundError(f"Evaluation data is missing: {previous}")
+                    candidate = previous
+                elif (root / EVIDENCE).is_dir():
+                    candidate = root / EVIDENCE / mapped.removeprefix(DATASETS)
                 else:
-                    relative = name.removeprefix(EVIDENCE)
-                    if relative.startswith("_compat/"):
-                        legacy = relative.removeprefix("_compat/")
-                    else:
-                        legacy = EVALUATION_MODULES.get(relative, relative)
+                    raise FileNotFoundError(f"Evaluation data is missing: {mapped}")
+            elif mapped.startswith(ENGINE_SOURCE) or name == LEGACY_ENGINE_METADATA:
+                # New and previous colocated packages cannot silently fall back
+                # to stale files when their current implementation is missing.
+                if (root / ENGINE_SOURCE).is_dir():
+                    raise FileNotFoundError(f"Evaluation implementation is missing: {mapped}")
+                prior = root / PRIOR_ENGINE_SOURCE
+                if prior.is_dir():
                     if name == LEGACY_ENGINE_METADATA:
-                        candidate = root / name
+                        raise FileNotFoundError(f"Evaluation implementation is missing: {mapped}")
+                    candidate = prior / mapped.removeprefix(ENGINE_SOURCE)
+                    if not candidate.is_file():
+                        raise FileNotFoundError(f"Evaluation implementation is missing: {candidate}")
+                elif (root / ENGINE_METADATA).parent.is_dir():
+                    raise FileNotFoundError(f"Evaluation implementation is missing: {mapped}")
+                if not prior.is_dir():
+                    # The immediately preceding colocated layout has its own
+                    # source tree. Resolve its real files before older layouts;
+                    # do not accept stale wrappers when that tree is incomplete.
+                    previous_layout = (root / PREVIOUS_ENGINE_METADATA).parent.is_dir() or (root / PREVIOUS_ENGINE_SOURCE).is_dir()
+                    if previous_layout:
+                        previous = (PREVIOUS_ENGINE_METADATA if name == LEGACY_ENGINE_METADATA
+                                    else PREVIOUS_ENGINE_SOURCE + mapped.removeprefix(ENGINE_SOURCE))
+                        candidate = root / previous
+                        if not candidate.is_file():
+                            raise FileNotFoundError(f"Evaluation implementation is missing: {previous}")
                     else:
-                        candidate = root / EVIDENCE / legacy
-                        if not candidate.exists() and relative in EVALUATION_MODULES:
-                            # Support checkouts predating the role directories.
-                            if any((root / EVIDENCE / part).is_dir() for part in ENGINE_PACKAGES):
-                                raise FileNotFoundError(f"Evaluation implementation is missing: {mapped}")
+                        relative = name.removeprefix(EVIDENCE)
+                        if relative.startswith("_compat/"):
+                            legacy = relative.removeprefix("_compat/")
+                        else:
+                            legacy = EVALUATION_MODULES.get(relative, relative)
+                        if name == LEGACY_ENGINE_METADATA:
                             candidate = root / name
+                        else:
+                            candidate = root / EVIDENCE / legacy
+                            if not candidate.exists() and relative in EVALUATION_MODULES:
+                                # Support checkouts predating the role directories.
+                                if any((root / EVIDENCE / part).is_dir() for part in ENGINE_PACKAGES):
+                                    raise FileNotFoundError(f"Evaluation implementation is missing: {mapped}")
+                                candidate = root / name
             else:
                 candidate = root / name
         if not candidate.resolve().is_relative_to(root):
@@ -166,8 +198,13 @@ def source_path(name, root=None):
             flat = relative.removeprefix("_compat/")
             if flat not in COMPAT_MODULES:
                 raise ValueError("Unknown evaluation compatibility resource")
-            return _package("govbiz_evaluation") / flat
-        return _package("govbiz_evaluation") / EVALUATION_MODULES.get(relative, relative)
+            return _package("support_program_evidence") / flat
+        return _package("support_program_evidence") / EVALUATION_MODULES.get(relative, relative)
+    if name.startswith((DATASETS, PRIOR_DATASETS)):
+        # Installed bundles retain the historical identifier for both current
+        # and previous repository data paths.
+        prefix = DATASETS if name.startswith(DATASETS) else PRIOR_DATASETS
+        return Path(__file__).parent / "_inputs" / EVIDENCE / name.removeprefix(prefix)
     if name.startswith(PIPELINE_COMPAT):
         relative = name.removeprefix(PIPELINE_COMPAT)
         if relative not in PIPELINE_MODULES:
@@ -183,6 +220,12 @@ def source_path(name, root=None):
 
 
 def evidence_root(root=None):
-    return (
-        Path(root) / EVIDENCE if root is not None else Path(__file__).parent / "_inputs" / EVIDENCE
-    )
+    if root is None:
+        return Path(__file__).parent / "_inputs" / EVIDENCE
+    root = Path(root)
+    current = root / DATASETS
+    prior = root / PRIOR_DATASETS
+    legacy = root / EVIDENCE
+    if current.is_dir() or (root / ENGINE_SOURCE).is_dir():
+        return current
+    return prior if prior.is_dir() else legacy if legacy.is_dir() else current

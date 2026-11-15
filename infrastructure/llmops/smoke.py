@@ -24,7 +24,7 @@ from govbiz_ai_runtime.tracing import LLMTracing
 from tests.langchain_stub import ResponsesChatStub, response_message
 from tests.support_program_evidence.test_agent import answer_request, valid_selection
 from pipelines.flows.evaluation.capture import evaluate_capture
-from govbiz_evaluation.reports.reporting import write_json
+from support_program_evidence.reports.reporting import write_json
 from assistant_trace_smoke import assistant_trace_examples, verify_assistant_observations
 from evidence_trace_smoke import evidence_trace_examples, verify_evidence_observations
 
@@ -187,8 +187,8 @@ def main():
     wait_ready(os.environ["PREFECT_API_URL"], "/health")
     traces = asyncio.run(search_trace_examples(settings))
     verify_traces(settings, traces)
-    fixture = str(ROOT / "evaluation/support-program-evidence/target-coverage-fixture.json")
-    capture = str(ROOT / "evaluation/support-program-evidence/runs/target-coverage-20260907-v1/capture.json")
+    fixture = str(ROOT / "pipelines/evals/support_program_evidence/datasets/target-coverage-fixture.json")
+    capture = str(ROOT / "pipelines/evals/support_program_evidence/datasets/runs/target-coverage-20260907-v1/capture.json")
     first = evaluate_capture(fixture, capture, capture, str(output / "first"))
     second = evaluate_capture(fixture, capture, capture, str(output / "replay"))
     assert first["evaluation_run_id"] == second["evaluation_run_id"]
