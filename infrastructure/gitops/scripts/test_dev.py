@@ -377,10 +377,11 @@ class DevTests(unittest.TestCase):
         root = dev.REPOSITORY_ROOT
         packages = (root / "pipelines/evals/support_program_evidence",
                     root / "pipelines/flows/support_program_evidence")
+        flow_tests = root / "pipelines/flows/support_program_evidence/tests"
         rules = (root / "infrastructure/llmops/Dockerfile.runner.dockerignore").read_text()
         modules = []
         for package in packages:
-            found = sorted(package.rglob("*.py"))
+            found = sorted(module for module in package.rglob("*.py") if not module.is_relative_to(flow_tests))
             self.assertTrue(found, f"The evaluation package must contain Python modules: {package}")
             modules.extend(found)
         for module in modules:
@@ -392,6 +393,17 @@ class DevTests(unittest.TestCase):
                     self.assertTrue(
                         dev.included(relative, rules), relative + " is excluded from the runner context"
                     )
+
+    def test_runner_build_context_excludes_flow_tests(self):
+        root = dev.REPOSITORY_ROOT
+        rules = (root / "infrastructure/llmops/Dockerfile.runner.dockerignore").read_text()
+        flow_tests = root / "pipelines/flows/support_program_evidence/tests"
+        test_files = sorted(flow_tests.glob("test_*.py"))
+        self.assertTrue(test_files, "The flow test directory must contain tests")
+        for path in (flow_tests, *test_files):
+            relative = path.relative_to(root).as_posix()
+            with self.subTest(path=relative):
+                self.assertFalse(dev.included(relative, rules), relative + " is included in the runner context")
 
 
     def test_runner_build_context_includes_registered_evaluation_inputs(self):
