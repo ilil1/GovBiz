@@ -569,7 +569,7 @@ Evidently 원본 보고서는 기존 점수 분포와 함께 같은 사례에서
 AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
 저장소 루트에서 `uv sync --project pipelines --locked --extra dev`으로 설치합니다.
 평가 계산은 `pipelines/evals/support_program_evidence/`에, Prefect 순서·재시도·등록과 Langfuse 전송은 `pipelines/flows/support_program_evidence/`에 있습니다.
-두 범위는 `uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/tests pipelines/tests`로 함께 검증합니다.
+두 범위는 `uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests`로 함께 검증합니다.
 [개발 서버·무료 검증·실행 명령](../../../../infrastructure/llmops/README.md)에 구성과 제한 사항을 정리했습니다.
 
 기존 `--execute`는 Langfuse를 명시적으로 활성화한 경우 실제 사례의 `traceId`와
@@ -612,7 +612,7 @@ Prefect에서는 실행 준비의 `validate-evaluation-inputs`, 새 응답 생�
 pipelines/.venv/bin/python -m support_program_evidence.evaluators.evaluate
 
 # 테스트: 실제 Agent/SDK 경로도 HTTP 스텁으로만 검증하며 외부 호출 없음
-pipelines/.venv/bin/python -m pytest pipelines/evals/tests pipelines/tests
+pipelines/.venv/bin/python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests
 ```
 
 실제 모델 평가를 선택한 경우에만 아래 명령을 실행합니다. `OPENAI_API_KEY`는 기존 보안 환경변수 주입

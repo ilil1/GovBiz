@@ -1079,7 +1079,7 @@ CI는 성공했고 GovBiz·[LLMOps CI](https://github.com/ilil1/SKN34-4th-1Team/
 
 명령은 저장소 루트에서 `pipelines/.venv/bin/python -m pytest` 뒤에 각각
 `infrastructure/llmops/test_cancellation_smoke.py -q`,
-`pipelines/tests/test_rag_live.py -q`를 붙여 실행했다.
+`pipelines/flows/support_program_evidence/tests/test_rag_live.py -q`를 붙여 실행했다.
 CI는 기존 LLMOps 검사기 테스트 및 GovBiz의 전체 평가 도구 테스트가 두 파일을 포함한다.
 
 선행 `67859d2`의 GovBiz·Ops·Catalog·Infra CI는 성공했고,

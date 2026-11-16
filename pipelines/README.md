@@ -17,7 +17,8 @@ pipelines/
 │   │   ├── flows.py                 # Ops 요청 검증·실행·복구 순서
 │   │   ├── capture.py, rag.py       # 고정 근거·RAG 평가 흐름
 │   │   ├── tasks.py                 # Prefect 작업과 재시도 정책
-│   │   └── clients.py               # Langfuse 점수 전송·저장 확인
+│   │   ├── clients.py               # Langfuse 점수 전송·저장 확인
+│   │   └── tests/                   # 실행 순서·실패·복구 및 전용 Prefect 테스트 설정
 │   ├── catalog_ingestion/README.md   # 추후 검토 후 개발 예정
 │   └── daily_report/README.md       # 추후 검토 후 개발 예정
 ├── evals/                           # 독립 설치되는 평가 기능
@@ -31,13 +32,16 @@ pipelines/
 │   │   ├── integrations/            # 모델 호출과 예산 연계
 │   │   └── preparation/             # 평가 자료 준비 및 검증
 │   └── tests/                       # 평가 기능 테스트
-└── tests/                           # 실행 순서·실패·복구 검증
+└── tests/                           # 공통 패키지 구조·설치·리소스 계약 검증
 ```
 
 평가 엔진과 파이프라인은 AI 서비스의 `app`이나 Ops의 `apps`를 import하지 않는다.
 공유 코드는 별도 패키지를 설치해 사용하고, Ops의 예산 승인·정산은 계속 HTTP API로
 요청한다. Prefect·Langfuse·Ops 연결도 운영 시 필요한 외부 시스템 의존성이다.
 평가 엔진은 Prefect나 `pipelines`를 가져오지 않는다.
+
+실행 코드 테스트와 전용 `conftest.py`는 해당 `flows/<기능>/tests/`에서 관리한다.
+`pipelines/tests/`에는 기능 실행과 무관한 패키지 구조·설치·리소스 계약 테스트를 둔다.
 
 입력 데이터와 과거 `runs/`는 `pipelines/evals/support_program_evidence/datasets/`에서 관리하며 내용을 다시 계산하지 않는다. 이미지 빌드는 승인된
 카탈로그가 참조하는 JSON만 검증해 계약 패키지의 리소스로 묶는다. 설치된 실행기는
@@ -72,7 +76,7 @@ uv run --project pipelines --locked --no-editable govbiz-pipelines
 외부 모델 호출 없는 평가·파이프라인 회귀 검증:
 
 ```bash
-uv run --project pipelines --locked --no-editable --extra dev python -m pytest pipelines/evals/tests pipelines/tests
+uv run --project pipelines --locked --no-editable --extra dev python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests
 ```
 
 AI HTTP 앱과의 통합 검증에는 테스트 전용 의존성 그룹을 별도로 설치한다.

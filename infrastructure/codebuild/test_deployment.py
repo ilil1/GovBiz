@@ -204,7 +204,7 @@ class DocumentTest(unittest.TestCase):
     def test_evaluation_and_pipeline_tests_use_the_locked_pipeline_environment(self):
         script = Path(__file__).with_name('verify-backend.sh').read_text()
         command = ('uv run --project pipelines --locked --no-editable --extra dev python -m pytest '
-                   'pipelines/evals/tests pipelines/tests')
+                   'pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests')
         # The AI subshell must finish before repository-relative pipeline paths are used.
         prepare = 'python3 infrastructure/llmops/bundle_runner_inputs.py'
         self.assertIn('\n)\n' + prepare + '\n' + command + '\n', script)

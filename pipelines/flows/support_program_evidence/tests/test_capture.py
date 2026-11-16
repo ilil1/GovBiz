@@ -12,7 +12,7 @@ from pipelines.flows.support_program_evidence import capture
 from support_program_evidence.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 
-HERE = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets"
+HERE = Path(__file__).resolve().parents[4] / "pipelines/evals/support_program_evidence/datasets"
 FIXTURE = HERE / "target-coverage-fixture.json"
 CAPTURE = HERE / "runs/target-coverage-20260907-v1/capture.json"
 

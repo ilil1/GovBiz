@@ -41,7 +41,7 @@ govbiz-evaluation-contracts = { path = "../packages/govbiz-evaluation-contracts"
 
 [tool.pytest.ini_options]
 addopts = "-q"
-testpaths = ["tests"]
+testpaths = ["tests", "flows/support_program_evidence/tests"]
 
 [project.scripts]
 govbiz-pipelines = "pipelines.serve:main"

@@ -119,7 +119,8 @@ def test_installed_package_omits_previous_pipeline_import_path(tmp_path):
             sys.executable, "-I", "-c",
             'import importlib.util; assert importlib.util.find_spec("pipelines.evaluation") is None; '
             'assert importlib.util.find_spec("pipelines.flows.evaluation") is None; '
-            'assert importlib.util.find_spec("pipelines.flows.support_program_evidence.flows") is not None',
+            'assert importlib.util.find_spec("pipelines.flows.support_program_evidence.flows") is not None; '
+            'assert importlib.util.find_spec("pipelines.flows.support_program_evidence.tests") is None',
         ],
         cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
     )

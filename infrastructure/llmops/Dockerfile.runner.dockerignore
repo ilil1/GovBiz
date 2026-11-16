@@ -91,6 +91,7 @@ pipelines/evals/support_program_evidence/datasets/runs/official-flow-*
 **/.pytest_cache
 **/.ruff_cache
 pipelines/tests
+pipelines/flows/*/tests
 **/_inputs
 **/_inputs.build
 **/*.egg-info

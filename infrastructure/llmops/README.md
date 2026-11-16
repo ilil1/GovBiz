@@ -965,7 +965,7 @@ uv run --project ../../pipelines --locked --extra dev python -m pytest \
   ../../infrastructure/llmops/test_search_trace_smoke.py
 uv run --project ../../pipelines --locked --extra dev python -m pytest \
   ../../pipelines/evals/tests/test_evaluate.py \
-  ../../pipelines/tests/test_execution_spec.py
+  ../../pipelines/flows/support_program_evidence/tests/test_execution_spec.py
 ```
 
 Core는 JDK 21에서 `SupportProgramEvidenceTracingTest`, 기존 근거 Service·Facade·Client,
@@ -1146,7 +1146,7 @@ uv run --project ../../pipelines --locked --extra dev python -m pytest \
   tests/test_config.py tests/test_bootstrap.py tests/test_container_image_contract.py \
   tests/support_program_evidence/test_agent.py tests/support_program_evidence/test_tracing.py tests/test_search_tracing.py \
   ../../infrastructure/llmops/test_search_trace_smoke.py \
-  ../../pipelines/evals/support_program_evidence/datasets ../../pipelines/tests
+  ../../pipelines/evals/support_program_evidence/datasets ../../pipelines/tests ../../pipelines/flows/support_program_evidence/tests
 ```
 
 [GovBiz CI](../../.github/workflows/ci.yml)는 기존 전체 AI 검증과 평가 도구 무료 테스트를 유지한다.
@@ -1283,7 +1283,7 @@ C2는 실행기가 정산 전에 서명된 사용량 증거를 저장하고, 운
   `makemigrations --check --dry-run`도 확인했다. 테스트 DB·컨테이너·네트워크만 정리했다.
 - `backend/ai-service`에서 `uv run --project ../../pipelines --locked --no-sync --extra dev python -m pytest`
   `../../pipelines/evals/tests/{test_budget_client,test_evaluate}.py`와
-  `../../pipelines/tests/{test_ops_flow,test_execution_spec}.py`:
+  `../../pipelines/flows/support_program_evidence/tests/{test_ops_flow,test_execution_spec}.py`:
   **126개** 통과. 모델 HTTP는 대역이며 정산 실패 후 증거 보존, 미확인 응답의 증거 미생성도 확인했다.
 - `../../infrastructure/llmops/test_cancellation_smoke.py`: **51개** 통과. 로컬 HTTP 대역의 소켓을
   허용한 환경에서 실행했으며 외부 모델 전송은 없었다.
@@ -1586,7 +1586,7 @@ Ops는 Python 3.12의 검사 컨테이너와 격리 MySQL 8.4를 사용했다. �
 uv run --locked python manage.py test apps.evaluations.test_quality apps.evaluations.test_reviews apps.evaluations.test_case_reviews apps.evaluations.test_baselines apps.evaluations.test_execution_spec --noinput
 
 # backend/ai-service: 고정된 평가 의존성을 설치한 환경
-uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/tests/test_execution_spec.py ../../pipelines/tests/test_ops_flow.py ../../pipelines/tests/test_recovery.py -q
+uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/flows/support_program_evidence/tests/test_execution_spec.py ../../pipelines/flows/support_program_evidence/tests/test_ops_flow.py ../../pipelines/flows/support_program_evidence/tests/test_recovery.py -q
 
 # frontend/web
 pnpm test src/App.ops.test.tsx
