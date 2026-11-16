@@ -105,7 +105,8 @@ class RunnerSourceTests(unittest.TestCase):
             if line.strip() and not line.lstrip().startswith("#")
         }
         self.assertIn("**", rules)
-        for excluded in ("**/.venv", "**/.pytest_cache", "**/.ruff_cache", "pipelines/tests"):
+        for excluded in ("**/.venv", "**/.pytest_cache", "**/.ruff_cache", "pipelines/tests",
+                         "pipelines/flows/support_program_evidence/tests"):
             self.assertIn(excluded, rules)
         # Dockerfiles and their ignore files are sent by the builder implicitly.
         for name in set(publish.RUNNER_PATHS) - {

@@ -1,11 +1,12 @@
 """Installed artifacts must reject changed code or evidence before any paid work."""
 
-from importlib.metadata import distribution
+from importlib.metadata import distributions
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import sysconfig
 import textwrap
 
 import pytest
@@ -137,7 +138,10 @@ PROBE = textwrap.dedent("""
 def test_installed_artifact_changes_fail_before_budget_or_model(tmp_path, changed):
     installed = tmp_path / "installed"
     for name, package in PACKAGES.items():
-        metadata = distribution(name)
+        # The pipeline working directory may contain build-generated egg-info.
+        # Inspect the environment's installed wheel, not source metadata on sys.path.
+        metadata = next(distributions(name=name, path=[sysconfig.get_path("purelib")]), None)
+        assert metadata is not None, f"{name} must be installed in the active environment"
         files = {str(path) for path in metadata.files or ()}
         source = Path(metadata.locate_file(package)).resolve()
         assert package + "/__init__.py" in files and source.is_dir(), (

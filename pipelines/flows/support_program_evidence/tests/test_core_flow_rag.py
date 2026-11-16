@@ -10,7 +10,7 @@ from support_program_evidence.preparation import core_flow_rag as importer
 import pytest
 from govbiz_evaluation_contracts import execution_spec
 
-RUN = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2"
+RUN = Path(__file__).resolve().parents[4] / "pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2"
 
 
 @pytest.fixture
@@ -317,6 +317,6 @@ def test_imported_capture_reaches_ops_pandera_evidently_and_score_contract(
     assert len(scores) == 16
     assert all("session_id" in score and "trace_id" not in score for score in scores)
 
-SOURCE_ROOT = Path(__file__).resolve().parents[2]
+SOURCE_ROOT = Path(__file__).resolve().parents[4]
 CORE_FIXTURE = SOURCE_ROOT / "backend/core-service/src/test/resources/support-program-evidence/official-sources.json"
 from govbiz_evaluation_contracts.resources import source_path

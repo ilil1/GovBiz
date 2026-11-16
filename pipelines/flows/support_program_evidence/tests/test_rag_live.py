@@ -21,7 +21,7 @@ from support_program_evidence.integrations.budget_client import BudgetClient, Bu
 
 DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
-HERE = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets"
+HERE = Path(__file__).resolve().parents[4] / "pipelines/evals/support_program_evidence/datasets"
 
 
 def parameters(dataset=DATASET, capture=CAPTURE):
