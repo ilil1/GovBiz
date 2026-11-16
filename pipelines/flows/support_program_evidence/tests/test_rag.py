@@ -21,7 +21,7 @@ DATASET = "rag-synthetic-multichunk-v1"
 CAPTURE = "rag-synthetic-capture-v1"
 
 
-EVIDENCE = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets"
+EVIDENCE = Path(__file__).resolve().parents[4] / "pipelines/evals/support_program_evidence/datasets"
 
 
 def parameters(mode="replay", recovery=None, *, dataset=DATASET, capture=CAPTURE):

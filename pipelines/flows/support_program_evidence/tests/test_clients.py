@@ -1,5 +1,6 @@
 """Langfuse 재전송의 점수 ID 안정성과 저장 재조회를 검증한다."""
 
+from contextlib import nullcontext
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,9 +11,15 @@ from pipelines.flows.support_program_evidence import clients, tasks
 from support_program_evidence.reports import reporting
 from govbiz_ai_runtime.config import LangfuseSettings
 
-HERE = Path(__file__).resolve().parents[2] / "pipelines/evals/support_program_evidence/datasets"
+HERE = Path(__file__).resolve().parents[4] / "pipelines/evals/support_program_evidence/datasets"
 FIXTURE = HERE / "target-coverage-fixture.json"
 CAPTURE = HERE / "runs/target-coverage-20260907-v1/capture.json"
+
+
+@pytest.fixture(autouse=True)
+def isolated_http_transport(monkeypatch):
+    # Langfuse is mocked below; do not depend on local proxy configuration.
+    monkeypatch.setattr(clients.httpx, "Client", lambda **_: nullcontext(object()))
 
 
 def test_score_retry_uses_stable_ids_without_inventing_model_traces(monkeypatch):

@@ -28,7 +28,7 @@ def runner(monkeypatch, tmp_path):
         names.add(EVIDENCE + dataset["fixture"])
         names.update(EVIDENCE + capture["path"] for capture in dataset["captures"])
     for name in names:
-        source_root = Path(__file__).resolve().parents[2]
+        source_root = Path(__file__).resolve().parents[4]
         destination = root / source_path(name, source_root).relative_to(source_root)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source_path(name), destination)

@@ -10,6 +10,35 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_default_pytest_discovers_common_and_flow_tests(tmp_path):
+    (tmp_path / "pytest.ini").write_bytes((ROOT / "pipelines/pytest.ini").read_bytes())
+    paths = ("tests/test_layout.py", "flows/support_program_evidence/tests/test_ops_flow.py")
+    for name in paths:
+        assert (ROOT / "pipelines" / name).is_file()
+        sample = tmp_path / name
+        sample.parent.mkdir(parents=True, exist_ok=True)
+        sample.write_text("def test_discovery():\n    pass\n")
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert all(name in completed.stdout for name in paths)
+
+
+def test_installed_pipeline_does_not_include_flow_tests(tmp_path):
+    script = (
+        "from pathlib import Path; "
+        "import pipelines.flows.support_program_evidence as flow; "
+        "assert not (Path(flow.__file__).parent / 'tests').exists()"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", script],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 @pytest.mark.parametrize("module", ["reporting", "rag_reporting"])
 def test_reporting_runs_without_prefect_or_pipelines(module, tmp_path):
     script = r'''

@@ -803,7 +803,7 @@ Ops의 장시간 평가는 HTTP 요청 밖에서 상시 `serve(limit=1)` 실행�
 ```bash
 # backend/ai-service에서 실행
 uv run --locked --extra dev python -m pytest tests/support_program_evidence
-uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/evals/tests ../../pipelines/tests
+uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/evals/tests ../../pipelines/tests ../../pipelines/flows/support_program_evidence/tests
 ```
 
 공통 호출·설정·초기화 변경 시 관련 소비자 테스트를 추가한다. SDK·서버 호환성은 합성 요청 및 HTTP 스텁으로 검증하고, 실제 Langfuse에서 trace 조회까지 별도로 확인한다. 콜백 호출만 확인한 단위 테스트를 서버 저장 성공으로 간주하지 않는다.
