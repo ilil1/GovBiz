@@ -101,7 +101,7 @@ uv run --project pipelines --locked python -m support_program_evidence.preparati
   --run-dir pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2 \
   --fixture backend/core-service/src/test/resources/support-program-evidence/official-sources.json
 
-uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/tests
+uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/support_program_evidence/tests
 ```
 
 평가 도구 전체 **118개 테스트 통과**로 기존·신규 가상 캡처와 공식 v1/v2를 함께 재검사했습니다.

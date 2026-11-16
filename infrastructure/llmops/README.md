@@ -964,7 +964,7 @@ uv run --project ../../pipelines --locked --extra dev python -m pytest \
   tests/support_program_evidence/test_rag_tracing.py \
   ../../infrastructure/llmops/test_search_trace_smoke.py
 uv run --project ../../pipelines --locked --extra dev python -m pytest \
-  ../../pipelines/evals/tests/test_evaluate.py \
+  ../../pipelines/evals/support_program_evidence/tests/test_evaluate.py \
   ../../pipelines/flows/support_program_evidence/tests/test_execution_spec.py
 ```
 
@@ -1282,7 +1282,7 @@ C2는 실행기가 정산 전에 서명된 사용량 증거를 저장하고, 운
   `test_budget_cleanup`: **55개** 통과(추가 회귀 재실행은 중복 합산하지 않음). `manage.py check` 및
   `makemigrations --check --dry-run`도 확인했다. 테스트 DB·컨테이너·네트워크만 정리했다.
 - `backend/ai-service`에서 `uv run --project ../../pipelines --locked --no-sync --extra dev python -m pytest`
-  `../../pipelines/evals/tests/{test_budget_client,test_evaluate}.py`와
+  `../../pipelines/evals/support_program_evidence/tests/{test_budget_client,test_evaluate}.py`와
   `../../pipelines/flows/support_program_evidence/tests/{test_ops_flow,test_execution_spec}.py`:
   **126개** 통과. 모델 HTTP는 대역이며 정산 실패 후 증거 보존, 미확인 응답의 증거 미생성도 확인했다.
 - `../../infrastructure/llmops/test_cancellation_smoke.py`: **51개** 통과. 로컬 HTTP 대역의 소켓을
@@ -1308,7 +1308,7 @@ migration 정합성, Compose 구문과 두 서비스 이미지 빌드도 확인�
 (`work/llmops-live-feature-replay-verification.json`, 요청 `7068d286-e16d-4594-9a48-b6d86d4dadf8`).
 브라우저에서 새 응답 생성 선택·자료별 1회/6회 예산·비활성화 상태를 확인했다.
 구현 당시에는 OpenAI 키와 별도 실행 승인이 없어 유료 호출 없이 검증했다. 이후 승인된 실제 호출 결과는 다음 절에 기록한다.
-변경된 평가 테스트는 기존 GovBiz CI의 `pipelines/evals/tests` 전체 테스트에 포함된다.
+변경된 평가 테스트는 기존 GovBiz CI의 `pipelines/evals/support_program_evidence/tests` 전체 테스트에 포함된다.
 이 기록은 로컬 검증 결과이며, 원격 CI 통과나 운영 배포 완료를 의미하지 않는다.
 
 

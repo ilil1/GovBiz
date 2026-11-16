@@ -91,9 +91,9 @@ C01 문서의 수동 조건 입력 UI와 개발 전략의 최초 UI 계획은 �
 | [신청 문서 작성 도우미 설계](application-preparation-design.md) | skn-89 최초 검수 기준과 skn-96 기업마당 공고 기반 공식 첨부·문항 발견, 작성 보조 계약 |
 | [중복 지원·수혜 검토 설계](duplicate-support-review-design.md) | skn-59 입력·실행 API, 공식 첨부 수집·파싱·단일 Agent·원문/결과 보존과 검증·한계 |
 | [중복 검토 공식 근거·사례](../evaluation/combination-review/README.md) | 4-1 창업도약패키지 원문·인용·AI 작성 사례·사람 검수표와 무료 무결성 검사 |
-| [실데이터 평가 결과·이어받기](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md) | 고정 스냅샷·판정 원표·3단계 기준선·4단계 전후 비교와 API 없는 재현 |
-| [검색 평가 도구](../evaluation/support-program-search/README.md) | 가상 공고 회귀 평가, 실제 후보·최종 추천 캡처와 지표 계산 |
-| [Elasticsearch 독립 비교 실험](../evaluation/support-program-search/elasticsearch/README.md) | 고정 스냅샷의 키워드·Standard BM25·Nori BM25 비교와 API 없는 보고서 재검증 |
+| [실데이터 평가 결과·이어받기](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/README.md) | 고정 스냅샷·판정 원표·3단계 기준선·4단계 전후 비교와 API 없는 재현 |
+| [검색 평가 도구](../pipelines/evals/support_program_search/README.md) | 가상 공고 회귀 평가, 실제 후보·최종 추천 캡처와 지표 계산 |
+| [Elasticsearch 독립 비교 실험](../pipelines/evals/support_program_search/elasticsearch/README.md) | 고정 스냅샷의 키워드·Standard BM25·Nori BM25 비교와 API 없는 보고서 재검증 |
 | [RAG 검수·답변 평가](../pipelines/evals/support_program_evidence/datasets/README.md) | 5단계 인용 오류 수정, 가상 근거 평가·공식 HTML 전체 경로 검증, API 없는 기록 재검사 |
 | [6단계 다중 제공처 준비](support-program-multi-source-preparation.md) | API 없는 제공처별 준비 상태·검색 범위·복구 실패 격리·K-Startup URL/RAG 화면 준비와 남은 연동 범위 |
 | [C01 기업 조건 검색](company-conditions-search.md) | 익명 조건 입력·적용·초기화, POST 검색 반영, 검증 결과와 후속 범위 |
@@ -105,7 +105,7 @@ C01 문서의 수동 조건 입력 UI와 개발 전략의 최초 UI 계획은 �
 | [지역 충돌 판정·Fast 상시 설정](region-conflict-fast-20260908.md) | 서울·안산 충돌과 실제 이전 예외 구분, 고정 회귀 검사·공개 공고 재검사·배포 기록 |
 | [지역 자격 범위·근거 개선](region-eligibility-scope-fix.md) | 상·하위 소재지 구분, 지역을 뒷받침하는 인용 선택, 합성 지역 평가와 실제 검증 |
 | [검색문·관련도·대화 초기화 개선](search-relevance-v5-fix.md) | 시스템 검색어 오염 제거, v5 관련도·자격 분리, 새 검색·현재 조건 표시, 검증과 한계 |
-| [판정·검토 도구](../evaluation/support-program-search/review/README.md) | AI-only·혼합·사람 검토 모드 선택과 출처 관리 |
+| [판정·검토 도구](../pipelines/evals/support_program_search/review/README.md) | AI-only·혼합·사람 검토 모드 선택과 출처 관리 |
 | [Agent 모듈 구조](../backend/ai-service/docs/agent-structure.md) | Agent의 책임과 기능 추가 기준 |
 | [기능 확장 안내](customization-guide.md) | 새 기능을 추가할 때의 계층·계약·검증 순서 |
 | [SampleItem 예제 계약](sample-item-contract.md) | 계층 학습용 예제 API |

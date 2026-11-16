@@ -210,7 +210,7 @@ jobs:
 
       - name: Test evidence evaluation tools without model calls
         working-directory: .
-        run: uv run --project pipelines --locked --extra dev --group integration --no-editable python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests backend/ai-service/integration
+        run: uv run --project pipelines --locked --extra dev --group integration --no-editable python -m pytest pipelines/evals/support_program_evidence/tests pipelines/tests pipelines/flows/support_program_evidence/tests backend/ai-service/integration
 
       - name: Test conversation evaluation cases and replay tools without model calls
         run: uv run --locked --extra dev python -m pytest ../../evaluation/support-program-conversation
@@ -226,26 +226,26 @@ jobs:
         run: python -B -m unittest discover -s ../../infrastructure/release -p 'test_*.py'
 
       - name: Validate retrieval evaluation fixture and metrics
-        working-directory: evaluation/support-program-search
-        run: ../../backend/ai-service/.venv/bin/python -m unittest discover
+        working-directory: pipelines/evals/support_program_search
+        run: ../../../backend/ai-service/.venv/bin/python -m unittest discover -s tests
 
       - name: Test offline review tools
-        working-directory: evaluation/support-program-search
-        run: python -B -m unittest discover -s review -p 'test_*.py'
+        working-directory: pipelines/evals/support_program_search
+        run: python -B -m unittest discover -s tests/review -p 'test_*.py'
 
       - name: Verify shared evaluation run without model calls
-        working-directory: evaluation/support-program-search
+        working-directory: pipelines/evals/support_program_search
         run: python -B review/verify-shared-run.py --run-dir runs/support-program-catalog-20260906-v1 --with-capture
 
       - name: Recheck saved lexical comparison without Elasticsearch or model calls
-        working-directory: evaluation/support-program-search
+        working-directory: pipelines/evals/support_program_search
         run: >-
           python -B compare_elasticsearch.py
           --fixture runs/support-program-catalog-20260906-v1/review-final-v1/fixture-labeled.json
           --verify-report runs/elasticsearch-nori-20260912-v1/report.json
 
       - name: Recheck expanded Korean questions without model calls
-        working-directory: evaluation/support-program-search
+        working-directory: pipelines/evals/support_program_search
         run: >-
           python -B compare_korean_queries.py
           --fixture runs/support-program-catalog-20260906-v1/review-final-v1/fixture-labeled.json

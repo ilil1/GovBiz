@@ -3036,7 +3036,7 @@ Ops 명세·실행기 검증·웹 동의·migration·CI 양쪽 계약을 함께 
 불필요한 인용, 조건의 AND/OR·예외·제외·근거 부족 등 검토 범주와 지표를 정하고, 자료 확대 시
 [점수 등록](../pipelines/flows/support_program_evidence/clients.py)의 단일 100개 조회도 페이지 처리로 검증한다.
 
-전체 RAG는 기존 [검색 평가](../evaluation/support-program-search/README.md)와 근거 답변 도구를 재사용한다.
+전체 RAG는 기존 [검색 평가](../pipelines/evals/support_program_search/README.md)와 근거 답변 도구를 재사용한다.
 문서 snapshot·청킹/임베딩/재정렬 버전과 검색 후보·순위·최종 인용을 고정하고,
 `Core → 원문/청킹 → 색인·검색 → 답변`의 추적 문맥을 연결한다. 두 span만 허용하는 현재 export
 정책도 필요한 범위만 확장한다. 검색 실패와 생성 실패, 고정 근거 점수와 전체 RAG 점수를 분리한다.

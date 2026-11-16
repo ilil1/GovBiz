@@ -149,7 +149,8 @@ def test_installed_evaluation_package_uses_the_current_name(tmp_path):
             sys.executable, "-I", "-c",
             'import importlib.util; '
             'assert importlib.util.find_spec("govbiz_evaluation") is None; '
-            'assert importlib.util.find_spec("support_program_evidence.evaluators.evaluate") is not None',
+            'assert importlib.util.find_spec("support_program_evidence.evaluators.evaluate") is not None; '
+            'assert importlib.util.find_spec("support_program_evidence.tests") is None',
         ],
         cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False,
     )

@@ -407,7 +407,7 @@ GovBiz/
 
 평가 절차는 입력과 설정 고정, 변경 전후 실행, 결과 및 실패 보존, 지표 재계산, 사례 검토 순서로 진행합니다. 코드 커밋, 질문·원문·프롬프트·설정의 해시, 모델·추론 수준·처리 등급, 기준일, 후보 수, 캐시 사용 여부를 실행 기록에 남깁니다. 한 번에 바꾼 요소와 고정한 요소도 구분합니다.
 
-기존 실행에는 모든 영역에 공통으로 적용할 사전 합의 합격선이 없습니다. 따라서 지표가 좋아졌다는 이유만으로 전체 시스템을 합격 처리하지 않습니다. 후속 평가에서는 개발셋으로 변경을 결정한 뒤, 별도 검증셋과 합격 기준을 실행 전에 확정합니다. 상세 절차는 [검색 평가 도구](../../evaluation/support-program-search/README.md)와 [RAG 평가 도구](../../pipelines/evals/support_program_evidence/datasets/README.md)에 있습니다.
+기존 실행에는 모든 영역에 공통으로 적용할 사전 합의 합격선이 없습니다. 따라서 지표가 좋아졌다는 이유만으로 전체 시스템을 합격 처리하지 않습니다. 후속 평가에서는 개발셋으로 변경을 결정한 뒤, 별도 검증셋과 합격 기준을 실행 전에 확정합니다. 상세 절차는 [검색 평가 도구](../../pipelines/evals/support_program_search/README.md)와 [RAG 평가 도구](../../pipelines/evals/support_program_evidence/datasets/README.md)에 있습니다.
 
 ### 12.3 평가 데이터와 지표 정의
 
@@ -436,10 +436,10 @@ GovBiz/
 
 | 평가·실행일 | 변경 전 | 변경 후 | 판정과 원본 |
 |---|---|---|---|
-| S01 의미 단독 → RRF 결합, 09-06 | 후보 Recall@20 0.50, 최종 Recall@5 0.50, MRR@5 0.50 | 후보 Recall@20 0.75, 최종 Recall@5 0.75, MRR@5 1.00 | 양성 2개 질문에서 개선 관측. 무정답 4개는 양쪽 모두 최종 추천이 빈 결과. [비교 기록](../../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/stage4-v1/README.md) |
-| S02 기존 exact-token → Nori BM25, 09-12 | Hit@1 25/48(52.08%), Hit@5 35/48, Hit@20 39/48, MRR@20 0.6120 | Hit@1 46/48(95.83%), Hit@5·20 48/48, MRR@20 0.9792 | 문장형 Hit@20 8/16 → 16/16. 키워드 후보 진단이며 LLM 최종 추천 평가는 제외. [48문항 보고서](../../evaluation/support-program-search/runs/elasticsearch-korean-queries-20260912-v1/README.md) |
-| S03 Nori v1 → v2, 09-13 | Hit@1 258/300, Hit@20 295/300, MRR@20 0.906111 | Hit@1 268/300, Hit@20 299/300, MRR@20 0.933764 | 기존 누락 5개 중 4개 회복. 9개 질문은 순위 하락, Q041은 계속 누락. [v2 보고서](../../evaluation/support-program-search/runs/lexical-v2-20260913-v1/README.md) |
-| S03 후보 15개·20개 비교, 09-13 | v2 Hit@15 298/300 | v2 Hit@20 299/300 | Q044 제주 음식점 융자 목표가 16위이므로 후보 20개 유지. K=20 결과의 접두부 비교이며 K=15 지연 실측은 아님. [같은 보고서](../../evaluation/support-program-search/runs/lexical-v2-20260913-v1/README.md) |
+| S01 의미 단독 → RRF 결합, 09-06 | 후보 Recall@20 0.50, 최종 Recall@5 0.50, MRR@5 0.50 | 후보 Recall@20 0.75, 최종 Recall@5 0.75, MRR@5 1.00 | 양성 2개 질문에서 개선 관측. 무정답 4개는 양쪽 모두 최종 추천이 빈 결과. [비교 기록](../../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/stage4-v1/README.md) |
+| S02 기존 exact-token → Nori BM25, 09-12 | Hit@1 25/48(52.08%), Hit@5 35/48, Hit@20 39/48, MRR@20 0.6120 | Hit@1 46/48(95.83%), Hit@5·20 48/48, MRR@20 0.9792 | 문장형 Hit@20 8/16 → 16/16. 키워드 후보 진단이며 LLM 최종 추천 평가는 제외. [48문항 보고서](../../pipelines/evals/support_program_search/runs/elasticsearch-korean-queries-20260912-v1/README.md) |
+| S03 Nori v1 → v2, 09-13 | Hit@1 258/300, Hit@20 295/300, MRR@20 0.906111 | Hit@1 268/300, Hit@20 299/300, MRR@20 0.933764 | 기존 누락 5개 중 4개 회복. 9개 질문은 순위 하락, Q041은 계속 누락. [v2 보고서](../../pipelines/evals/support_program_search/runs/lexical-v2-20260913-v1/README.md) |
+| S03 후보 15개·20개 비교, 09-13 | v2 Hit@15 298/300 | v2 Hit@20 299/300 | Q044 제주 음식점 융자 목표가 16위이므로 후보 20개 유지. K=20 결과의 접두부 비교이며 K=15 지연 실측은 아님. [같은 보고서](../../pipelines/evals/support_program_search/runs/lexical-v2-20260913-v1/README.md) |
 
 S01의 dev Q02에서는 관련 공고 2개 중 부산 AX 에이지테크 1개만 후보 3위·최종 1위로 회복했고, 산업융합 규제샌드박스 사업화 공고는 계속 누락됐습니다. **MRR@5 1.00이어도 모든 관련 공고를 찾았다는 뜻은 아닙니다.** 기존에 제외한 10개 질문과 미판정 추천의 품질은 확정하지 않았습니다.
 
@@ -461,8 +461,8 @@ S02의 exact-token은 Python 기준선이며, BM25/Nori와 S03은 로컬 Elastic
 | 실험 | 기록된 결과 | 해석 |
 |---|---|---|
 | 동일 확인 검색 2회 | 42.467초 → 0.484초, 두 응답 동일, 두 번째 임베딩·랭킹 캐시 적중 | 조건 해석 시간을 제외한 확인 검색 왕복. 당시 안산 한정 공고 오추천도 함께 재사용돼 의미 품질 검사는 실패. [검색 지연 기록](../../docs/search-latency-20260908.md#실제-검색-확인) |
-| 일반 처리와 Fast 랭킹 | 성공 4/6 → 6/6, 성공 호출 중앙값 41.097초 → 27.165초 | 공통 성공 4개로 맞추면 41.097초 → 28.617초, 약 30.4% 단축. 실패 2회 → 0회. [원본 비교](../../evaluation/support-program-search/runs/search-latency-20260908-v1/report.json) |
-| 출력 축약 실험 | 성공 3/6, 성공 호출 중앙값 44.775초 | 시간 초과 3회로 개선되지 않아 미채택. 성공 건만 골라 효과를 주장하지 않음. [실행 조건](../../evaluation/support-program-search/runs/search-latency-20260908-v1/README.md) |
+| 일반 처리와 Fast 랭킹 | 성공 4/6 → 6/6, 성공 호출 중앙값 41.097초 → 27.165초 | 공통 성공 4개로 맞추면 41.097초 → 28.617초, 약 30.4% 단축. 실패 2회 → 0회. [원본 비교](../../pipelines/evals/support_program_search/runs/search-latency-20260908-v1/report.json) |
+| 출력 축약 실험 | 성공 3/6, 성공 호출 중앙값 44.775초 | 시간 초과 3회로 개선되지 않아 미채택. 성공 건만 골라 효과를 주장하지 않음. [실행 조건](../../pipelines/evals/support_program_search/runs/search-latency-20260908-v1/README.md) |
 
 Frontend·Core·AI Service 자동 테스트와 스텁 기반 Compose 검증은 기능·계약·장애 처리를 확인하는 선행 검증입니다. 통과 개수를 검색·RAG 정확도로 환산하지 않습니다. 실행 기준은 [CI 정의](../../.github/workflows/ci.yml), [통합 검증 안내](../../infrastructure/README.md), 각 실행 보고서에 따릅니다.
 
@@ -472,8 +472,8 @@ Frontend·Core·AI Service 자동 테스트와 스텁 기반 Compose 검증은 �
 
 ```bash
 # Nori v2의 저장 입력·순위·집계 검증(Python 3.11 이상)
-python3 -B evaluation/support-program-search/compare_lexical_v2.py \
-  --verify-report evaluation/support-program-search/runs/lexical-v2-20260913-v1/report.json
+python3 -B pipelines/evals/support_program_search/compare_lexical_v2.py \
+  --verify-report pipelines/evals/support_program_search/runs/lexical-v2-20260913-v1/report.json
 
 # 공식 HTML RAG 캡처의 요청·응답·인용 경로 검증
 uv run --project pipelines --locked python -m support_program_evidence.preparation.verify_flow \

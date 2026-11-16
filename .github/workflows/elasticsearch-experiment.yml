@@ -23,14 +23,15 @@ jobs:
 
       - name: Build and start isolated Elasticsearch
         run: |
-          docker compose --env-file /dev/null -f evaluation/support-program-search/elasticsearch/compose.yaml config --quiet
-          docker compose --env-file /dev/null -f evaluation/support-program-search/elasticsearch/compose.yaml up --build -d --wait --wait-timeout 180
+          docker compose --env-file /dev/null -f pipelines/evals/support_program_search/elasticsearch/compose.yaml config --quiet
+          docker compose --env-file /dev/null -f pipelines/evals/support_program_search/elasticsearch/compose.yaml up --build -d --wait --wait-timeout 180
 
       - name: Test real Nori indexing and search without model calls
         env:
           LOCAL_ES_INTEGRATION_URL: http://127.0.0.1:19200
-        run: python -B -m unittest discover -s evaluation/support-program-search -p 'test_compare_*.py'
+        working-directory: pipelines/evals/support_program_search
+        run: python -B -m unittest discover -s tests -p 'test_compare_*.py'
 
       - name: Stop only the disposable experiment
         if: always()
-        run: docker compose --env-file /dev/null -f evaluation/support-program-search/elasticsearch/compose.yaml down
+        run: docker compose --env-file /dev/null -f pipelines/evals/support_program_search/elasticsearch/compose.yaml down

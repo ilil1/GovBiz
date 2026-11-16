@@ -611,7 +611,7 @@ Core는 반환된 ID가 허용 목록에 있고 내용 해시가 일치하는지
 지원대상·지역의 명백한 불일치를 제외하고 의미 관련성 20점 최소 기준을 통과한 공고를
 최대 5개 반환하며, 적격 공고가 없을 때의 빈 목록은
 정상 성공 응답입니다. 원문 근거 질문은 위의 별도 endpoint이며 이 목록 검색 경로의 동작을 바꾸지 않습니다.
-후보·최종 추천 비교를 위한 [검색 평가 자료와 실행 도구](../evaluation/support-program-search/README.md)를
+후보·최종 추천 비교를 위한 [검색 평가 자료와 실행 도구](../pipelines/evals/support_program_search/README.md)를
 추가했습니다. `evaluation-fixture-export`는 공개 API가 아닌 비웹 실행 프로필이며, 현재 MySQL에서 색인 준비된
 제공처의 `OPEN` 공고를 미라벨 fixture 초안에 기록합니다. `text/contentHash`는 기존 전체 본문과
 카탈로그 지문용이며, `semanticText/semanticContentHash`는 실제 의미 색인 입력입니다. 평가기는 두 쌍의 해시를 검증합니다.

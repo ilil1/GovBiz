@@ -48,7 +48,7 @@ Service에서 검증된 복사 응답을 반환하므로 뒤의 Agent/OpenAI를 
 동일한 4개 성공 사례끼리 비교하면 **41.097 → 28.617초, 약 30.4% 단축**입니다. Fast 전체 범위는
 24.122~31.250초였고, 응답 6개 모두 `priority`로 확인됐습니다. 모든 완료 응답의 입력 캐시 토큰은 0이었습니다.
 토큰·실패·필터 전 20개 판정·최종 추천·입력/프롬프트/schema 해시와 재계산 도구를
-[평가 기록](../evaluation/support-program-search/runs/search-latency-20260908-v1/README.md)에 보존했습니다.
+[평가 기록](../pipelines/evals/support_program_search/runs/search-latency-20260908-v1/README.md)에 보존했습니다.
 
 축약은 내부 ID·필드명·공백을 줄이는 실험이었지만 호출 시간과 실패가 개선되지 않아 미채택했습니다.
 기존 출력 계약과 지침은 그대로 두며 실험 코드/테스트는 평가 폴더에만 보관합니다. 단순히 출력 토큰이
@@ -99,5 +99,5 @@ Service에서 검증된 복사 응답을 반환하므로 뒤의 Agent/OpenAI를 
 - DB 스키마·공고·색인 변경 없음. Core·MySQL·Qdrant·Web은 재시작하지 않음.
 - 반영 전 검색 준비 상태: `SEARCHABLE`, 공고 1,506개, 색인 준비 완료.
 
-실제 확인 검색과 최종 로컬 상태는 [배포 기록](../evaluation/support-program-search/runs/search-latency-20260908-v1/deployment.json),
-[검색 캡처](../evaluation/support-program-search/runs/search-latency-20260908-v1/search/capture.json)에 보관합니다.
+실제 확인 검색과 최종 로컬 상태는 [배포 기록](../pipelines/evals/support_program_search/runs/search-latency-20260908-v1/deployment.json),
+[검색 캡처](../pipelines/evals/support_program_search/runs/search-latency-20260908-v1/search/capture.json)에 보관합니다.

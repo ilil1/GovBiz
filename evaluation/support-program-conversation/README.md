@@ -5,7 +5,7 @@
 
 AI 대화 검색의 조건 해석(`POST /internal/v1/support-program-conversation/interpret`)이 사용자 메시지와 작은 대화
 상태로 상태(`READY`·`CLARIFICATION_REQUIRED`·`ANSWERED`), 조건 변경(`updates`), 확인 질문·안내 종류를 고르는
-동작을 재는 평가 세트와 무료 검증 도구다. 검색 결과 품질은 [검색 평가](../support-program-search/README.md)가 다룬다.
+동작을 재는 평가 세트와 무료 검증 도구다. 검색 결과 품질은 [검색 평가](../../pipelines/evals/support_program_search/README.md)가 다룬다.
 
 - **기대 라벨은 AI(Claude)가 현재 프롬프트·스키마를 기준으로 작성한 기대 동작이다. 사람이 검토한 정답이 아니다**
   (`labelSource: ai-authored-expected-behaviour`, `humanReviewed: false`).

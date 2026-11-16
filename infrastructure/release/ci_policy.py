@@ -72,7 +72,7 @@ def affected_jobs(paths):
         selected[filename].update(jobs or WORKFLOW_JOBS[filename])
 
     for path in paths:
-        if (path in {"README.md", "AGENTS.md", "pipelines/README.md"}
+        if (path in {"README.md", "AGENTS.md", "pipelines/README.md", "pipelines/evals/support_program_search/README.md"}
                 or path.startswith("pipelines/evals/support_program_evidence/datasets/") and path.endswith(".md")
                 or path.startswith(("docs/", "infrastructure/gitops/docs/", "backend/ai-service/docs/"))
                 and path.endswith((".md", ".png", ".jpg", ".svg"))
@@ -128,12 +128,12 @@ def affected_jobs(paths):
         elif path.startswith("infrastructure/gitops/"):
             add("infra-ci.yml")
             add("llmops-ci.yml")
+        elif path.startswith(("evaluation/support-program-search/", "pipelines/evals/support_program_search/")):
+            add("ci.yml", "ai-service")
         elif path.startswith(("infrastructure/llmops/", "evaluation/support-program-evidence/", "pipelines/")):
             add("ci.yml", "ai-service")
             add("ops-ci.yml")
             add("llmops-ci.yml")
-        elif path.startswith("evaluation/support-program-search/"):
-            add("ci.yml", "ai-service")
         else:
             # Includes workflow/policy changes, root lock files and unknown new inputs.
             return {name: set(jobs) for name, jobs in WORKFLOW_JOBS.items()}

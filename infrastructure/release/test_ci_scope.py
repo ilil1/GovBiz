@@ -111,6 +111,19 @@ class AffectedJobsTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(policy.affected_jobs([path])["llmops-ci.yml"], set(policy.WORKFLOW_JOBS["llmops-ci.yml"]))
 
+    def test_search_evaluation_move_keeps_its_independent_validation_scope(self):
+        for path in (
+            "evaluation/support-program-search/evaluate.py",
+            "pipelines/evals/support_program_search/evaluate.py",
+            "pipelines/evals/support_program_search/tests/test_evaluate.py",
+            "pipelines/evals/support_program_search/tests/review/test_review_tools.py",
+        ):
+            with self.subTest(path=path):
+                selected = policy.affected_jobs([path])
+                self.assertEqual(selected["ci.yml"], {"ai-service"})
+                self.assertEqual(selected["ops-ci.yml"], set())
+                self.assertEqual(selected["llmops-ci.yml"], set())
+
     def assert_full(self, paths):
         self.assertEqual(
             policy.affected_jobs(paths),
@@ -124,6 +137,7 @@ class AffectedJobsTests(unittest.TestCase):
             "backend/ai-service/docs/agent-structure.md", "infrastructure/gitops/docs/web-kubernetes.md",
             "pipelines/evals/support_program_evidence/datasets/README.md", "pipelines/evals/support_program_evidence/datasets/runs/README.md",
             "pipelines/README.md",
+            "pipelines/evals/support_program_search/README.md",
         ])
         self.assertEqual(selected["infra-ci.yml"], {"repository", "fork-identity"})
         self.assertTrue(all(not jobs for name, jobs in selected.items() if name != "infra-ci.yml"))

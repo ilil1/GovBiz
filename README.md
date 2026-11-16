@@ -814,7 +814,7 @@ flowchart LR
 의미검색과 BM25는 **제목 → 기관 → 지원대상 → 분야 → 지역 → 신청기간 → 지원내용**의 기존 본문과
 K-Startup 분류를 유지합니다. RRF 순위 계산 변경만으로 기존 벡터를 재생성하지 않으며,
 결합 후 AI 평가에 전달하는 후보는 최대 20건입니다.
-[본문·RRF 비교 실험](evaluation/support-program-search/runs/semantic-focus-20261015-v1/README.md)의 지원 내용 중심 본문은
+[본문·RRF 비교 실험](pipelines/evals/support_program_search/runs/semantic-focus-20261015-v1/README.md)의 지원 내용 중심 본문은
 평가용 비교안이며 운영 적용을 보류했습니다. 해당 수치는 새 본문까지 적용한 16문항의 AI 참조 판정 결과로,
 기존 벡터를 유지하는 이번 RRF 변경의 실측 성능이나 독립적인 품질 검증을 뜻하지 않습니다.
 

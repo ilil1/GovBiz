@@ -274,7 +274,7 @@ Web 첫 실행은 테스트 시작 전 worker timeout이었고 같은 명령의 
 
 ### 운영과 전체 RAG의 완료 증거
 
-전체 RAG는 [기존 검색 평가](../evaluation/support-program-search/README.md),
+전체 RAG는 [기존 검색 평가](../pipelines/evals/support_program_search/README.md),
 [실제 흐름 실행](../backend/ai-service/integration/serve_flow.py),
 [흐름 검증](../pipelines/evals/support_program_evidence/preparation/verify_flow.py)을 재사용한다.
 검색 후보·필터·순위·근거 선택·답변 지표를 분리하고 index/문서 snapshot·chunker/embedding/reranker 버전을
@@ -803,7 +803,7 @@ Ops의 장시간 평가는 HTTP 요청 밖에서 상시 `serve(limit=1)` 실행�
 ```bash
 # backend/ai-service에서 실행
 uv run --locked --extra dev python -m pytest tests/support_program_evidence
-uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/evals/tests ../../pipelines/tests ../../pipelines/flows/support_program_evidence/tests
+uv run --project ../../pipelines --locked --extra dev python -m pytest ../../pipelines/evals/support_program_evidence/tests ../../pipelines/tests ../../pipelines/flows/support_program_evidence/tests
 ```
 
 공통 호출·설정·초기화 변경 시 관련 소비자 테스트를 추가한다. SDK·서버 호환성은 합성 요청 및 HTTP 스텁으로 검증하고, 실제 Langfuse에서 trace 조회까지 별도로 확인한다. 콜백 호출만 확인한 단위 테스트를 서버 저장 성공으로 간주하지 않는다.

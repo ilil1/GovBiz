@@ -30,16 +30,16 @@ PY
   uv build
 )
 python3 infrastructure/llmops/bundle_runner_inputs.py
-uv run --project pipelines --locked --no-editable --extra dev python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests
+uv run --project pipelines --locked --no-editable --extra dev python -m pytest pipelines/evals/support_program_evidence/tests pipelines/tests pipelines/flows/support_program_evidence/tests
 PYTHONPATH=backend/ai-service uv run --project pipelines --locked --no-editable --extra dev --group integration python -m pytest backend/ai-service/integration
 cleanup_qdrant
 trap - EXIT
 python3 -B -m unittest discover -s infrastructure/scripts -p 'test_*.py'
 python3 -B -m unittest discover -s infrastructure/codebuild -p 'test_*.py'
 (
-  cd evaluation/support-program-search
-  ../../backend/ai-service/.venv/bin/python -m unittest discover
-  python3 -B -m unittest discover -s review -p 'test_*.py'
+  cd pipelines/evals/support_program_search
+  ../../../backend/ai-service/.venv/bin/python -m unittest discover -s tests
+  python3 -B -m unittest discover -s tests/review -p 'test_*.py'
   python3 -B review/verify-shared-run.py --run-dir runs/support-program-catalog-20260906-v1 --with-capture
   python3 -B compare_elasticsearch.py --fixture runs/support-program-catalog-20260906-v1/review-final-v1/fixture-labeled.json --verify-report runs/elasticsearch-nori-20260912-v1/report.json
   python3 -B compare_korean_queries.py --fixture runs/support-program-catalog-20260906-v1/review-final-v1/fixture-labeled.json --questions runs/elasticsearch-korean-queries-20260912-v1/questions.json --verify-report runs/elasticsearch-korean-queries-20260912-v1/report.json

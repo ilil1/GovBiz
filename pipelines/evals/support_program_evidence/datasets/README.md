@@ -17,7 +17,7 @@
 - `reports/`: 평가 결과를 비교하고 Evidently 보고서를 만듭니다.
 - `integrations/`: 모델 응답 생성과 예산 연결 등 외부 실행을 담당합니다.
 - `preparation/`: 공고 원문 및 평가 자료 검증·준비 도구를 둡니다.
-- `pipelines/evals/tests/`: 평가 패키지 테스트입니다. 등록된 fixture와 `runs/` 기록은 `datasets/`에서 관리합니다.
+- `pipelines/evals/support_program_evidence/tests/`: 평가 패키지 테스트입니다. 등록된 fixture와 `runs/` 기록은 `datasets/`에서 관리합니다.
 
 이전 실행 명세에 저장된 평가 파일의 논리 경로는 보존하되, 실행 시 해시는 이동한 실제
 구현 파일을 기준으로 계산합니다. 실행기와 평가 요청에 사용된 버전이 다르면 기존과 같이
@@ -308,7 +308,7 @@ pipelines/.venv/bin/python -m support_program_evidence.evaluators.rag_evaluate \
 해석해야 합니다. 모든 사례가 실패하면 값은 null입니다. 인용 재현율은 불필요한 인용을 벌점주지 않습니다.
 입력 변조·계약 불일치는 종료 코드 1로 실패하며 점수 보고서를 출력하지 않습니다.
 
-로컬 Python 3.12에서 [무료 테스트](../../../../pipelines/evals/tests/test_rag_evaluate.py) 69건, 합성 캡처 CLI,
+로컬 Python 3.12에서 [무료 테스트](../tests/test_rag_evaluate.py) 69건, 합성 캡처 CLI,
 Ruff 검사·포맷을 확인했습니다. `uv`가 PATH에 없어 기존 AI 가상환경으로 실행했습니다.
 이 최초 계약의 `skn-74 / 4537e5f`는 필수 CI 5개가 성공했습니다. 전체 테스트는 기존
 `.github/workflows/ci.yml`의 `Test evidence evaluation tools without model calls`에서 자동 발견합니다.
@@ -471,7 +471,7 @@ E12 추가 실행에서 모델이 64자리 인용 ID를 63자리로 복사한 �
 
 관련 테스트: [Facade](../../../../backend/core-service/src/test/kotlin/ai/govbiz/core/supportprogram/facade/AiSupportProgramEvidenceFacadeTest.kt),
 [Service](../../../../backend/core-service/src/test/kotlin/ai/govbiz/core/supportprogram/service/evidence/SupportProgramEvidenceServiceTest.kt),
-[AI 근거 기능](../../../../backend/ai-service/tests/support_program_evidence), [평가 도구](../../../../pipelines/evals/tests/test_evaluate.py).
+[AI 근거 기능](../../../../backend/ai-service/tests/support_program_evidence), [평가 도구](../tests/test_evaluate.py).
 
 ## 대상 조건 요약 보완 — 실제 모델 검증 완료
 
@@ -569,7 +569,7 @@ Evidently 원본 보고서는 기존 점수 분포와 함께 같은 사례에서
 AI Service와 같은 Python 3.12를 사용하며, 평가 의존성은
 저장소 루트에서 `uv sync --project pipelines --locked --extra dev`으로 설치합니다.
 평가 계산은 `pipelines/evals/support_program_evidence/`에, Prefect 순서·재시도·등록과 Langfuse 전송은 `pipelines/flows/support_program_evidence/`에 있습니다.
-두 범위는 `uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests`로 함께 검증합니다.
+두 범위는 `uv run --project pipelines --locked --extra dev python -m pytest pipelines/evals/support_program_evidence/tests pipelines/tests pipelines/flows/support_program_evidence/tests`로 함께 검증합니다.
 [개발 서버·무료 검증·실행 명령](../../../../infrastructure/llmops/README.md)에 구성과 제한 사항을 정리했습니다.
 
 기존 `--execute`는 Langfuse를 명시적으로 활성화한 경우 실제 사례의 `traceId`와
@@ -612,7 +612,7 @@ Prefect에서는 실행 준비의 `validate-evaluation-inputs`, 새 응답 생�
 pipelines/.venv/bin/python -m support_program_evidence.evaluators.evaluate
 
 # 테스트: 실제 Agent/SDK 경로도 HTTP 스텁으로만 검증하며 외부 호출 없음
-pipelines/.venv/bin/python -m pytest pipelines/evals/tests pipelines/tests pipelines/flows/support_program_evidence/tests
+pipelines/.venv/bin/python -m pytest pipelines/evals/support_program_evidence/tests pipelines/tests pipelines/flows/support_program_evidence/tests
 ```
 
 실제 모델 평가를 선택한 경우에만 아래 명령을 실행합니다. `OPENAI_API_KEY`는 기존 보안 환경변수 주입

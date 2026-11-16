@@ -37,8 +37,8 @@ MySQL 전체 대상 조회와 ID 허용 목록 전송은 유지한다. 전체 �
   지역·신청 자격의 정확성을 Nori가 보장하지는 않는다. 기존 AI 자격 판정과 원문 확인이 필요하다.
 
 가중치·후보 수를 포함한 24개 조합의 비교와 동점 규칙 선택의 근거·한계는
-[2026-10-15 비교 보고서](../evaluation/support-program-search/runs/rrf-tuning-20261015-v1/README.md)에 기록했다.
-지원 내용 중심 본문·RRF 상수 조합의 실험은 [후속 비교](../evaluation/support-program-search/runs/semantic-focus-20261015-v1/README.md)에 기록했다.
+[2026-10-15 비교 보고서](../pipelines/evals/support_program_search/runs/rrf-tuning-20261015-v1/README.md)에 기록했다.
+지원 내용 중심 본문·RRF 상수 조합의 실험은 [후속 비교](../pipelines/evals/support_program_search/runs/semantic-focus-20261015-v1/README.md)에 기록했다.
 새 본문의 운영 적용은 보류했으므로 해당 수치는 기존 벡터를 유지하는 현재 RRF 변경의 실측 성능이 아니다.
 
 ### 의미검색 본문 전환
@@ -83,7 +83,7 @@ v1 설정 파일과 과거 평가 보고서는 재현용으로 보존하며, 실
 공고의 방문 목적지를 신청 기업의 소재지로 오인해 전국 여행사를 배제하지 않는다.
 
 316개 질문의 전후 결과·순위 하락·남은 누락·재실행 명령은
-[v2 비교 보고서](../evaluation/support-program-search/runs/lexical-v2-20260913-v1/README.md)에 기록한다.
+[v2 비교 보고서](../pipelines/evals/support_program_search/runs/lexical-v2-20260913-v1/README.md)에 기록한다.
 이 자료는 AI 작성 목표 공고 검색 진단이며 전체 관련 공고 Recall이나 최종 추천 정확도가 아니다.
 
 ### v3 약어·동의어 사전 (정의만 준비, 운영 미전환)
@@ -109,7 +109,7 @@ v2처럼 `연구`·`자금` 한 낱말만 있는 공고에 점수를 주지 않�
 운영 기본 이름(v2)을 확인한다. 실제 Nori 분석과 동의어 확장·구분 유지는 CI의 Elasticsearch 통합 테스트
 (`ElasticsearchSupportProgramClientIntegrationTest`의 v3 테스트)가 확인한다. **검색 품질은 미검증이다.**
 316문항 비교(로컬 Elasticsearch, 유료 호출 없음)를 v2 대 v3로 돌려 Hit@20·MRR@20·순위 하락을 확인하기 전에는
-품질이 좋아졌다고 말하지 않는다. 비교 도구 [compare_lexical_v2.py](../evaluation/support-program-search/compare_lexical_v2.py)는
+품질이 좋아졌다고 말하지 않는다. 비교 도구 [compare_lexical_v2.py](../pipelines/evals/support_program_search/compare_lexical_v2.py)는
 v1/v2 보고서 재현용으로 고정돼 있으므로 v3 비교는 새 실행 폴더와 스크립트로 만든다.
 
 ### v2 → v3 전환 절차 (승인 후 정비 시간에만)
@@ -211,7 +211,7 @@ Docker 메모리가 작은 개발 환경에서는 Core 전체 테스트와 Compo
 Core 테스트는 `JAVA_TOOL_OPTIONS='-Dspring.test.context.cache.maxSize=2'`를 해당 명령에만 지정해
 보관하는 Spring 테스트 환경·MySQL 컨테이너 수를 줄일 수 있다. 테스트를 생략하거나 production 설정을 바꾸는 옵션은 아니다.
 
-[48개 질문 진단](../evaluation/support-program-search/runs/elasticsearch-korean-queries-20260912-v1/README.md)은
+[48개 질문 진단](../pipelines/evals/support_program_search/runs/elasticsearch-korean-queries-20260912-v1/README.md)은
 **16개 목표 공고 × 3개 문장 형태의 AI 작성 진단**이다. 사람 검증 정확도나 전체 Recall이 아니다.
 기존 실험 보고서·라벨은 변경하지 않는다. 이번 통합 검증을 실제 AI 최종 추천 품질 측정으로 표현하지 않으며,
 운영 하이브리드 변경 전후의 실데이터 평가와 전체 응답시간 비교는 별도 승인·측정이 필요하다.
@@ -235,7 +235,7 @@ Core 테스트는 `JAVA_TOOL_OPTIONS='-Dspring.test.context.cache.maxSize=2'`를
 - 최신 코드 JDK 21 `clean build`: **1,261건 통과**, 실패·오류·skipped 0건. 실제 ES·Nori 통합 9건 포함.
 - 검색 평가 도구 139건(실제 ES 통합 포함), 검토 도구 108건, 인프라 스크립트 25건 통과.
 - 같은 300개 질문의 목표 Hit@20은 295→299, MRR@20은 0.906111→0.933764다. 추가 16개는 양쪽 모두
-  Hit@20 16/16이다. 기존 9개 질문의 순위 하락·남은 누락 1개도 [비교 보고서](../evaluation/support-program-search/runs/lexical-v2-20260913-v1/README.md)에 보존했다.
+  Hit@20 16/16이다. 기존 9개 질문의 순위 하락·남은 누락 1개도 [비교 보고서](../pipelines/evals/support_program_search/runs/lexical-v2-20260913-v1/README.md)에 보존했다.
 - 격리 Compose 전체 검증 통과: 새 v2 색인·4개 제공처 검색, ES 중단/영속 볼륨 복구,
   기존 Redis·RabbitMQ·Qdrant·AI Service 장애 복구. 모델 API는 로컬 스텁만 사용했다.
 - 검증용 컨테이너·볼륨은 정리했다. **기존 개발 Docker에는 v2를 배포하거나 실제 공고를 재색인하지 않았다.**

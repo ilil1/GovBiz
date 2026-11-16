@@ -27,14 +27,14 @@ Elasticsearch·RabbitMQ 후속 반영 기준일은 2026-09-12이며, 이 갱신�
 v5의 코드 회귀 통과를 실제 모델 검색 정확도 향상으로 해석하지 않습니다.
 후속 실제 비교에서는 지원금·컨설팅·영화 후반작업을 구분하는 지침과 랭킹 전용 Sol/low 설정을
 채택했습니다. Luna의 지침 추가·추론 변경만으로 남았던 오추천과 빈 결과도 삭제하지 않고
-[고정 후보 진단 기록](../evaluation/support-program-search/runs/search-precision-v5-20260907-v1/README.md)에 보존합니다.
+[고정 후보 진단 기록](../pipelines/evals/support_program_search/runs/search-precision-v5-20260907-v1/README.md)에 보존합니다.
 이는 20개 후보의 소규모 AI 초안 대조이며 전체 검색 정확도 합격이나 후보 Recall 개선을 뜻하지 않습니다.
 
 2026-10-15 RRF 1차 후속(이전 기록): 의미·BM25 후보 각 20개, 가중치 각 1, `k=60`, 랭킹 입력 최대 20개를 유지하고,
 동점 기준만 BM25 순위·제공처 포함 ID순으로 변경했습니다. 후보 각 100개·BM25 가중치 3 설정은 개별 질문 회귀와
 LOPO 내부 재표본화 결과 하락으로 채택하지 않았습니다. 선택은 사후 보수적 결정이며 독립 검증에서의 품질 개선 입증이 아닙니다.
 내부 의미 검색 API의 `limit`도 1~20을 유지하며 이번 작업에서는 배포하지 않았습니다.
-[설정 선택·평가 범위·한계](../evaluation/support-program-search/runs/rrf-tuning-20261015-v1/README.md)를 참고하세요.
+[설정 선택·평가 범위·한계](../pipelines/evals/support_program_search/runs/rrf-tuning-20261015-v1/README.md)를 참고하세요.
 
 2026-10-15 현재 후속: 기존 벡터와 호환되도록 의미검색·BM25·카탈로그 지문에 기관·신청기간을 포함한 기존 본문을
 유지하고 RRF `k=1`·BM25 우선 동점 처리만 반영합니다. 후보 수·가중치·최종 추천 LLM 경로는 유지합니다.
@@ -42,7 +42,7 @@ LOPO 내부 재표본화 결과 하락으로 채택하지 않았습니다. 선�
 고정 16문항 중 관련 판정이 있는 12문항의 AI 참조판정 비교에서는 Recall@20·Recall@5가 유지되고
 MRR@5가 0.722222→0.854167이었으며 Q04는 3→4위로 하락했습니다. 이 수치는 기존 본문을 유지하는 현재 RRF
 변경의 실측 성능이 아니며 독립 질문·사람 정답·K-Startup·최종 추천 LLM 품질 검증이나 운영 배포 완료를 뜻하지 않습니다.
-[재현 자료와 전체 질문별 결과](../evaluation/support-program-search/runs/semantic-focus-20261015-v1/README.md)를 참고하세요.
+[재현 자료와 전체 질문별 결과](../pipelines/evals/support_program_search/runs/semantic-focus-20261015-v1/README.md)를 참고하세요.
 
 기획서 전체와의 차이 및 다음 개발의 우선순위·선행 조건·완료 기준은
 [기획 정합성·개발 전략](development-strategy-20260907.md)에 정리했습니다.
@@ -136,7 +136,7 @@ ES 장애는 503으로 반환하며, 기존 MySQL 공고는 유지합니다. 이
 
 코드 검증은 Core 1,233건·Frontend 1,044건·인프라 25건과 격리 Compose 연결·장애·복구까지 완료했습니다.
 이는 실제 MySQL·ES/Nori·Qdrant와 로컬 OpenAI 스텁 기반 검증이며, 유료 실데이터 검색 평가는 아닙니다.
-16개 목표 공고 × 3개 질문 형태의 [48개 한국어 진단](../evaluation/support-program-search/runs/elasticsearch-korean-queries-20260912-v1/README.md)도
+16개 목표 공고 × 3개 질문 형태의 [48개 한국어 진단](../pipelines/evals/support_program_search/runs/elasticsearch-korean-queries-20260912-v1/README.md)도
 보존합니다. AI 작성 진단의 목표 공고 포함률을 사람이 검증한 정답 기반 Recall이나 최종 추천 정확도로 해석하지 않습니다.
 
 **구현 검증 종료 시점의 기존 개발 Docker·DB에는 미배포입니다.** 다음 작업은 기존 설정·대기 작업·백업 확인 →
@@ -328,20 +328,20 @@ TTL은 성공 후 재사용 기한이며 만료 즉시 물리 삭제를 보장�
 평가 도구는 후보 단계의 `macroRecallAtK`·무결과 오추천율과 최종 단계의 `macroRecallAt5`·`MRR@5`·무결과
 오추천율을 분리해 계산합니다. `evaluation-fixture-export`는 현재 MySQL 카탈로그에서 미라벨 fixture 초안을
 만들고, `evaluation-capture`는 실제 Search Service를 다시 구현하지 않고 같은 기준 날짜의 호출 흐름에서 나온
-후보·최종 ID를 기록합니다. 실제 snapshot·capture는 `evaluation/support-program-search/runs/`에 보관합니다.
+후보·최종 ID를 기록합니다. 실제 snapshot·capture는 `pipelines/evals/support_program_search/runs/`에 보관합니다.
 신규 fixture와 capture는 모두 색인 준비된 제공처만 조회합니다. 기존 고정 스냅샷·판정·캡처는 당시 조건의
 원본으로 유지하며 이번 상태 필터로 과거 평가 결과를 다시 해석하지 않습니다.
 현재 고정 스냅샷·AI 판정·모드 선택 결과는 Git 포함 대상이고 새 실행·임시 출력은 기본적으로 제외합니다.
-[공유 자료 검증과 이어받기](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md)를 따릅니다.
+[공유 자료 검증과 이어받기](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/README.md)를 따릅니다.
 선택한 판정 출처와 실제 캡처 없이 검색 품질 점수를 주장하지 않으며, 의미 검색 결과
 파일이나 캡처 파일을 제공하지 않으면 각각 출력의 `semantic`·`capture`는 `null`입니다.
-[평가 자료와 실행법](../evaluation/support-program-search/README.md)을 참고하세요.
+[평가 자료와 실행법](../pipelines/evals/support_program_search/README.md)을 참고하세요.
 
 메인 README에서 분리한 단계별 평가 결과는 원본 실행 폴더에서 이어서 확인합니다.
 
-- [3단계 기준선 보고서](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/review-final-v1/report.md): 판정 출처·표본 한계·후보/최종 지표
-- [4단계 1차 후보 검색 비교](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/stage4-v1/README.md): 동일 질문의 RRF 결합 전후·제한시간 정렬
-- [4단계 2차 고정 후보 랭킹 비교](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/stage4-v2/README.md): 지원 목적 판단 전후·응답 지연·토큰 사용량
+- [3단계 기준선 보고서](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/review-final-v1/report.md): 판정 출처·표본 한계·후보/최종 지표
+- [4단계 1차 후보 검색 비교](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/stage4-v1/README.md): 동일 질문의 RRF 결합 전후·제한시간 정렬
+- [4단계 2차 고정 후보 랭킹 비교](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/stage4-v2/README.md): 지원 목적 판단 전후·응답 지연·토큰 사용량
 - [4단계 요청 제한·최종 통합 검증](support-program-request-limits.md#4단계-최종-통합-검증-2026-09-06): 제한 구현과 전체 Compose 통과 기록
 - [5단계 HTML RAG 후속 검증](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v1/README.md): 인용 ID 오류 수정·공식 공고 전체 경로·AI-only 정성 검토·API 없는 기록 재검사
 - [5단계 대상 조건 요약 검증](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v2/README.md): H01 누락 보완·가상 6건 및 공식 6건·전후 조건/사용량 비교

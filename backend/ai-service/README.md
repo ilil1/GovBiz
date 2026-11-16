@@ -659,7 +659,7 @@ Core가 결과가 없을 때 사유와 조건 빼기를 안내하는 데 씁니�
 당시 공개 점수 계약 v3와 임계값은 유지하고 측정 파일의 프롬프트 SHA-256으로 전후 버전을 구별했습니다.
 실제 고정 후보 전후 32회 비교에서 dev의 알려진 무관 추천은 6→4건, 관련 추천은 15→16건이었으나
 heldout 오추천은 줄지 않았고 평균 API 응답시간은 약 1.82초 늘었습니다.
-[측정 조건·결과·재현 방법](../../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/stage4-v2/README.md)에 한계를 함께 기록했습니다.
+[측정 조건·결과·재현 방법](../../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/stage4-v2/README.md)에 한계를 함께 기록했습니다.
 
 포괄적인 분야별 창업지원 검색(예: AI 창업지원)은 AI 전용 공고로만 제한하지 않습니다. 다른 산업에만 한정되지 않고
 창업기업의 사업화·보육·창업 교육·입주 공간·지식재산 활용을 실제 지원하는 공고도 관련성 평가에 포함합니다.

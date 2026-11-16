@@ -38,7 +38,7 @@ AI 패키지는 Python `>=3.11,<3.15`를 선언하며, Frontend와 AI Service의
 
 **Elasticsearch + Nori·BM25**를 자연어 검색의 키워드 후보와 공개 전 색인·정기 복구에 연결했습니다.
 MySQL 원본·Qdrant 의미 검색·Redis 역할은 그대로입니다. 독립적인 고정 스냅샷
-[비교 실험과 한계](../evaluation/support-program-search/elasticsearch/README.md)도 보존합니다.
+[비교 실험과 한계](../pipelines/evals/support_program_search/elasticsearch/README.md)도 보존합니다.
 
 코드 계층·DI·MVVM·Flux·Facade·Agent 구조는 [아키텍처 README](architecture/README.md)로 모았습니다.
 아래는 기술별 데이터 역할이며, 요청·동기화의 상세 순서는 [서비스 호출·데이터 흐름](architecture.md)을 참고하세요.
@@ -151,7 +151,7 @@ C02의 조건 변경 해석은 공고 검색에 앞서는 별도 구체 Agent입
 랭킹은 `OPENAI_RANKING_MODEL`을 별도로 지정할 수 있고 미지정이면 공통 모델을 상속합니다.
 `.env.example`의 랭킹은 `gpt-6-luna`와 `OPENAI_RANKING_REASONING_EFFORT=low`를 사용합니다.
 도우미 계획·답 모델도 `gpt-6-luna`이며 의도 분류 전용 `gpt-5-nano`는 별도 설정입니다.
-[고정 후보 비교 기록](../evaluation/support-program-search/runs/search-precision-v5-20260907-v1/README.md)은
+[고정 후보 비교 기록](../pipelines/evals/support_program_search/runs/search-precision-v5-20260907-v1/README.md)은
 이전 모델의 평가이며 GPT-6 Luna의 품질·지연 측정값으로 사용하지 않습니다.
 임베딩은 기존 `text-embedding-3-small`·1,536차원입니다.
 설정은 [AI Service config](../backend/ai-service/app/config.py)와 [.env.example](../.env.example)을 기준으로 합니다.

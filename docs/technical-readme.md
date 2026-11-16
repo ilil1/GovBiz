@@ -62,7 +62,7 @@ Vercel + AWS 구성은 [배포 구성도](assets/architecture/README-aws-deploye
 | [RabbitMQ 공식 문서 분석](rabbitmq-application-form-discovery.md) | 문항 추출 작업·결과 복원·관리자 큐 운영 조회 |
 | [RabbitMQ 카카오 연결 해제](rabbitmq-account-oauth-unlink.md) | 탈퇴 작업 보관·재가입 충돌 방지·운영 확인 |
 | [구현 현황](implementation-status.md) | 완료 단계·검증 결과·현재 한계·다음 작업 |
-| [검색 평가 결과](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md) | 고정 실데이터·AI-only 판정·전후 비교·재현 방법 |
+| [검색 평가 결과](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/README.md) | 고정 실데이터·AI-only 판정·전후 비교·재현 방법 |
 | [실행·검증](../infrastructure/README.md) | Compose·환경변수·통합 검증 |
 | [전체 문서 목록](README.md) | API 계약·요청 제한·서비스별 개발·확장 안내 |
 

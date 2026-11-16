@@ -592,7 +592,7 @@ Qdrant·키워드 순위를 결합한 후보 최대 20개, AI 최종 추천 최�
 그대로 JSON 파일에 기록합니다. fixture와 capture는 모두 `findSearchablePresent`로 준비된 제공처의
 공고만 읽습니다. 기존 고정 평가 자료는 당시 스냅샷·실행 조건의 기록이며 이번 조회 범위로 다시 해석하지 않습니다.
 
-질문 파일은 [예시](../../evaluation/support-program-search/query-set.example.json)를 복사해 준비합니다.
+질문 파일은 [예시](../../pipelines/evals/support_program_search/query-set.example.json)를 복사해 준비합니다.
 fixture 내보내기는 지정한 기준 날짜의 `OPEN` 공고만 담으므로, 캡처도 기본값인 `acceptingOnly=true`와
 **같은 기준 날짜**로 실행해야 합니다.
 실행 환경의 MySQL·Elasticsearch·AI Service·Qdrant는 실제 검색과 같은 상태여야 하며, AI 점수화 호출 비용이 발생할 수
@@ -611,10 +611,10 @@ java -jar build/libs/govbiz-core-service-0.0.1-SNAPSHOT.jar
 질문은 최대 100개이며, 하나라도 실패하거나 실행 중 카탈로그가 바뀌면 결과 파일을 쓰지 않습니다.
 성공한 v2 캡처에는 기준 날짜·공고 수·카탈로그 지문·후보 ID·최종 추천 ID가 포함됩니다. 평가기는 fixture와
 capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 공고의 검색 문서가 들어갈 수 있는 파일은
-[평가 실행 보관 폴더](../../evaluation/support-program-search/runs/README.md)에서 관리합니다.
+[평가 실행 보관 폴더](../../pipelines/evals/support_program_search/runs/README.md)에서 관리합니다.
 비밀정보를 제외한 고정 공유 실행의 스냅샷·판정·캡처·보고서는 Git에 포함하며, 새 실행과 임시 출력은
 기본적으로 제외합니다. 선택한 판정 출처의 fixture와 비교해 지표를 계산하는 방법은
-[검색 평가 자료](../../evaluation/support-program-search/README.md)를 참고하세요.
+[검색 평가 자료](../../pipelines/evals/support_program_search/README.md)를 참고하세요.
 
 ## 공개 API
 
@@ -823,9 +823,9 @@ v1을 사용하던 환경은 **새 v2 인덱스 이름으로 전환하고 재색
 클라이언트는 여전히 v2를 씁니다. 316문항 비교 전에는 전환·재색인하지 않으며 절차는 Elasticsearch 문서에 있습니다.
 
 지원 내용 중심 본문·RRF 설정의 비교 실험과 질문별 회귀는
-[2026-10-15 후속 비교](../../evaluation/support-program-search/runs/semantic-focus-20261015-v1/README.md)에 기록했습니다.
+[2026-10-15 후속 비교](../../pipelines/evals/support_program_search/runs/semantic-focus-20261015-v1/README.md)에 기록했습니다.
 이 수치는 새 본문까지 적용한 평가 결과이며 기존 벡터를 유지하는 현재 RRF 변경의 실측 성능은 아닙니다.
-이전 가중치·후보 수 비교는 [기존 기록](../../evaluation/support-program-search/runs/rrf-tuning-20261015-v1/README.md)에 보존합니다.
+이전 가중치·후보 수 비교는 [기존 기록](../../pipelines/evals/support_program_search/runs/rrf-tuning-20261015-v1/README.md)에 보존합니다.
 
 - GET 검색: 필수 `query`는 최대 500 UTF-16 코드 단위이며 빈 문자열을 허용합니다. 탭·줄바꿈·캐리지 리턴을 제외한
   Unicode C 범주 문자(예: NUL·제로폭 문자·단독 surrogate)는 DB·AI 호출 전에 400으로 거부합니다.

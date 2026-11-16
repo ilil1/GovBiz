@@ -758,7 +758,7 @@ Web의 POST 검색은 `query`와 선택적인 `companyConditions`를 따로 보�
    이어 의미 검색 응답의 질의·ID·해시·중복·유한 점수·내림차순·개수를 검증합니다.
    의미 검색과 키워드의 1부터 시작하는 순위를 동일 가중치 RRF `1 / (1 + 순위)`로 합산하고,
    동점은 BM25 순위·제공처 포함 ID 오름차순으로 정렬해 중복 없는 최대 20개를 점수화에 전달합니다.
-   상위 순위의 차이를 반영합니다. [2026-10-15 후속 기록](../evaluation/support-program-search/runs/semantic-focus-20261015-v1/README.md)은
+   상위 순위의 차이를 반영합니다. [2026-10-15 후속 기록](../pipelines/evals/support_program_search/runs/semantic-focus-20261015-v1/README.md)은
    운영 적용을 보류한 지원 내용 중심 본문까지 포함한 실험이며 현재 본문을 유지하는 RRF 변경의 실측 성능은 아닙니다.
    어느 색인이든 실패하거나 잘못됐으면 오류를 반환합니다. 정상 키워드 일치가 없으면 의미 검색 순서를 유지합니다.
 5. AI Service는 전체 입력이 같은 검증된 랭킹 응답을 재사용하거나 모든 후보를 다시 평가합니다.
@@ -1006,7 +1006,7 @@ evaluation-capture profile (비웹 실행)
 `[A-Z][A-Z0-9_]{0,63}` 제공처 코드와 뒤의 원본 ID를 함께 사용합니다. 같은 Search Service가 만든
 후보·최종 결과를 기록하므로 평가 코드가 운영 검색 흐름을 별도로 재현하지 않습니다. 실제 AI Service를
 호출할 수 있으므로 기본 실행·CI에는 포함하지 않습니다. fixture 내보내기·라벨·캡처·평가 실행 규칙은
-[검색 평가 자료](../evaluation/support-program-search/README.md)를 따릅니다.
+[검색 평가 자료](../pipelines/evals/support_program_search/README.md)를 따릅니다.
 새 fixture/capture는 같은 준비된 제공처 범위를 사용합니다. 기존 고정 평가 스냅샷·원표·캡처는 당시의
 입력과 실행 결과로 보존하며, 이번 상태 필터를 소급 적용하거나 과거 지표를 다시 해석하지 않습니다.
 
@@ -1410,7 +1410,7 @@ Core의 Health는 프로세스 상태, AI Health는 AI Service의 정해진 Heal
 
 현재 제품은 공고 요약의 의미·키워드 결합 검색·구조화된 추천과, 기업마당·K-Startup 공식 상세 HTML의 공고별 근거 답변을 제공합니다.
 실제 검색 후보·최종 추천의 캡처, AI-only 참조 판정과 변경 전후 보고서는
-[공유 평가 자료](../evaluation/support-program-search/runs/support-program-catalog-20260906-v1/README.md)에 있습니다.
+[공유 평가 자료](../pipelines/evals/support_program_search/runs/support-program-catalog-20260906-v1/README.md)에 있습니다.
 평가 가능한 질문은 6개, 그중 양성 질문은 2개뿐이며 독립적인 사람 검토 품질 증거는 아닙니다.
 근거 답변은 [5단계 후속 검증](../pipelines/evals/support_program_evidence/datasets/runs/official-flow-20260907-v1/README.md)에서
 공식 HTML 2건·질문 6개의 실제 MySQL·Qdrant·모델 연결과 인용을 확인했습니다. 고정 HTML을 재생한

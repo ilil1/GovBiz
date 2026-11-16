@@ -57,7 +57,7 @@ OpenAI가 기존 후보별 원문 번호를 선택하고, Agent가 원문으로 
 
 1차 실제 합성 3요청은 모두 API/Service 검증을 통과했지만 **24판정 중 22개 일치**로 의미 평가가
 불합격이었다. 서울 기업에 추가 이전 의사를 요구해 UNKNOWN으로, 부산 기업의 이전 의사 미확인을
-불충족으로 취급해 INCOMPATIBLE로 판정했다. [1차 원본 기록](../evaluation/support-program-search/runs/region-scope-20260907-v1/README.md)을 보존한다.
+불충족으로 취급해 INCOMPATIBLE로 판정했다. [1차 원본 기록](../pipelines/evals/support_program_search/runs/region-scope-20260907-v1/README.md)을 보존한다.
 
 OR로 연결된 신청 경로는 하나를 충족하면 되고, 모든 경로가 명백히 불충족일 때만 부적합이라는 지침을
 보완했다. 새 전체 AI 테스트는 **572개 통과**(16.40초)이며 실제 SDK 지역 schema 설명도 검사했다.
@@ -66,7 +66,7 @@ OR로 연결된 신청 경로는 하나를 충족하면 되고, 모든 경로가
 
 사용자가 남은 2회를 서울·부산 재검증에 사용하도록 승인해 **16판정 모두 일치**를 확인했다.
 앞서 실패한 두 예외 판정과 서울→서초구 UNKNOWN, 본문 전국 허용·태그만 존재 구분을 확인했다.
-[최종 재검증 기록](../evaluation/support-program-search/runs/region-scope-20260907-v2/README.md)에 실제 입력,
+[최종 재검증 기록](../pipelines/evals/support_program_search/runs/region-scope-20260907-v2/README.md)에 실제 입력,
 응답, 사용량, 프롬프트·schema·코드 해시와 이전 실패를 보존한다.
 
 이번 유료 호출은 합계 랭킹 **5회**, 임베딩 **0회**이며 승인 한도 내에서 종료했다. 모델·추론·후보

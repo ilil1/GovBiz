@@ -62,9 +62,9 @@ Core 검색은 `MySQL 조회 → 접수 상태 필터 → 깨끗한 검색문 �
   실행 전후 기존 사용자 자원은 동일했다. 통합 동작 검증이지 실제 추천 품질 점수가 아니다.
 
 실제 대표 질문 3개와 서울 사례 재검증은
-[첫 실행 기록](../evaluation/support-program-search/runs/search-relevance-v5-20260907-v1/README.md)에 있다.
+[첫 실행 기록](../pipelines/evals/support_program_search/runs/search-relevance-v5-20260907-v1/README.md)에 있다.
 서울 SW 질문에서 영화 제작 공고 2개가 사라졌지만, 남은 공고의 지원금 제공 방식이 불명확했다.
-후속 [고정 후보 비교](../evaluation/support-program-search/runs/search-precision-v5-20260907-v1/README.md)는
+후속 [고정 후보 비교](../pipelines/evals/support_program_search/runs/search-precision-v5-20260907-v1/README.md)는
 같은 공고 20개로 Luna/none 13회, Luna/low 6회, Sol/low 6회를 실행했다. 지원금 질문뿐 아니라
 컨설팅·영화 질문의 양성 보존과 반복 편차를 함께 확인했고, 실패한 설정도 모두 기록했다.
 Sol/low에서 지원금 질문·표현 변형·반복은 모두의 창업만 반환하고, 컨설팅은 관련 공고 3개,

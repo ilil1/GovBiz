@@ -14,7 +14,7 @@ Fast는 처리 등급 변경이며 정확도 수정 자체가 아닙니다. 지�
 
 ## 오류 원인과 수정 범위
 
-[이전 실제 검색](../evaluation/support-program-search/runs/search-latency-20260908-v1/search/capture.json)에서
+[이전 실제 검색](../pipelines/evals/support_program_search/runs/search-latency-20260908-v1/search/capture.json)에서
 서울 SW 기업에 안산 관내 기업 대상 공고 `BIZINFO:PBLN_000000000125900`이 추천됐습니다.
 지역 조건과 본문이 전달됐고 절단되지도 않았지만, 모델은 추가 안산 사업장 여부가 미확인이라는
 이유로 지역 충돌을 `UNKNOWN`으로 남겼습니다. 기존 내부 schema의 '상위 지역만 알고 공고가 하위
@@ -42,7 +42,7 @@ v2는 합성 54/54였지만 공개 대구 여성창업 공고를 회사 서울 �
 
 ## 고정 검증과 해석 기준
 
-[실행 자료](../evaluation/support-program-search/runs/region-conflict-20260908-v1/README.md)에 입력·변경 전
+[실행 자료](../pipelines/evals/support_program_search/runs/region-conflict-20260908-v1/README.md)에 입력·변경 전
 프롬프트/Agent·전체 후보 판정·원문 근거·최종 추천·설정/소스 해시·API 사용량을 보관합니다.
 
 - 합성 공고 18개 × 회사 소재지 3개 = 지역 판정 54개를 변경 전후 같은 Sol/low/Fast로 비교합니다.
@@ -98,6 +98,6 @@ AI 이미지를 재빌드하고 **AI 컨테이너만 재생성해 반영 완료*
 Core·MySQL·Qdrant·Web의 이미지·시작 시각은 그대로이며 DB/색인 변경은 없습니다.
 검색 준비 상태는 `SEARCHABLE`, 공고 **1,506개**, 색인 준비 완료를 유지합니다.
 
-[배포·호출 한도 기록](../evaluation/support-program-search/runs/region-conflict-20260908-v2/deployment.json),
-[최종 실제 검색](../evaluation/support-program-search/runs/region-conflict-20260908-v1/search/capture.json),
-[v2 재검사 자료](../evaluation/support-program-search/runs/region-conflict-20260908-v2/README.md)를 보존합니다.
+[배포·호출 한도 기록](../pipelines/evals/support_program_search/runs/region-conflict-20260908-v2/deployment.json),
+[최종 실제 검색](../pipelines/evals/support_program_search/runs/region-conflict-20260908-v1/search/capture.json),
+[v2 재검사 자료](../pipelines/evals/support_program_search/runs/region-conflict-20260908-v2/README.md)를 보존합니다.
